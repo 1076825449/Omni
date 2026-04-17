@@ -1,0 +1,164 @@
+/* Omni 统一平台 - 全局样式 */
+@import './theme.css';
+
+/* 重置 */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background-color: var(--omni-bg-layout);
+  color: var(--omni-text-primary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* 统一页面容器 */
+.omni-page {
+  padding: var(--omni-spacing-lg);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.omni-page-header {
+  margin-bottom: var(--omni-spacing-lg);
+}
+
+.omni-page-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--omni-text-primary);
+  margin: 0 0 var(--omni-spacing-xs);
+}
+
+.omni-page-subtitle {
+  font-size: 14px;
+  color: var(--omni-text-secondary);
+  margin: 0;
+}
+
+/* 统一卡片 */
+.omni-card {
+  background: var(--omni-bg-card);
+  border-radius: var(--omni-border-radius);
+  box-shadow: var(--omni-shadow-1);
+  border: 1px solid var(--omni-border-color);
+  padding: var(--omni-spacing-lg);
+}
+
+/* 统一状态卡片 */
+.omni-state-card {
+  padding: var(--omni-spacing-xl);
+  text-align: center;
+  color: var(--omni-text-tertiary);
+}
+
+/* 统一模块卡片 */
+.omni-module-card {
+  background: var(--omni-bg-card);
+  border-radius: var(--omni-border-radius);
+  box-shadow: var(--omni-shadow-1);
+  border: 1px solid var(--omni-border-color);
+  padding: var(--omni-spacing-lg);
+  cursor: pointer;
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+.omni-module-card:hover {
+  box-shadow: var(--omni-shadow-2);
+  border-color: var(--omni-color-primary);
+}
+
+/* 统一空状态 */
+.omni-empty {
+  padding: var(--omni-spacing-xl) var(--omni-spacing-lg);
+  text-align: center;
+  color: var(--omni-text-tertiary);
+}
+
+/* 统一错误状态 */
+.omni-error {
+  padding: var(--omni-spacing-xl) var(--omni-spacing-lg);
+  text-align: center;
+  color: #ff4d4f;
+}
+
+/* 统一加载状态 */
+.omni-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--omni-spacing-xl);
+}
+
+/* 登录页容器 */
+.omni-login-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.omni-login-box {
+  width: 360px;
+  background: var(--omni-bg-card);
+  border-radius: var(--omni-border-radius-lg);
+  box-shadow: var(--omni-shadow-3);
+  padding: var(--omni-spacing-xl);
+}
+
+/* 平台头部导航 */
+.omni-header {
+  height: var(--omni-header-height);
+  background: var(--omni-bg-base);
+  border-bottom: 1px solid var(--omni-border-color);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--omni-spacing-lg);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.omni-header-logo {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--omni-color-primary);
+  margin-right: var(--omni-spacing-xl);
+  text-decoration: none;
+}
+
+.omni-header-nav {
+  display: flex;
+  gap: var(--omni-spacing-xs);
+  flex: 1;
+}
+
+.omni-header-nav-item {
+  padding: var(--omni-spacing-sm) var(--omni-spacing-md);
+  border-radius: var(--omni-border-radius-sm);
+  color: var(--omni-text-secondary);
+  text-decoration: none;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.omni-header-nav-item:hover {
+  background: var(--omni-bg-hover);
+  color: var(--omni-text-primary);
+}
+
+.omni-header-nav-item.active {
+  background: var(--omni-bg-pressed);
+  color: var(--omni-color-primary);
+}
+
+.omni-header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--omni-spacing-md);
+}

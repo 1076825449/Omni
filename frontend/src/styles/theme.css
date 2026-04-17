@@ -1,0 +1,43 @@
+/* Omni 统一平台 - 设计系统 tokens */
+
+:root {
+  /* 品牌色 */
+  --omni-color-primary: #1677ff;
+  --omni-color-primary-hover: #4096ff;
+  --omni-color-primary-active: #0958d9;
+
+  /* 背景色 */
+  --omni-bg-base: #ffffff;
+  --omni-bg-layout: #f5f7fa;
+  --omni-bg-card: #ffffff;
+  --omni-bg-hover: #f0f5ff;
+  --omni-bg-pressed: #e6f0ff;
+
+  /* 文字色 */
+  --omni-text-primary: #1d2129;
+  --omni-text-secondary: #4b5563;
+  --omni-text-tertiary: #86909c;
+  --omni-text-disabled: #c4c7cc;
+
+  /* 边框 */
+  --omni-border-color: #e5e6eb;
+  --omni-border-radius: 8px;
+  --omni-border-radius-sm: 6px;
+  --omni-border-radius-lg: 12px;
+
+  /* 间距 */
+  --omni-spacing-xs: 4px;
+  --omni-spacing-sm: 8px;
+  --omni-spacing-md: 16px;
+  --omni-spacing-lg: 24px;
+  --omni-spacing-xl: 32px;
+
+  /* 阴影 */
+  --omni-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --omni-shadow-2: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --omni-shadow-3: 0 4px 16px rgba(0, 0, 0, 0.12);
+
+  /* 布局 */
+  --omni-header-height: 56px;
+  --omni-sidebar-width: 220px;
+}

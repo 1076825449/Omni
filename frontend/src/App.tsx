@@ -1,4 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { ConfigProvider } from 'antd'
+import PlatformLayout from './components/Layout'
 import Login from './pages/Login'
 import Home from './pages/Platform/Home'
 import ModuleCenter from './pages/ModuleCenter'
@@ -11,36 +13,45 @@ import AnalysisWorkbench from './modules/analysis-workbench'
 import RecordOperations from './modules/record-operations'
 import LearningLab from './modules/learning-lab'
 
-// 临时布局占位，后续任务包会实现
-function Layout({ children }: { children: React.ReactNode }) {
-  return <div style={{ minHeight: '100vh' }}>{children}</div>
+// 登录页不使用平台布局（独立）
+function LoginLayout({ children }: { children: React.ReactNode }) {
+  return <>{children}</>
 }
 
 function App() {
   return (
-    <BrowserRouter>
-      <Layout>
+    <ConfigProvider
+      theme={{
+        token: {
+          colorPrimary: '#1677ff',
+          borderRadius: 8,
+        },
+      }}
+    >
+      <BrowserRouter>
         <Routes>
-          {/* 平台公共 */}
-          <Route path="/login" element={<Login />} />
-          <Route path="/" element={<Home />} />
-          <Route path="/modules" element={<ModuleCenter />} />
-          <Route path="/tasks" element={<TaskCenter />} />
-          <Route path="/files" element={<FileCenter />} />
-          <Route path="/logs" element={<LogCenter />} />
-          <Route path="/notifications" element={<Notifications />} />
-          <Route path="/settings" element={<Settings />} />
+          {/* 登录页 - 独立布局 */}
+          <Route path="/login" element={<LoginLayout><Login /></LoginLayout>} />
 
-          {/* 模块页面 */}
-          <Route path="/modules/analysis-workbench" element={<AnalysisWorkbench />} />
-          <Route path="/modules/record-operations" element={<RecordOperations />} />
-          <Route path="/modules/learning-lab" element={<LearningLab />} />
+          {/* 平台页面 - 统一布局 */}
+          <Route path="/" element={<PlatformLayout><Home /></PlatformLayout>} />
+          <Route path="/modules" element={<PlatformLayout><ModuleCenter /></PlatformLayout>} />
+          <Route path="/tasks" element={<PlatformLayout><TaskCenter /></PlatformLayout>} />
+          <Route path="/files" element={<PlatformLayout><FileCenter /></PlatformLayout>} />
+          <Route path="/logs" element={<PlatformLayout><LogCenter /></PlatformLayout>} />
+          <Route path="/notifications" element={<PlatformLayout><Notifications /></PlatformLayout>} />
+          <Route path="/settings" element={<PlatformLayout><Settings /></PlatformLayout>} />
+
+          {/* 模块页面 - 统一布局 */}
+          <Route path="/modules/analysis-workbench" element={<PlatformLayout><AnalysisWorkbench /></PlatformLayout>} />
+          <Route path="/modules/record-operations" element={<PlatformLayout><RecordOperations /></PlatformLayout>} />
+          <Route path="/modules/learning-lab" element={<PlatformLayout><LearningLab /></PlatformLayout>} />
 
           {/* 默认跳转 */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </Layout>
-    </BrowserRouter>
+      </BrowserRouter>
+    </ConfigProvider>
   )
 }
 

@@ -2,16 +2,18 @@
 import { Routes, Route } from 'react-router-dom'
 import PlatformLayout from '../../components/Layout'
 import ModuleLayout from '../../components/Layout/ModuleLayout'
-import LearningLabHome from './pages/Home'
+import LearningLabWorkbench from './pages/Workbench'
+import SetList from './pages/SetList'
 import Practice from './pages/Practice'
-import Datasets from './pages/Datasets'
-import Mistakes from './pages/Mistakes'
+import Results from './pages/Results'
+import Favorites from './pages/Favorites'
+import Stats from './pages/Stats'
 
 const tabItems = [
   { key: 'home', label: '首页', path: '/modules/learning-lab' },
-  { key: 'practice', label: '练习', path: '/modules/learning-lab/practice' },
-  { key: 'datasets', label: '训练集', path: '/modules/learning-lab/datasets' },
-  { key: 'mistakes', label: '错题本', path: '/modules/learning-lab/mistakes' },
+  { key: 'sets', label: '训练集', path: '/modules/learning-lab/sets' },
+  { key: 'favorites', label: '收藏', path: '/modules/learning-lab/favorites' },
+  { key: 'stats', label: '统计', path: '/modules/learning-lab/stats' },
 ]
 
 export default function LearningLab() {
@@ -23,10 +25,12 @@ export default function LearningLab() {
         items={tabItems}
       >
         <Routes>
-          <Route index element={<LearningLabHome />} />
-          <Route path="practice" element={<Practice />} />
-          <Route path="datasets" element={<Datasets />} />
-          <Route path="mistakes" element={<Mistakes />} />
+          <Route index element={<LearningLabWorkbench />} />
+          <Route path="sets" element={<SetList />} />
+          <Route path="practice/:id" element={<Practice />} />
+          <Route path="results/:id" element={<Results />} />
+          <Route path="favorites" element={<Favorites />} />
+          <Route path="stats" element={<Stats />} />
         </Routes>
       </ModuleLayout>
     </PlatformLayout>

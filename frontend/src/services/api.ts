@@ -296,3 +296,75 @@ export const recordsApi = {
   },
   stats: () => request<{ total: number; active: number; categories: number }>('/api/modules/record-operations/stats'),
 }
+
+export interface TrainingSet {
+  id: number
+  set_id: string
+  name: string
+  description: string
+  category: string
+  difficulty: string
+  question_count: number
+  tags: string
+  is_active: boolean
+}
+
+export interface PracticeSession {
+  session_id: string
+  set_id: string
+  set_name: string
+  status: string
+  total_count: number
+  correct_count: number
+  score: number
+  questions: Question[]
+  started_at: string
+  completed_at: string | null
+}
+
+export interface Question {
+  id: string
+  question: string
+  options: string[]
+  answer: string
+  user_answer?: string
+  is_correct?: boolean
+}
+
+export interface FavoriteItem {
+  id: number
+  session_id: string
+  question_id: string
+  question_text: string
+  user_answer: string
+  correct_answer: string
+  created_at: string
+}
+
+export interface LearningStats {
+  total_sessions: number
+  total_correct: number
+  total_questions: number
+  avg_score: number
+  streak_days: number
+  last_practice_at: string | null
+  recent_sessions: any[]
+}
+
+export const learningLabApi = {
+  listSets: () => request<TrainingSet[]>('/api/modules/learning-lab/sets'),
+  getSet: (setId: string) => request<TrainingSet>('/api/modules/learning-lab/sets/' + setId),
+  continueLast: () => request<PracticeSession>('/api/modules/learning-lab/practice/continue'),
+  startPractice: (setId: string) => request<PracticeSession>('/api/modules/learning-lab/practice/start?set_id=' + setId, { method: 'POST' }),
+  getPractice: (sessionId: string) => request<PracticeSession>('/api/modules/learning-lab/practice/' + sessionId),
+  answer: (sessionId: string, questionId: string, userAnswer: string) =>
+    request<{ success: boolean; all_answered: boolean; is_correct: boolean }>(
+      '/api/modules/learning-lab/practice/' + sessionId + '/answer?question_id=' + questionId + '&user_answer=' + encodeURIComponent(userAnswer),
+      { method: 'POST' },
+    ),
+  toggleFavorite: (sessionId: string, questionId: string) =>
+    request<{ favorited: boolean }>('/api/modules/learning-lab/practice/' + sessionId + '/favorite/' + questionId, { method: 'POST' }),
+  listFavorites: () => request<FavoriteItem[]>('/api/modules/learning-lab/favorites'),
+  removeFavorite: (id: number) => request<{ success: boolean }>('/api/modules/learning-lab/favorites/' + id, { method: 'DELETE' }),
+  getStats: () => request<LearningStats>('/api/modules/learning-lab/stats'),
+}

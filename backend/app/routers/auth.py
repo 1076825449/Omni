@@ -82,6 +82,7 @@ def login(
     response: Response,
     db: SASession = Depends(get_db),
 ):
+    """登录接口。传入用户名和密码，成功返回 session cookie。"""
     user = db.query(User).filter(User.username == body.username).first()
     if not user or not verify_password(body.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="用户名或密码错误")
@@ -122,6 +123,7 @@ def logout(
     session_id: Optional[str] = Cookie(None),
     db: SASession = Depends(get_db),
 ):
+    """退出登录。清除 session cookie。"""
     if session_id:
         session = db.query(SessionModel).filter(SessionModel.session_id == session_id).first()
         if session:
@@ -133,6 +135,7 @@ def logout(
 
 @router.get("/me", response_model=Optional[UserInfo])
 def get_me(current_user: Optional[User] = Depends(get_optional_user)):
+    """获取当前登录用户信息。未登录返回 null。"""
     if not current_user:
         return None
     return UserInfo(

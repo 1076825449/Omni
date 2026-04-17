@@ -43,6 +43,7 @@ def list_tasks(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """获取任务列表。支持按状态/模块/类型筛选，分页返回。"""
     q = db.query(TaskModel)
     if status:
         q = q.filter(TaskModel.status == status)

@@ -41,6 +41,7 @@ def list_files(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """获取文件列表。支持按模块/状态/MIME类型筛选，分页返回。"""
     q = db.query(FileRecord).filter(FileRecord.owner_id == current_user.id)
     if module:
         q = q.filter(FileRecord.module == module)
@@ -76,6 +77,7 @@ def archive_file(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """归档指定文件。归档后文件标记为 archived 状态。"""
     f = db.query(FileRecord).filter(
         FileRecord.file_id == file_id,
         FileRecord.owner_id == current_user.id,

@@ -241,6 +241,18 @@ def run_task(
                     user_id=current_user.id,
                 )
                 s.add(notif)
+                # 触发 webhook
+                try:
+                    from app.services.webhook import WebhookService
+                    WebhookService.trigger("task.completed", {
+                        "task_id": t.task_id,
+                        "name": t.name,
+                        "status": "succeeded",
+                        "result_summary": t.result_summary,
+                        "creator_id": current_user.id,
+                    })
+                except Exception:
+                    pass
                 s.commit()
 
     threading.Thread(target=finish, daemon=True).start()

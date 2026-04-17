@@ -233,6 +233,24 @@ export const searchApi = {
   search: (q: string) => request<{ query: string; results: SearchResult[]; total: number }>('/api/search?q=' + encodeURIComponent(q)),
 }
 
+export const platformStatsApi = {
+  overview: () => request<any>('/api/platform/stats/overview'),
+  taskStats: () => request<any>('/api/platform/stats/task-stats'),
+  recentActivity: () => request<any>('/api/platform/stats/recent-activity'),
+}
+
+export const fileCenterApi = {
+  list: (params?: { module?: string; status?: string; limit?: number; offset?: number }) => {
+    const sp = new URLSearchParams()
+    if (params?.module) sp.set('module', params.module)
+    if (params?.status) sp.set('status', params.status)
+    if (params?.limit) sp.set('limit', String(params.limit))
+    if (params?.offset) sp.set('offset', String(params.offset))
+    return request<{ files: any[]; total: number }>('/api/files?' + sp)
+  },
+  archive: (fileId: string) => request<{ success: boolean }>('/api/files/' + fileId + '/archive', { method: 'POST' }),
+}
+
 export interface RecordItem {
   id: number
   record_id: string

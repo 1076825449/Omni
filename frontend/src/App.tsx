@@ -11,6 +11,8 @@ import LogCenter from './pages/LogCenter'
 import Notifications from './pages/Notifications'
 import Settings from './pages/Settings'
 import Search from './pages/Search'
+import Stats from './pages/Stats'
+import Help from './pages/Help'
 import AnalysisWorkbench from './modules/analysis-workbench'
 import RecordOperations from './modules/record-operations'
 import LearningLab from './modules/learning-lab'
@@ -84,6 +86,22 @@ function App() {
             element={
               <ProtectedRoute>
                 <PlatformLayout><Search /></PlatformLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/stats"
+            element={
+              <ProtectedRoute>
+                <PlatformLayout><Stats /></PlatformLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/help"
+            element={
+              <ProtectedRoute>
+                <PlatformLayout><Help /></PlatformLayout>
               </ProtectedRoute>
             }
           />

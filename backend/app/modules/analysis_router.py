@@ -188,12 +188,21 @@ def run_task(
     import threading
     def finish():
         import time; time.sleep(3)
+        from app.models.notification import Notification
         with Session(bind=db.get_bind()) as s:
             t = s.query(Task).filter(Task.task_id == task_id).first()
             if t:
                 t.status = "succeeded"
                 t.result_summary = "分析完成。共处理 1 个文件，发现 3 条关键结论。"
                 t.completed_at = datetime.utcnow()
+                # 发通知
+                notif = Notification(
+                    title="分析任务完成",
+                    content=f'任务 "{t.name}" 已完成，请查看结果。',
+                    type="success",
+                    user_id=current_user.id,
+                )
+                s.add(notif)
                 s.commit()
 
     threading.Thread(target=finish, daemon=True).start()

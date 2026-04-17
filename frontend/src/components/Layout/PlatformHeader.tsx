@@ -10,6 +10,8 @@ const navItems = [
   { label: '任务中心', path: '/tasks' },
   { label: '文件中心', path: '/files' },
   { label: '日志中心', path: '/logs' },
+  { label: '统计', path: '/stats' },
+  { label: '帮助', path: '/help' },
 ]
 
 export default function PlatformHeader() {

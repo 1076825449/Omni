@@ -80,10 +80,20 @@ python cli.py session cleanup           # 清理过期会话
 - ✅ Webhook 通知系统（HMAC签名/异步投递/CRUD管理）
 - ✅ 插件系统基础架构（PluginManager + 示例插件）
 
+**Phase 4 — 新样板模块 + 实时能力 + 生产加固 ✅**
+- ✅ Dashboard 数据仪表盘（统计卡片/7天趋势/模块统计/活动时间线）
+- ✅ Schedule 定时任务模块（CRUD + 手动触发）
+- ✅ WebSocket 实时通知（/ws 端点 + ConnectionManager）
+- ✅ 前端全局状态管理（Zustand: auth/notification/theme stores）
+- ✅ 登录页增强（记住用户名 Checkbox）
+- ✅ 顶部导航增强（仪表盘入口 + 用户菜单显示角色）
+
 **样板模块：**
 - ✅ 分析工作台（analysis-workbench）— 工作流型
 - ✅ 对象管理（record-operations）— 列表型
 - ✅ 学习训练（learning-lab）— 轻交互型
+- ✅ 数据仪表盘（dashboard-workbench）— 数据展示型
+- ✅ 定时调度（schedule-workbench）— 任务调度型
 
 ## 开发规范
 
@@ -99,5 +109,5 @@ git clone https://github.com/1076825449/Omni.git
 cd Omni
 ```
 
-**当前 commit：** `28dce3c`
+**当前 commit：** `7d4adc2`
 **GitHub：** https://github.com/1076825449/Omni

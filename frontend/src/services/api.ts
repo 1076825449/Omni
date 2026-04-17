@@ -143,6 +143,25 @@ export interface TaskCreatedResponse {
   task_id: string
 }
 
+export interface BackupRecord {
+  id: number
+  backup_id: string
+  name: string
+  type: string
+  status: string
+  file_size: number
+  note: string
+  created_at: string
+  completed_at: string | null
+}
+
+export const backupApi = {
+  create: (name: string, note?: string) =>
+    request<{ success: boolean; message: string; backup_id: string }>('/api/platform/backup?name=' + encodeURIComponent(name) + (note ? '&note=' + encodeURIComponent(note) : ''), { method: 'POST' }),
+  list: () => request<{ backups: BackupRecord[]; total: number }>('/api/platform/backups'),
+  downloadUrl: (backupId: string) => 'http://localhost:3000/api/platform/backups/' + backupId + '/download',
+}
+
 export const analysisApi = {
   createTask: (name: string, description: string) =>
     request<TaskCreatedResponse>('/api/modules/analysis-workbench/tasks', {

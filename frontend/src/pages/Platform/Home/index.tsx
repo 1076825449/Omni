@@ -1,32 +1,23 @@
 // 平台首页
-import { Card, Row, Col, Typography, Space, List, Button } from 'antd'
-import { Link } from 'react-router-dom'
+import { Card, Row, Col, Statistic, Button, Space, Typography, List, Skeleton } from 'antd'
+import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import type { Module } from '../../../services/api'
+import { modulesApi } from '../../../services/api'
 
 const { Title, Text } = Typography
 
-const modules = [
-  {
-    key: 'analysis-workbench',
-    name: '分析工作模块',
-    desc: '上传资料 → 生成分析结果 → 导出报告',
-    tag: '工作流型',
-    tagColor: 'blue',
-  },
-  {
-    key: 'record-operations',
-    name: '对象管理模块',
-    desc: '对象列表 · 分类 · 分配 · 批量操作',
-    tag: '列表型',
-    tagColor: 'gold',
-  },
-  {
-    key: 'learning-lab',
-    name: '学习训练模块',
-    desc: '练习 · 反馈 · 复盘 · 统计',
-    tag: '轻交互型',
-    tagColor: 'green',
-  },
-]
+const typeMap: Record<string, string> = {
+  workflow: '工作流型',
+  list: '列表型',
+  interactive: '轻交互型',
+}
+
+const typeColor: Record<string, string> = {
+  workflow: 'blue',
+  list: 'gold',
+  interactive: 'green',
+}
 
 const recentTasks = [
   { id: 1, name: '数据分析报告 #2023', status: '进行中' },
@@ -35,6 +26,17 @@ const recentTasks = [
 ]
 
 export default function Home() {
+  const [modules, setModules] = useState<Module[]>([])
+  const [loading, setLoading] = useState(true)
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    modulesApi.list().then(data => {
+      setModules(data.modules.filter((m: Module) => m.status === 'active'))
+      setLoading(false)
+    }).catch(() => setLoading(false))
+  }, [])
+
   return (
     <div className="omni-page">
       {/* 欢迎区 */}
@@ -44,29 +46,40 @@ export default function Home() {
       </div>
 
       {/* 模块快捷入口 */}
-      <Card title="模块中心" size="small" style={{ marginBottom: 24 }}>
-        <Row gutter={[16, 16]}>
-          {modules.map(m => (
-            <Col xs={24} sm={8} key={m.key}>
-              <Link to={`/modules/${m.key}`}>
+      <Card
+        title="模块中心"
+        size="small"
+        extra={<Link to="/modules"><Button size="small">查看全部</Button></Link>}
+        style={{ marginBottom: 24 }}
+      >
+        {loading ? (
+          <Row gutter={[16, 16]}>
+            {[1, 2, 3].map(i => <Col xs={24} sm={8} key={i}><Skeleton active /></Col>)}
+          </Row>
+        ) : (
+          <Row gutter={[16, 16]}>
+            {modules.map(m => (
+              <Col xs={24} sm={8} key={m.key}>
                 <Card
                   hoverable
                   size="small"
-                  style={{ height: '100%' }}
                   bodyStyle={{ padding: 16 }}
+                  onClick={() => navigate(`/modules/${m.key}`)}
                 >
                   <Space direction="vertical" size={4} style={{ width: '100%' }}>
                     <Space>
+                      <Text style={{ fontSize: 18 }}>{m.icon}</Text>
                       <Text strong>{m.name}</Text>
-                      <Text type="secondary" style={{ fontSize: 12 }}>[{m.tag}]</Text>
                     </Space>
-                    <Text type="secondary" style={{ fontSize: 12 }}>{m.desc}</Text>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {typeMap[m.type]}
+                    </Text>
                   </Space>
                 </Card>
-              </Link>
-            </Col>
-          ))}
-        </Row>
+              </Col>
+            ))}
+          </Row>
+        )}
       </Card>
 
       {/* 最近任务 + 快捷操作 */}
@@ -89,9 +102,11 @@ export default function Home() {
         <Col xs={24} sm={8}>
           <Card title="快捷操作" size="small">
             <Space direction="vertical" style={{ width: '100%' }}>
-              <Link to="/modules/analysis-workbench">
-                <Button block>发起分析</Button>
-              </Link>
+              {modules.slice(0, 1).map(m => (
+                <Link key={m.key} to={`/modules/${m.key}`}>
+                  <Button type="primary" block>发起分析</Button>
+                </Link>
+              ))}
               <Link to="/modules/record-operations">
                 <Button block>导入数据</Button>
               </Link>

@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from app.core.database import engine, Base
-from app.routers import auth
+from app.routers import auth, modules
 
 
 @asynccontextmanager
@@ -28,6 +28,7 @@ app.add_middleware(
 
 # 挂载路由
 app.include_router(auth.router)
+app.include_router(modules.router)
 
 
 @app.get("/api/platform/health")

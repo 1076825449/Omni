@@ -1,5 +1,5 @@
-import { Tabs, Typography } from 'antd'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { Tabs, Typography, Breadcrumb, Space } from 'antd'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
 
 const { Title, Text } = Typography
 
@@ -35,17 +35,32 @@ export default function ModuleLayout({ moduleName, moduleDesc, items, children }
   }
 
   return (
-    <div className="omni-page" style={{ paddingTop: 0 }}>
-      {/* 模块标题区 */}
+    <div style={{ minHeight: '100vh', background: 'var(--omni-bg-layout)' }}>
+      {/* 模块页面顶部横条 */}
       <div style={{
         background: 'var(--omni-bg-base)',
         borderBottom: '1px solid var(--omni-border-color)',
-        padding: '16px 24px 0',
+        padding: '12px 24px 0',
       }}>
+        {/* 面包屑：平台 → 模块 */}
+        <Breadcrumb
+          style={{ marginBottom: 8 }}
+          items={[
+            { title: <Link to="/">平台首页</Link> },
+            { title: <Link to="/modules">模块中心</Link> },
+            { title: moduleName },
+          ]}
+        />
+
+        {/* 模块标题 */}
         <div style={{ marginBottom: 12 }}>
-          <Title level={5} style={{ margin: 0 }}>{moduleName}</Title>
-          {moduleDesc && <Text type="secondary">{moduleDesc}</Text>}
+          <Space>
+            <Title level={5} style={{ margin: 0 }}>{moduleName}</Title>
+            {moduleDesc && <Text type="secondary">— {moduleDesc}</Text>}
+          </Space>
         </div>
+
+        {/* 模块级 Tab */}
         <Tabs
           activeKey={activeKey}
           onChange={onTabChange}
@@ -54,7 +69,7 @@ export default function ModuleLayout({ moduleName, moduleDesc, items, children }
         />
       </div>
 
-      {/* 模块内容区 */}
+      {/* 模块内容 */}
       <div style={{ padding: 24 }}>
         {children}
       </div>

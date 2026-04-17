@@ -14,6 +14,7 @@ from app.modules.records_router import router as records_router
 from app.modules.learning_lab_router import router as learning_lab_router
 from app.modules.dashboard_router import router as dashboard_router
 from app.modules.schedule_router import router as schedule_router
+from app.routers.data_ops import router as data_ops_router
 
 v1 = APIRouter(prefix="/api/v1", tags=["API v1"])
 
@@ -34,3 +35,4 @@ v1.include_router(records_router)
 v1.include_router(learning_lab_router)
 v1.include_router(dashboard_router)
 v1.include_router(schedule_router)
+v1.include_router(data_ops_router)

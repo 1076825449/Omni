@@ -169,6 +169,73 @@ def delete_record(
     return {"success": True, "message": "对象已归档"}
 
 
+@router.post("/records/{record_id}/tags")
+def update_tags(
+    record_id: str,
+    body: BatchRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """更新标签（批量）"""
+    records = db.query(Record).filter(
+        Record.record_id.in_(body.record_ids),
+        Record.owner_id == current_user.id,
+    ).all()
+    updated = 0
+    for r in records:
+        if body.assignee is not None:
+            r.tags = body.assignee  # reuse assignee field as tags placeholder
+        log_action(db, "update", r.record_id, current_user.id, detail=f"更新标签: {r.name}")
+        updated += 1
+    db.commit()
+    return {"success": True, "message": f"已更新 {updated} 条记录"}
+
+
+@router.get("/records/tags/suggestions")
+def tag_suggestions(
+    q: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """获取标签建议（去重）"""
+    query = db.query(Record.tags).filter(
+        Record.owner_id == current_user.id,
+        Record.tags.isnot(None),
+        Record.tags != "",
+    )
+    if q:
+        query = query.filter(Record.tags.like(f"%{q}%"))
+    all_tags = set()
+    for (tag_str,) in query.distinct().all():
+        if tag_str:
+            for tag in tag_str.split(","):
+                tag = tag.strip()
+                if tag:
+                    all_tags.add(tag)
+    return {"tags": sorted(all_tags)[:50]}
+
+
+@router.post("/records/batch-delete")
+def batch_delete(
+    body: BatchRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """批量彻底删除（需确认）"""
+    if not body.record_ids:
+        raise HTTPException(status_code=400, detail="未提供要删除的记录ID")
+    records = db.query(Record).filter(
+        Record.record_id.in_(body.record_ids),
+        Record.owner_id == current_user.id,
+    ).all()
+    deleted = 0
+    for r in records:
+        db.delete(r)
+        deleted += 1
+    db.commit()
+    return {"success": True, "message": f"已彻底删除 {deleted} 条记录"}
+
+
 @router.post("/batch-update")
 def batch_update(
     body: BatchRequest,

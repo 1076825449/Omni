@@ -21,6 +21,7 @@ from app.modules.dashboard_router import router as dashboard_router
 from app.modules.schedule_router import router as schedule_router
 from app.routers.webhooks import router as webhooks_router
 from app.routers.ws import websocket_endpoint
+from app.routers.data_ops import router as data_ops_router
 from app.models.permission import Role, ROLE_PERMISSIONS
 
 
@@ -84,6 +85,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 速率限制中间件
+from app.middleware.rate_limit import rate_limit_middleware
+app.middleware("http")(rate_limit_middleware)
+
 # 挂载路由
 app.include_router(auth.router)
 app.include_router(modules.router)
@@ -102,6 +107,7 @@ app.include_router(cross_links_router)
 app.include_router(webhooks_router)
 app.include_router(dashboard_router)
 app.include_router(schedule_router)
+app.include_router(data_ops_router)
 
 # WebSocket
 app.add_websocket_route("/ws", websocket_endpoint)

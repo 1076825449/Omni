@@ -30,6 +30,9 @@ def override_get_db():
 def setup_db():
     Base.metadata.create_all(bind=engine)
     app.dependency_overrides[get_db] = override_get_db
+    # 清理 rate limiter 状态
+    from app.middleware.rate_limit import _limiter
+    _limiter._hits.clear()
     yield
     app.dependency_overrides.clear()
     Base.metadata.drop_all(bind=engine)

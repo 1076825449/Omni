@@ -368,3 +368,16 @@ export const learningLabApi = {
   removeFavorite: (id: number) => request<{ success: boolean }>('/api/modules/learning-lab/favorites/' + id, { method: 'DELETE' }),
   getStats: () => request<LearningStats>('/api/modules/learning-lab/stats'),
 }
+
+export interface DashboardData {
+  stat_cards: { label: string; value: number; change?: number }[]
+  task_trend: { date: string; count: number }[]
+  module_stats: { module: string; total: number; succeeded: number; failed: number }[]
+  recent_activity: {
+    action: string; target_type: string; detail: string; module: string; result: string; created_at: string
+  }[]
+}
+
+export const dashboardApi = {
+  overview: () => request<DashboardData>('/api/modules/dashboard/overview'),
+}

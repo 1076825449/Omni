@@ -1,5 +1,6 @@
-import { Form, Input, Button, Typography, message } from 'antd'
+import { Form, Input, Button, Typography, message, Checkbox } from 'antd'
 import { useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 import { useAuthStore } from '../../stores/auth'
 
 const { Title, Text } = Typography
@@ -8,16 +9,28 @@ export default function Login() {
   const [form] = Form.useForm()
   const navigate = useNavigate()
   const login = useAuthStore(s => s.login)
+  const [remember, setRemember] = useState(() => {
+    return localStorage.getItem('omni-remember') === 'true'
+  })
 
   const onFinish = async ({ username, password }: { username: string; password: string }) => {
     const ok = await login(username, password)
     if (ok) {
+      if (remember) {
+        localStorage.setItem('omni-remember', 'true')
+        localStorage.setItem('omni-last-username', username)
+      } else {
+        localStorage.removeItem('omni-remember')
+        localStorage.removeItem('omni-last-username')
+      }
       message.success('登录成功')
       navigate('/')
     } else {
       message.error('用户名或密码错误')
     }
   }
+
+  const lastUsername = localStorage.getItem('omni-last-username') || ''
 
   return (
     <div className="omni-login-container">
@@ -32,7 +45,7 @@ export default function Login() {
           layout="vertical"
           onFinish={onFinish}
           size="large"
-          initialValues={{ username: 'admin', password: 'admin123' }}
+          initialValues={{ username: lastUsername || 'admin', password: 'admin123' }}
         >
           <Form.Item
             name="username"
@@ -50,7 +63,13 @@ export default function Login() {
             <Input.Password placeholder="请输入密码" />
           </Form.Item>
 
-          <Form.Item style={{ marginBottom: 0, marginTop: 24 }}>
+          <Form.Item style={{ marginBottom: 0 }}>
+            <Checkbox checked={remember} onChange={e => setRemember(e.target.checked)}>
+              记住用户名
+            </Checkbox>
+          </Form.Item>
+
+          <Form.Item style={{ marginBottom: 0, marginTop: 16 }}>
             <Button type="primary" htmlType="submit" block>
               登录
             </Button>

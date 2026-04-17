@@ -15,6 +15,7 @@ import Stats from './pages/Stats'
 import Help from './pages/Help'
 import GettingStarted from './pages/Help/GettingStarted'
 import AnalysisWorkbench from './modules/analysis-workbench'
+import DashboardWorkbench from './modules/dashboard-workbench'
 import RecordOperations from './modules/record-operations'
 import LearningLab from './modules/learning-lab'
 
@@ -145,6 +146,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <LearningLab />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/modules/dashboard-workbench/*"
+            element={
+              <ProtectedRoute>
+                <DashboardWorkbench />
               </ProtectedRoute>
             }
           />

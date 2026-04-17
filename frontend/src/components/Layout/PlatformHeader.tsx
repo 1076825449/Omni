@@ -7,6 +7,7 @@ import { notificationsApi } from '../../services/api'
 
 const navItems = [
   { label: '首页', path: '/' },
+  { label: '仪表盘', path: '/modules/dashboard-workbench' },
   { label: '模块中心', path: '/modules' },
   { label: '任务中心', path: '/tasks' },
   { label: '文件中心', path: '/files' },
@@ -39,7 +40,19 @@ export default function PlatformHeader() {
     }
   }
 
+  const roleLabels: Record<string, string> = { admin: '管理员', user: '普通用户', viewer: '访客' }
   const userMenu: MenuProps['items'] = [
+    {
+      key: 'user-info',
+      label: (
+        <div style={{ minWidth: 160 }}>
+          <div style={{ fontWeight: 600 }}>{user?.nickname || user?.username}</div>
+          <div style={{ fontSize: 12, color: '#999' }}>{roleLabels[user?.role || ''] || user?.role}</div>
+        </div>
+      ),
+      disabled: true,
+    },
+    { type: 'divider' },
     { key: 'settings', label: '系统设置' },
     { type: 'divider' },
     { key: 'logout', label: '退出登录', danger: true },

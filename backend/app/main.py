@@ -17,7 +17,10 @@ from app.routers.v1 import v1 as api_v1_router
 from app.modules.analysis_router import router as analysis_router
 from app.modules.records_router import router as records_router
 from app.modules.learning_lab_router import router as learning_lab_router
+from app.modules.dashboard_router import router as dashboard_router
+from app.modules.schedule_router import router as schedule_router
 from app.routers.webhooks import router as webhooks_router
+from app.routers.ws import websocket_endpoint
 from app.models.permission import Role, ROLE_PERMISSIONS
 
 
@@ -59,6 +62,9 @@ async def lifespan(app: FastAPI):
     yield
     # 关闭时调用插件钩子
     pm.call_hooks("on_shutdown", app=app)
+    # 关闭 WebSocket 管理器
+    from app.routers.ws import manager
+    manager._connections.clear()
 
 
 app = FastAPI(
@@ -94,6 +100,12 @@ app.include_router(learning_lab_router)
 app.include_router(stats_router)
 app.include_router(cross_links_router)
 app.include_router(webhooks_router)
+app.include_router(dashboard_router)
+app.include_router(schedule_router)
+
+# WebSocket
+app.add_websocket_route("/ws", websocket_endpoint)
+
 app.include_router(api_v1_router)
 
 

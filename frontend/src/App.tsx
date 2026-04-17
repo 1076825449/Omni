@@ -13,7 +13,6 @@ import AnalysisWorkbench from './modules/analysis-workbench'
 import RecordOperations from './modules/record-operations'
 import LearningLab from './modules/learning-lab'
 
-// 登录页不使用平台布局（独立）
 function LoginLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
@@ -33,7 +32,7 @@ function App() {
           {/* 登录页 - 独立布局 */}
           <Route path="/login" element={<LoginLayout><Login /></LoginLayout>} />
 
-          {/* 平台页面 - 统一布局 */}
+          {/* 平台公共页面 - 统一布局 */}
           <Route path="/" element={<PlatformLayout><Home /></PlatformLayout>} />
           <Route path="/modules" element={<PlatformLayout><ModuleCenter /></PlatformLayout>} />
           <Route path="/tasks" element={<PlatformLayout><TaskCenter /></PlatformLayout>} />
@@ -42,10 +41,10 @@ function App() {
           <Route path="/notifications" element={<PlatformLayout><Notifications /></PlatformLayout>} />
           <Route path="/settings" element={<PlatformLayout><Settings /></PlatformLayout>} />
 
-          {/* 模块页面 - 统一布局 */}
-          <Route path="/modules/analysis-workbench" element={<PlatformLayout><AnalysisWorkbench /></PlatformLayout>} />
-          <Route path="/modules/record-operations" element={<PlatformLayout><RecordOperations /></PlatformLayout>} />
-          <Route path="/modules/learning-lab" element={<PlatformLayout><LearningLab /></PlatformLayout>} />
+          {/* 模块页面 - 模块内部包含 PlatformLayout */}
+          <Route path="/modules/analysis-workbench/*" element={<AnalysisWorkbench />} />
+          <Route path="/modules/record-operations/*" element={<RecordOperations />} />
+          <Route path="/modules/learning-lab/*" element={<LearningLab />} />
 
           {/* 默认跳转 */}
           <Route path="*" element={<Navigate to="/" replace />} />

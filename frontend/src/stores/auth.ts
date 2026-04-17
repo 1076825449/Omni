@@ -10,18 +10,21 @@ interface User {
 
 interface AuthState {
   user: User | null
+  permissions: string[]
   isAuthenticated: boolean
   login: (username: string, password: string) => Promise<boolean>
   logout: () => Promise<void>
   checkSession: () => Promise<void>
+  hasPermission: (permission: string) => boolean
 }
 
 const API_BASE = 'http://localhost:3000'
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
+      permissions: [],
       isAuthenticated: false,
 
       login: async (username: string, password: string): Promise<boolean> => {
@@ -34,7 +37,9 @@ export const useAuthStore = create<AuthState>()(
           })
           const data = await res.json()
           if (data.success) {
-            set({ user: data.user, isAuthenticated: true })
+            set({ user: data.user, isAuthenticated: true, permissions: [] })
+            // fetch permissions
+            get().checkSession()
             return true
           }
           return false
@@ -48,28 +53,44 @@ export const useAuthStore = create<AuthState>()(
           method: 'POST',
           credentials: 'include',
         })
-        set({ user: null, isAuthenticated: false })
+        set({ user: null, permissions: [], isAuthenticated: false })
       },
 
       checkSession: async () => {
         try {
-          const res = await fetch(`${API_BASE}/api/auth/me`, {
-            credentials: 'include',
-          })
-          if (res.ok) {
-            const user = await res.json()
+          const [meRes, permRes] = await Promise.all([
+            fetch(`${API_BASE}/api/auth/me`, { credentials: 'include' }),
+            fetch(`${API_BASE}/api/auth/me/permissions`, { credentials: 'include' }),
+          ])
+          if (meRes.ok && permRes.ok) {
+            const user = await meRes.json()
+            const permData = await permRes.json()
             if (user) {
-              set({ user, isAuthenticated: true })
+              set({
+                user,
+                permissions: permData.permissions || [],
+                isAuthenticated: true,
+              })
             }
           }
         } catch {
           // ignore
         }
       },
+
+      hasPermission: (permission: string) => {
+        const { permissions } = get()
+        // admin role has all permissions via the backend
+        return permissions.includes(permission)
+      },
     }),
     {
       name: 'omni-auth',
-      partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated }),
+      partialize: (state) => ({
+        user: state.user,
+        isAuthenticated: state.isAuthenticated,
+        permissions: state.permissions,
+      }),
     }
   )
 )

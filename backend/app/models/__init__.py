@@ -2,3 +2,4 @@ from .models import User, Session
 from .module import Module
 from .record import Task, FileRecord, OperationLog
 from .backup import Backup
+from .permission import Role, ALL_PERMISSIONS, ROLE_PERMISSIONS

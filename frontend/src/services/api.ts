@@ -186,3 +186,22 @@ export const analysisApi = {
     }).then(r => r.json())
   },
 }
+
+export interface RoleRecord {
+  id: number
+  name: string
+  display_name: string
+  description: string
+  permissions: string[]
+  is_active: boolean
+}
+
+export const rolesApi = {
+  list: () => request<{ roles: RoleRecord[] }>('/api/platform/roles'),
+  getPermissions: () => request<{ permissions: string[]; defaults: Record<string, string[]> }>('/api/platform/roles/permissions'),
+  update: (name: string, data: { display_name: string; description: string; permissions: string[] }) =>
+    request<{ success: boolean }>('/api/platform/roles/' + name, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+}

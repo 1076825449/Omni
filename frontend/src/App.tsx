@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ConfigProvider } from 'antd'
 import PlatformLayout from './components/Layout'
+import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
 import Home from './pages/Platform/Home'
 import ModuleCenter from './pages/ModuleCenter'
@@ -12,10 +13,6 @@ import Settings from './pages/Settings'
 import AnalysisWorkbench from './modules/analysis-workbench'
 import RecordOperations from './modules/record-operations'
 import LearningLab from './modules/learning-lab'
-
-function LoginLayout({ children }: { children: React.ReactNode }) {
-  return <>{children}</>
-}
 
 function App() {
   return (
@@ -29,22 +26,92 @@ function App() {
     >
       <BrowserRouter>
         <Routes>
-          {/* 登录页 - 独立布局 */}
-          <Route path="/login" element={<LoginLayout><Login /></LoginLayout>} />
+          {/* 公开 */}
+          <Route path="/login" element={<Login />} />
 
-          {/* 平台公共页面 - 统一布局 */}
-          <Route path="/" element={<PlatformLayout><Home /></PlatformLayout>} />
-          <Route path="/modules" element={<PlatformLayout><ModuleCenter /></PlatformLayout>} />
-          <Route path="/tasks" element={<PlatformLayout><TaskCenter /></PlatformLayout>} />
-          <Route path="/files" element={<PlatformLayout><FileCenter /></PlatformLayout>} />
-          <Route path="/logs" element={<PlatformLayout><LogCenter /></PlatformLayout>} />
-          <Route path="/notifications" element={<PlatformLayout><Notifications /></PlatformLayout>} />
-          <Route path="/settings" element={<PlatformLayout><Settings /></PlatformLayout>} />
+          {/* 受保护 */}
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <PlatformLayout><Home /></PlatformLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/modules"
+            element={
+              <ProtectedRoute>
+                <PlatformLayout><ModuleCenter /></PlatformLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tasks"
+            element={
+              <ProtectedRoute>
+                <PlatformLayout><TaskCenter /></PlatformLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/files"
+            element={
+              <ProtectedRoute>
+                <PlatformLayout><FileCenter /></PlatformLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/logs"
+            element={
+              <ProtectedRoute>
+                <PlatformLayout><LogCenter /></PlatformLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/notifications"
+            element={
+              <ProtectedRoute>
+                <PlatformLayout><Notifications /></PlatformLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <PlatformLayout><Settings /></PlatformLayout>
+              </ProtectedRoute>
+            }
+          />
 
-          {/* 模块页面 - 模块内部包含 PlatformLayout */}
-          <Route path="/modules/analysis-workbench/*" element={<AnalysisWorkbench />} />
-          <Route path="/modules/record-operations/*" element={<RecordOperations />} />
-          <Route path="/modules/learning-lab/*" element={<LearningLab />} />
+          {/* 模块 */}
+          <Route
+            path="/modules/analysis-workbench/*"
+            element={
+              <ProtectedRoute>
+                <AnalysisWorkbench />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/modules/record-operations/*"
+            element={
+              <ProtectedRoute>
+                <RecordOperations />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/modules/learning-lab/*"
+            element={
+              <ProtectedRoute>
+                <LearningLab />
+              </ProtectedRoute>
+            }
+          />
 
           {/* 默认跳转 */}
           <Route path="*" element={<Navigate to="/" replace />} />

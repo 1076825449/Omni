@@ -1,14 +1,22 @@
-// 登录页
 import { Form, Input, Button, Typography, message } from 'antd'
+import { useNavigate } from 'react-router-dom'
+import { useAuthStore } from '../../stores/auth'
 
 const { Title, Text } = Typography
 
 export default function Login() {
   const [form] = Form.useForm()
+  const navigate = useNavigate()
+  const login = useAuthStore(s => s.login)
 
-  const onFinish = (values: { username: string; password: string }) => {
-    console.log('登录:', values)
-    message.success('登录成功（占位）')
+  const onFinish = async ({ username, password }: { username: string; password: string }) => {
+    const ok = await login(username, password)
+    if (ok) {
+      message.success('登录成功')
+      navigate('/')
+    } else {
+      message.error('用户名或密码错误')
+    }
   }
 
   return (
@@ -24,6 +32,7 @@ export default function Login() {
           layout="vertical"
           onFinish={onFinish}
           size="large"
+          initialValues={{ username: 'admin', password: 'admin123' }}
         >
           <Form.Item
             name="username"
@@ -47,6 +56,12 @@ export default function Login() {
             </Button>
           </Form.Item>
         </Form>
+
+        <div style={{ textAlign: 'center', marginTop: 16 }}>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            测试账号：admin / admin123
+          </Text>
+        </div>
       </div>
     </div>
   )

@@ -1,7 +1,7 @@
-import { Link, useLocation } from 'react-router-dom'
-import { Badge, Avatar, Dropdown } from 'antd'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Badge, Avatar, Dropdown, Button, message } from 'antd'
 import type { MenuProps } from 'antd'
-import './PlatformHeader.css'
+import { useAuthStore } from '../../stores/auth'
 
 const navItems = [
   { label: '首页', path: '/' },
@@ -11,13 +11,27 @@ const navItems = [
   { label: '日志中心', path: '/logs' },
 ]
 
-const userMenu: MenuProps['items'] = [
-  { key: 'settings', label: '系统设置' },
-  { key: 'logout', label: '退出登录' },
-]
-
 export default function PlatformHeader() {
   const location = useLocation()
+  const navigate = useNavigate()
+  const { user, isAuthenticated, logout } = useAuthStore()
+
+  const handleLogout = async () => {
+    await logout()
+    message.success('已退出登录')
+    navigate('/login')
+  }
+
+  const userMenu: MenuProps['items'] = [
+    { key: 'settings', label: '系统设置' },
+    { type: 'divider' },
+    { key: 'logout', label: '退出登录', danger: true },
+  ]
+
+  const onUserMenuClick: MenuProps['onClick'] = ({ key }) => {
+    if (key === 'logout') handleLogout()
+    if (key === 'settings') navigate('/settings')
+  }
 
   return (
     <header className="omni-header">
@@ -44,11 +58,17 @@ export default function PlatformHeader() {
           </Badge>
         </Link>
 
-        <Dropdown menu={{ items: userMenu }} placement="bottomRight">
-          <Avatar style={{ cursor: 'pointer', background: 'var(--omni-color-primary)' }}>
-            U
-          </Avatar>
-        </Dropdown>
+        {isAuthenticated ? (
+          <Dropdown menu={{ items: userMenu, onClick: onUserMenuClick }} placement="bottomRight">
+            <Avatar style={{ cursor: 'pointer', background: 'var(--omni-color-primary)' }}>
+              {user?.nickname?.[0] ?? user?.username?.[0] ?? 'U'}
+            </Avatar>
+          </Dropdown>
+        ) : (
+          <Link to="/login">
+            <Button size="small">登录</Button>
+          </Link>
+        )}
       </div>
     </header>
   )

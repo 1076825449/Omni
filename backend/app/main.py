@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 
 from app.core.database import engine, Base
 from app.routers import auth, modules, tasks, files, logs
+from app.modules.analysis_router import router as analysis_router
 
 
 @asynccontextmanager
@@ -32,6 +33,7 @@ app.include_router(modules.router)
 app.include_router(tasks.router)
 app.include_router(files.router)
 app.include_router(logs.router)
+app.include_router(analysis_router)
 
 
 @app.get("/api/platform/health")

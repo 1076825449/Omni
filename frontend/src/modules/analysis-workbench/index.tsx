@@ -5,6 +5,8 @@ import ModuleLayout from '../../components/Layout/ModuleLayout'
 import Workbench from './pages/Workbench'
 import NewAnalysis from './pages/NewAnalysis'
 import History from './pages/History'
+import Results from './pages/Results'
+import Reports from './pages/Reports'
 
 const tabItems = [
   { key: 'workbench', label: '工作台', path: '/modules/analysis-workbench' },
@@ -24,6 +26,8 @@ export default function AnalysisWorkbench() {
           <Route index element={<Workbench />} />
           <Route path="new" element={<NewAnalysis />} />
           <Route path="history" element={<History />} />
+          <Route path="results/:id" element={<Results />} />
+          <Route path="reports/:id" element={<Reports />} />
         </Routes>
       </ModuleLayout>
     </PlatformLayout>

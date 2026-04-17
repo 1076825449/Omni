@@ -113,3 +113,57 @@ export const authApi = {
     request<{ success: boolean; message: string }>('/api/auth/logout', { method: 'POST' }),
   me: () => request<any>('/api/auth/me'),
 }
+
+export interface AnalysisTask {
+  id: number
+  task_id: string
+  name: string
+  description: string
+  status: string
+  file_count: number
+  created_at: string
+}
+
+export interface AnalysisTaskDetail {
+  id: number
+  task_id: string
+  name: string
+  description: string
+  status: string
+  result_summary: string
+  file_count: number
+  created_at: string
+  updated_at: string
+  completed_at: string | null
+}
+
+export interface TaskCreatedResponse {
+  success: boolean
+  message: string
+  task_id: string
+}
+
+export const analysisApi = {
+  createTask: (name: string, description: string) =>
+    request<TaskCreatedResponse>('/api/modules/analysis-workbench/tasks', {
+      method: 'POST',
+      body: JSON.stringify({ name, description }),
+    }),
+  listTasks: () =>
+    request<{ tasks: AnalysisTask[]; total: number }>('/api/modules/analysis-workbench/tasks'),
+  getTask: (taskId: string) =>
+    request<AnalysisTaskDetail>('/api/modules/analysis-workbench/tasks/' + taskId),
+  cancelTask: (taskId: string) =>
+    request<{ success: boolean }>('/api/modules/analysis-workbench/tasks/' + taskId + '/cancel', { method: 'POST' }),
+  runTask: (taskId: string) =>
+    request<{ success: boolean }>('/api/modules/analysis-workbench/tasks/' + taskId + '/run', { method: 'POST' }),
+  uploadFile: (taskId: string, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return fetch('http://localhost:3000/api/modules/analysis-workbench/upload?task_id=' + taskId, {
+      method: 'POST',
+      credentials: 'include',
+      body: form,
+    }).then(r => r.json())
+  },
+}

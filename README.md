@@ -88,6 +88,13 @@ python cli.py session cleanup           # 清理过期会话
 - ✅ 登录页增强（记住用户名 Checkbox）
 - ✅ 顶部导航增强（仪表盘入口 + 用户菜单显示角色）
 
+**Phase 5 — 生产加固 + 易用性 ✅**
+- ✅ Rate Limiting 中间件（登录5次/分钟，API100次/分钟，localhost白名单）
+- ✅ 数据导入/导出模块（JSON格式，GET /export + POST /import）
+- ✅ Audit Log 服务（app/services/audit.py，IP/User-Agent记录）
+- ✅ 模块注册API（POST /register，GET/PUT /{key}/config，admin only）
+- ✅ 对象管理增强（批量删除弹窗确认 + 标签AutoComplete + 分页显示总数）
+
 **样板模块：**
 - ✅ 分析工作台（analysis-workbench）— 工作流型
 - ✅ 对象管理（record-operations）— 列表型
@@ -109,5 +116,5 @@ git clone https://github.com/1076825449/Omni.git
 cd Omni
 ```
 
-**当前 commit：** `7d4adc2`
+**当前 commit：** `0838588`
 **GitHub：** https://github.com/1076825449/Omni

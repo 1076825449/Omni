@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Badge, Avatar, Dropdown, Button, message } from 'antd'
+import { Badge, Avatar, Dropdown, Input, Button } from 'antd'
 import type { MenuProps } from 'antd'
+import { useState } from 'react'
 import { useAuthStore } from '../../stores/auth'
 
 const navItems = [
@@ -15,11 +16,18 @@ export default function PlatformHeader() {
   const location = useLocation()
   const navigate = useNavigate()
   const { user, isAuthenticated, logout } = useAuthStore()
+  const [searchValue, setSearchValue] = useState('')
 
   const handleLogout = async () => {
     await logout()
-    message.success('已退出登录')
     navigate('/login')
+  }
+
+  const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && searchValue.trim()) {
+      navigate('/search?q=' + encodeURIComponent(searchValue.trim()))
+      setSearchValue('')
+    }
   }
 
   const userMenu: MenuProps['items'] = [
@@ -50,6 +58,16 @@ export default function PlatformHeader() {
           </Link>
         ))}
       </nav>
+
+      {/* 搜索框 */}
+      <Input.Search
+        placeholder="搜索任务/文件/日志/模块"
+        value={searchValue}
+        onChange={e => setSearchValue(e.target.value)}
+        onKeyDown={handleSearch}
+        style={{ width: 240, marginRight: 16 }}
+        size="small"
+      />
 
       <div className="omni-header-right">
         <Link to="/notifications" className="omni-header-nav-item">

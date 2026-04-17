@@ -10,6 +10,7 @@ import FileCenter from './pages/FileCenter'
 import LogCenter from './pages/LogCenter'
 import Notifications from './pages/Notifications'
 import Settings from './pages/Settings'
+import Search from './pages/Search'
 import AnalysisWorkbench from './modules/analysis-workbench'
 import RecordOperations from './modules/record-operations'
 import LearningLab from './modules/learning-lab'
@@ -75,6 +76,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <PlatformLayout><Notifications /></PlatformLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/search"
+            element={
+              <ProtectedRoute>
+                <PlatformLayout><Search /></PlatformLayout>
               </ProtectedRoute>
             }
           />

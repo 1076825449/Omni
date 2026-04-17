@@ -9,6 +9,8 @@ from app.core.database import engine, Base, SessionLocal
 from app.routers import auth, modules, tasks, files, logs
 from app.routers.backups import router as backups_router
 from app.routers.roles import router as roles_router
+from app.routers.notifications import router as notifications_router
+from app.routers.search import router as search_router
 from app.modules.analysis_router import router as analysis_router
 from app.models.permission import Role, ROLE_PERMISSIONS
 
@@ -65,6 +67,8 @@ app.include_router(files.router)
 app.include_router(logs.router)
 app.include_router(backups_router)
 app.include_router(roles_router)
+app.include_router(notifications_router)
+app.include_router(search_router)
 app.include_router(analysis_router)
 
 

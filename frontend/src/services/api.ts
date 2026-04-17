@@ -205,3 +205,30 @@ export const rolesApi = {
       body: JSON.stringify(data),
     }),
 }
+
+export interface NotificationRecord {
+  id: number
+  title: string
+  content: string
+  type: string
+  is_read: boolean
+  created_at: string
+}
+
+export interface SearchResult {
+  type: string
+  id: string
+  title: string
+  subtitle: string
+  url: string
+}
+
+export const notificationsApi = {
+  list: () => request<{ notifications: NotificationRecord[]; total: number; unread_count: number }>('/api/notifications'),
+  markRead: (id: number) => request<{ success: boolean }>('/api/notifications/' + id + '/read', { method: 'POST' }),
+  markAllRead: () => request<{ success: boolean }>('/api/notifications/read-all', { method: 'POST' }),
+}
+
+export const searchApi = {
+  search: (q: string) => request<{ query: string; results: SearchResult[]; total: number }>('/api/search?q=' + encodeURIComponent(q)),
+}

@@ -3,13 +3,14 @@ import { Routes, Route } from 'react-router-dom'
 import PlatformLayout from '../../components/Layout'
 import ModuleLayout from '../../components/Layout/ModuleLayout'
 import RecordOperationsWorkbench from './pages/Workbench'
-import RecordImport from './pages/Import'
 import RecordList from './pages/List'
+import RecordImport from './pages/Import'
+import RecordDetail from './pages/Detail'
 
 const tabItems = [
   { key: 'workbench', label: '工作台', path: '/modules/record-operations' },
-  { key: 'import', label: '导入数据', path: '/modules/record-operations/import' },
   { key: 'list', label: '对象列表', path: '/modules/record-operations/list' },
+  { key: 'import', label: '导入数据', path: '/modules/record-operations/import' },
 ]
 
 export default function RecordOperations() {
@@ -22,8 +23,9 @@ export default function RecordOperations() {
       >
         <Routes>
           <Route index element={<RecordOperationsWorkbench />} />
-          <Route path="import" element={<RecordImport />} />
           <Route path="list" element={<RecordList />} />
+          <Route path="import" element={<RecordImport />} />
+          <Route path=":id" element={<RecordDetail />} />
         </Routes>
       </ModuleLayout>
     </PlatformLayout>

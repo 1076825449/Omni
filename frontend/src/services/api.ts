@@ -232,3 +232,47 @@ export const notificationsApi = {
 export const searchApi = {
   search: (q: string) => request<{ query: string; results: SearchResult[]; total: number }>('/api/search?q=' + encodeURIComponent(q)),
 }
+
+export interface RecordItem {
+  id: number
+  record_id: string
+  name: string
+  category: string
+  assignee: string
+  status: string
+  tags: string
+  detail: string
+  import_batch: string
+  owner_id: number
+  created_at: string
+  updated_at: string
+}
+
+export const recordsApi = {
+  list: (params?: { category?: string; status?: string; assignee?: string; q?: string; limit?: number; offset?: number }) => {
+    const sp = new URLSearchParams()
+    if (params?.category) sp.set('category', params.category)
+    if (params?.status) sp.set('status', params.status)
+    if (params?.assignee) sp.set('assignee', params.assignee)
+    if (params?.q) sp.set('q', params.q)
+    if (params?.limit) sp.set('limit', String(params.limit))
+    if (params?.offset) sp.set('offset', String(params.offset))
+    return request<{ records: RecordItem[]; total: number }>('/api/modules/record-operations/records?' + sp)
+  },
+  create: (data: { name: string; category?: string; assignee?: string; tags?: string; detail?: string }) =>
+    request<RecordItem>('/api/modules/record-operations/records', { method: 'POST', body: JSON.stringify(data) }),
+  get: (id: string) => request<RecordItem>('/api/modules/record-operations/records/' + id),
+  update: (id: string, data: Partial<RecordItem>) =>
+    request<RecordItem>('/api/modules/record-operations/records/' + id, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) => request<{ success: boolean }>('/api/modules/record-operations/records/' + id + '/delete', { method: 'POST' }),
+  batchUpdate: (record_ids: string[], data: { category?: string; assignee?: string; status?: string }) =>
+    request<{ success: boolean; message: string }>('/api/modules/record-operations/batch-update', { method: 'POST', body: JSON.stringify({ record_ids, ...data }) }),
+  importFile: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return fetch('http://localhost:3000/api/modules/record-operations/import', {
+      method: 'POST', credentials: 'include', body: form,
+    }).then(r => r.json())
+  },
+  stats: () => request<{ total: number; active: number; categories: number }>('/api/modules/record-operations/stats'),
+}

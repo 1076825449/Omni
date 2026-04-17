@@ -4,3 +4,4 @@ from .record import Task, FileRecord, OperationLog
 from .backup import Backup
 from .permission import Role, ALL_PERMISSIONS, ROLE_PERMISSIONS
 from .notification import Notification
+from .records import Record

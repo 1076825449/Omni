@@ -9,9 +9,11 @@ Omni/
 ├── docs/                    # 产品规范文档
 ├── frontend/               # 平台前端（React + TypeScript + Vite + Ant Design）
 ├── backend/                # 平台后端（FastAPI + Python + SQLAlchemy）
+│   └── app/plugins/         # 插件系统
 ├── scripts/                # 启动脚本
-├── data/                   # 本地运行数据（SQLite + 上传文件）
-└── tests/                  # 平台级测试
+├── cli.py                  # CLI 管理工具
+├── docker-compose.yml      # Docker Compose 一键部署
+└── tests/                  # 平台级测试（pytest + Playwright）
 ```
 
 ## 技术栈
@@ -27,24 +29,32 @@ Omni/
 ## 快速启动
 
 ```bash
-# 后端（端口 3000）
-cd backend
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 3000
+# 方式一：脚本启动（推荐）
+bash scripts/start.sh
 
-# 前端（端口 5173）
-cd frontend
-npm install
-npm run dev
+# 方式二：手动启动
+cd backend && .venv/bin/uvicorn app.main:app --reload --port 3000
+cd frontend && npm run dev
+
+# 方式三：Docker Compose
+cp .env.example .env
+docker-compose up -d
 ```
 
 **测试账号：** `admin / admin123`
 
+**CLI 工具：**
+```bash
+python cli.py --help                    # 查看所有命令
+python cli.py user create <u> <p>      # 创建用户
+python cli.py db status                # 数据库状态
+python cli.py server status            # 服务状态
+python cli.py session cleanup           # 清理过期会话
+```
+
 ## 已完成功能
 
-**平台公共能力：**
+**Phase 1 — 平台骨架 + 样板模块 ✅**
 - ✅ 统一登录与会话（Session + Cookie）
 - ✅ RBAC 权限体系（admin / user / viewer + 自定义权限）
 - ✅ 统一任务中心（全平台耗时操作可追踪）
@@ -56,6 +66,19 @@ npm run dev
 - ✅ 备份与恢复（手动打包 ZIP）
 - ✅ 帮助中心 + 新手起步引导
 - ✅ 模块联动规范（CrossLinkLog + 分析→对象管理联动示例）
+
+**Phase 2 — 部署 + 测试 ✅**
+- ✅ Docker Compose 一键部署（后端+前端+PostgreSQL）
+- ✅ PostgreSQL 支持（DATABASE_URL 环境变量切换）
+- ✅ 自动化测试（10/10 pytest 通过，Playwright 冒烟测试）
+- ✅ 配置外置（.env 环境变量）
+
+**Phase 3 — 开发者工具 + API + 插件 ✅**
+- ✅ CLI 管理工具（user/db/session/server/module）
+- ✅ OpenAPI 文档增强（/docs + /redoc）
+- ✅ API 版本管理（/api/v1/ 与 /api/ 完全兼容）
+- ✅ Webhook 通知系统（HMAC签名/异步投递/CRUD管理）
+- ✅ 插件系统基础架构（PluginManager + 示例插件）
 
 **样板模块：**
 - ✅ 分析工作台（analysis-workbench）— 工作流型
@@ -76,4 +99,5 @@ git clone https://github.com/1076825449/Omni.git
 cd Omni
 ```
 
-**当前 commit：** `5c3b2d4`
+**当前 commit：** `28dce3c`
+**GitHub：** https://github.com/1076825449/Omni

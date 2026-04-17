@@ -16,7 +16,31 @@ router = APIRouter(prefix="/api/auth", tags=["认证"])
 def get_current_user(
     session_id: Optional[str] = Cookie(None),
     db: SASession = Depends(get_db),
+) -> User:
+    """返回当前登录用户，未登录则 raise 401"""
+    if not session_id:
+        raise HTTPException(status_code=401, detail="未登录")
+    session = db.query(SessionModel).filter(
+        SessionModel.session_id == session_id,
+        SessionModel.is_valid == True,
+    ).first()
+    if not session:
+        raise HTTPException(status_code=401, detail="未登录")
+    if session.expires_at < datetime.utcnow():
+        session.is_valid = False
+        db.commit()
+        raise HTTPException(status_code=401, detail="会话已过期")
+    user = db.query(User).filter(User.id == session.user_id, User.is_active == True).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="用户不存在或已禁用")
+    return user
+
+
+def get_optional_user(
+    session_id: Optional[str] = Cookie(None),
+    db: SASession = Depends(get_db),
 ) -> Optional[User]:
+    """可选当前用户（用于 /me 等端点）"""
     if not session_id:
         return None
     session = db.query(SessionModel).filter(
@@ -60,9 +84,9 @@ def login(
 ):
     user = db.query(User).filter(User.username == body.username).first()
     if not user or not verify_password(body.password, user.hashed_password):
-        return LoginResponse(success=False, message="用户名或密码错误")
+        raise HTTPException(status_code=401, detail="用户名或密码错误")
     if not user.is_active:
-        return LoginResponse(success=False, message="账号已被禁用")
+        raise HTTPException(status_code=403, detail="账号已被禁用")
 
     sid = create_session_id()
     session = SessionModel(
@@ -108,7 +132,7 @@ def logout(
 
 
 @router.get("/me", response_model=Optional[UserInfo])
-def get_me(current_user: Optional[User] = Depends(get_current_user)):
+def get_me(current_user: Optional[User] = Depends(get_optional_user)):
     if not current_user:
         return None
     return UserInfo(

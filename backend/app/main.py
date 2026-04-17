@@ -12,6 +12,7 @@ from app.routers.roles import router as roles_router
 from app.routers.notifications import router as notifications_router
 from app.routers.search import router as search_router
 from app.routers.stats import router as stats_router
+from app.routers.cross_links import router as cross_links_router
 from app.modules.analysis_router import router as analysis_router
 from app.modules.records_router import router as records_router
 from app.models.permission import Role, ROLE_PERMISSIONS
@@ -74,6 +75,7 @@ app.include_router(search_router)
 app.include_router(analysis_router)
 app.include_router(records_router)
 app.include_router(stats_router)
+app.include_router(cross_links_router)
 
 
 @app.get("/api/platform/health")

@@ -7,6 +7,8 @@ from pydantic import BaseModel
 from app.core.database import get_db
 from app.models import User
 from app.models.record import Task, FileRecord, OperationLog
+from app.models.records import Record
+from app.models.cross_link import CrossLinkLog
 from app.routers.auth import get_current_user
 from app.services.file_service import save_upload
 
@@ -45,6 +47,8 @@ class TaskDetailResponse(BaseModel):
     status: str
     result_summary: str
     file_count: int
+    related_record_count: int = 0
+    related_record_ids: List[str] = []
     created_at: datetime
     updated_at: datetime
     completed_at: Optional[datetime]
@@ -137,6 +141,11 @@ def get_task(
         FileRecord.module == "analysis-workbench",
         FileRecord.name.like(f"{task.task_id}%")
     ).count()
+    related = db.query(Record).filter(
+        Record.import_batch.like(f"analysis-{task_id}%"),
+        Record.owner_id == current_user.id,
+    ).all()
+    related_record_ids = [r.record_id for r in related]
     return TaskDetailResponse(
         id=task.id,
         task_id=task.task_id,
@@ -145,6 +154,8 @@ def get_task(
         status=task.status,
         result_summary=task.result_summary or "",
         file_count=file_count,
+        related_record_count=len(related),
+        related_record_ids=related_record_ids,
         created_at=task.created_at,
         updated_at=task.updated_at,
         completed_at=task.completed_at,
@@ -195,10 +206,37 @@ def run_task(
                 t.status = "succeeded"
                 t.result_summary = "分析完成。共处理 1 个文件，发现 3 条关键结论。"
                 t.completed_at = datetime.utcnow()
+                # 创建关联对象（联动示例：分析结果 → 对象管理）
+                import secrets as sk
+                for i, label in enumerate(["高价值线索", "中风险信号", "待核实项"]):
+                    rec = Record(
+                        record_id=f"rec-{sk.token_hex(6)}",
+                        name=f"[{t.name}] {label}",
+                        category="analysis-result",
+                        assignee="",
+                        status="active",
+                        tags="analysis,auto-generated",
+                        detail=f"来源于分析任务 {t.task_id}，标签：{label}",
+                        import_batch=f"analysis-{task_id}",
+                        owner_id=current_user.id,
+                    )
+                    s.add(rec)
+                    s.flush()
+                    # 写联动日志
+                    link = CrossLinkLog(
+                        source_module="analysis-workbench",
+                        source_type="task",
+                        source_id=task_id,
+                        target_module="record-operations",
+                        target_type="record",
+                        target_id=rec.record_id,
+                        operator_id=current_user.id,
+                    )
+                    s.add(link)
                 # 发通知
                 notif = Notification(
                     title="分析任务完成",
-                    content=f'任务 "{t.name}" 已完成，请查看结果。',
+                    content=f'任务 "{t.name}" 已完成，发现 3 条关键结论，已同步至对象管理。',
                     type="success",
                     user_id=current_user.id,
                 )

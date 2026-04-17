@@ -1,5 +1,5 @@
 // 帮助中心页
-import { Card, Typography, List, Space, Divider, Tag, Collapse } from 'antd'
+import { Card, Typography, List, Space, Divider, Tag, Collapse, Button } from 'antd'
 import { useNavigate } from 'react-router-dom'
 
 const { Title, Text, Paragraph } = Typography
@@ -44,6 +44,9 @@ export default function Help() {
     <div className="omni-page">
       <div className="omni-page-header">
         <Title level={4} style={{ margin: 0 }}>帮助中心</Title>
+        <Button type="primary" size="small" onClick={() => navigate('/help/getting-started')}>
+          新手起步
+        </Button>
       </div>
 
       <Card title="平台模块概览" style={{ marginBottom: 16 }}>

@@ -127,6 +127,24 @@ export default function Results() {
           <Text type="secondary">* 以上为模拟结果，实际分析取决于上传的原始数据</Text>
         </Card>
       )}
+
+      {task.status === 'succeeded' && task.related_record_count > 0 && (
+        <Card
+          title="相关对象（联动至对象管理）"
+          style={{ marginTop: 16 }}
+          extra={
+            <Button size="small" onClick={() => navigate(`/modules/record-operations?batch=analysis-${task.task_id}`)}>
+              查看全部 {task.related_record_count} 条
+            </Button>
+          }
+        >
+          <Text>分析完成自动同步了 <strong>{task.related_record_count}</strong> 条结果对象至对象管理模块。</Text>
+          <br />
+          <Button type="link" onClick={() => navigate(`/modules/record-operations?batch=analysis-${task.task_id}`)}>
+            → 跳转至对象管理查看
+          </Button>
+        </Card>
+      )}
     </div>
   )
 }

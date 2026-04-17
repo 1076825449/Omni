@@ -1,8 +1,9 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Badge, Avatar, Dropdown, Input, Button } from 'antd'
 import type { MenuProps } from 'antd'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuthStore } from '../../stores/auth'
+import { notificationsApi } from '../../services/api'
 
 const navItems = [
   { label: '首页', path: '/' },
@@ -19,6 +20,12 @@ export default function PlatformHeader() {
   const navigate = useNavigate()
   const { user, isAuthenticated, logout } = useAuthStore()
   const [searchValue, setSearchValue] = useState('')
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  useEffect(() => {
+    if (!isAuthenticated) return
+    notificationsApi.list().then(d => setUnreadCount(d.unread_count)).catch(() => {})
+  }, [isAuthenticated])
 
   const handleLogout = async () => {
     await logout()
@@ -61,7 +68,6 @@ export default function PlatformHeader() {
         ))}
       </nav>
 
-      {/* 搜索框 */}
       <Input.Search
         placeholder="搜索任务/文件/日志/模块"
         value={searchValue}
@@ -73,7 +79,7 @@ export default function PlatformHeader() {
 
       <div className="omni-header-right">
         <Link to="/notifications" className="omni-header-nav-item">
-          <Badge count={0} size="small">
+          <Badge count={unreadCount} size="small">
             <span style={{ fontSize: 16 }}>🔔</span>
           </Badge>
         </Link>

@@ -13,6 +13,7 @@ import Settings from './pages/Settings'
 import Search from './pages/Search'
 import Stats from './pages/Stats'
 import Help from './pages/Help'
+import GettingStarted from './pages/Help/GettingStarted'
 import AnalysisWorkbench from './modules/analysis-workbench'
 import RecordOperations from './modules/record-operations'
 import LearningLab from './modules/learning-lab'
@@ -94,6 +95,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <PlatformLayout><Stats /></PlatformLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/help/getting-started"
+            element={
+              <ProtectedRoute>
+                <PlatformLayout><GettingStarted /></PlatformLayout>
               </ProtectedRoute>
             }
           />

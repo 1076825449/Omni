@@ -132,6 +132,8 @@ export interface AnalysisTaskDetail {
   status: string
   result_summary: string
   file_count: number
+  related_record_count: number
+  related_record_ids: string[]
   created_at: string
   updated_at: string
   completed_at: string | null

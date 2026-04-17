@@ -65,7 +65,7 @@ def global_search(
     # Logs
     logs = db.query(OperationLog).filter(
         OperationLog.detail.like(like),
-        operator_id == current_user.id,
+        OperationLog.operator_id == current_user.id,
     ).limit(5).all()
     for l in logs:
         results.append(SearchResult(

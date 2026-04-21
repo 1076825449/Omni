@@ -3,7 +3,8 @@ import { Badge, Avatar, Dropdown, Input, Button } from 'antd'
 import type { MenuProps } from 'antd'
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '../../stores/auth'
-import { notificationsApi } from '../../services/api'
+import { useNotificationStore } from '../../stores/notification'
+import { useWsStore } from '../../stores/ws'
 
 const navItems = [
   { label: '首页', path: '/' },
@@ -20,12 +21,21 @@ export default function PlatformHeader() {
   const location = useLocation()
   const navigate = useNavigate()
   const { user, isAuthenticated, logout } = useAuthStore()
+  const notificationStore = useNotificationStore()
+  const wsConnected = useWsStore(s => s.connected)
   const [searchValue, setSearchValue] = useState('')
-  const [unreadCount, setUnreadCount] = useState(0)
 
+  // Initial fetch + WS-driven real-time updates for notification badge
   useEffect(() => {
     if (!isAuthenticated) return
-    notificationsApi.list().then(d => setUnreadCount(d.unread_count)).catch(() => {})
+    notificationStore.fetch()
+    // Listen for real-time notification events pushed from backend via WebSocket
+    useWsStore.getState().onMessage((msg) => {
+      if (msg.type === 'notification') {
+        // New notification arrived via WS — refresh badge count
+        notificationStore.fetch()
+      }
+    })
   }, [isAuthenticated])
 
   const handleLogout = async () => {
@@ -92,7 +102,7 @@ export default function PlatformHeader() {
 
       <div className="omni-header-right">
         <Link to="/notifications" className="omni-header-nav-item">
-          <Badge count={unreadCount} size="small">
+          <Badge count={notificationStore.unreadCount} size="small">
             <span style={{ fontSize: 16 }}>🔔</span>
           </Badge>
         </Link>

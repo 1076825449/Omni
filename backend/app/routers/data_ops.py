@@ -3,17 +3,15 @@
 GET  /api/platform/backup/export   — 导出全量数据（JSON）
 POST /api/platform/backup/import — 导入数据（JSON）
 """
-import json
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Any, Dict
 from app.core.database import get_db
-from app.models import User, Role, Module, Task, FileRecord, OperationLog, Session as SessionModel
+from app.models import User, Role, Module, Task, FileRecord, OperationLog
 from app.models.records import Record
-from app.models.learning import TrainingSet, PracticeSession, FavoriteQuestion, LearningStats
-from app.models.webhook import Webhook
+from app.models.learning import TrainingSet, PracticeSession
 from app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/api/platform/backup", tags=["平台公共"])
@@ -59,7 +57,7 @@ def make_export(user_id: int, db: Session) -> Dict[str, Any]:
         # 模块注册信息
         "modules": [
             {
-                "module_id": m.module_id,
+                "key": m.key,
                 "name": m.name,
                 "description": m.description,
                 "type": m.type,
@@ -216,10 +214,15 @@ def import_data(
 
     # 导入模块
     for mod_data in body.data.get("modules", []):
-        existing = db.query(Module).filter(Module.module_id == mod_data["module_id"]).first()
+        # 严格使用 key 字段，不再接受 module_id 作为别名（ROADMAP B1）
+        module_key = mod_data.get("key")
+        if not module_key:
+            continue
+
+        existing = db.query(Module).filter(Module.key == module_key).first()
         if not existing:
             db.add(Module(
-                module_id=mod_data["module_id"],
+                key=module_key,
                 name=mod_data["name"],
                 description=mod_data.get("description", ""),
                 type=mod_data.get("type", "custom"),

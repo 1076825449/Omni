@@ -63,7 +63,7 @@ export default function RecordList() {
 
   const handleBatchDelete = async () => {
     try {
-      const res = await recordsApi.delete(selected)
+      const res = await recordsApi.batchDelete(selected)
       message.success(res.message)
       setDeleteModalOpen(false)
       load(page)

@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { Card, Row, Col, Typography, Tag, Button, Space, Spin, Empty } from 'antd'
 import { Link } from 'react-router-dom'
+import { modulesApi } from '../../services/api'
 import type { Module } from '../../services/api'
 
 const { Title, Text, Paragraph } = Typography

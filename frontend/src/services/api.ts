@@ -285,6 +285,8 @@ export const recordsApi = {
   update: (id: string, data: Partial<RecordItem>) =>
     request<RecordItem>('/api/modules/record-operations/records/' + id, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) => request<{ success: boolean }>('/api/modules/record-operations/records/' + id + '/delete', { method: 'POST' }),
+  batchDelete: (record_ids: string[]) =>
+    request<{ success: boolean; message: string }>('/api/modules/record-operations/records/batch-delete', { method: 'POST', body: JSON.stringify({ record_ids }) }),
   batchUpdate: (record_ids: string[], data: { category?: string; assignee?: string; status?: string }) =>
     request<{ success: boolean; message: string }>('/api/modules/record-operations/batch-update', { method: 'POST', body: JSON.stringify({ record_ids, ...data }) }),
   importFile: (file: File) => {
@@ -380,4 +382,26 @@ export interface DashboardData {
 
 export const dashboardApi = {
   overview: () => request<DashboardData>('/api/modules/dashboard/overview'),
+}
+
+export interface ScheduleTask {
+  id: number
+  name: string
+  description?: string
+  cron_expression: string
+  task_type: string
+  task_params?: string
+  is_active: boolean
+  last_run_at?: string
+  next_run_at?: string
+  last_result?: string
+  created_at: string
+}
+
+export const scheduleApi = {
+  list: () => request<{ tasks: ScheduleTask[]; total: number }>('/api/modules/schedule-workbench/tasks'),
+  create: (data: any) => request<ScheduleTask>('/api/modules/schedule-workbench/tasks', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: any) => request<ScheduleTask>('/api/modules/schedule-workbench/tasks/' + id, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: number) => request('/api/modules/schedule-workbench/tasks/' + id, { method: 'DELETE' }),
+  runNow: (id: number) => request<{ success: boolean; message: string }>('/api/modules/schedule-workbench/tasks/' + id + '/run', { method: 'POST' }),
 }

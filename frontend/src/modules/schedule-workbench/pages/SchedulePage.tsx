@@ -56,7 +56,7 @@ export default function SchedulePage() {
 
   const handleRemove = async (id: number) => {
     try {
-      await scheduleApi.remove(id)
+      await scheduleApi.delete(id)
       message.success('定时任务已删除')
       await load()
     } catch {

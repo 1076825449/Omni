@@ -1,7 +1,7 @@
 // 全局搜索结果页
 import { useEffect, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { Card, List, Typography, Input, Tag, Spin, Empty, Button } from 'antd'
+import { Card, List, Typography, Input, Tag, Spin, Empty, Button, Space } from 'antd'
 import { searchApi, SearchResult } from '../../services/api'
 
 const { Title, Text } = Typography

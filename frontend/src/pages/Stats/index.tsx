@@ -1,5 +1,5 @@
 // 平台统计页
-import { Card, Row, Col, Statistic, Progress, Typography, List, Tag, Space, Spin } from 'antd'
+import { Card, Row, Col, Statistic, Progress, Typography, Space, Spin } from 'antd'
 import { useEffect, useState } from 'react'
 import { platformStatsApi } from '../../services/api'
 

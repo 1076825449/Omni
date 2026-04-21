@@ -73,7 +73,7 @@ export default function TaskCenter() {
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
   const [status, setStatus] = useState<string | undefined>()
-  const [module, setModule] = useState<string | undefined>()
+  const [module] = useState<string | undefined>()
 
   const load = (p = 1, s?: string, m?: string) => {
     setLoading(true)

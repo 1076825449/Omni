@@ -48,7 +48,7 @@ export const useWsStore = create<WsState>((set, get) => ({
         }
       }
 
-      ws.onclose = (event) => {
+      ws.onclose = () => {
         set({ connected: false })
         ws = null
 

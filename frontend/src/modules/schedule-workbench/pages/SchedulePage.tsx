@@ -127,51 +127,104 @@ export default function SchedulePage() {
             void handleCreate(values)
           }}
         >
-          <Form.Item label="任务名称" name="name" rules={[{ required: true, message: '请输入任务名称' }]}>
-            <Input placeholder="例如：每日分析同步" />
+          <Form.Item
+            label="任务名称"
+            name="name"
+            rules={[{ required: true, message: '请输入任务名称' }]}
+            extra="给这个定时任务起个名字，方便识别，例如：每日风险分析"
+          >
+            <Input placeholder="例如：每日风险分析" />
           </Form.Item>
-          <Form.Item label="任务说明" name="description">
-            <Input.TextArea rows={2} placeholder="说明该任务的用途" />
+          <Form.Item
+            label="任务说明"
+            name="description"
+            extra="描述这个任务的用途（选填）"
+          >
+            <Input.TextArea rows={2} placeholder="说明该任务的用途，例如：每天自动分析前一天的申报数据" />
           </Form.Item>
-          <Form.Item label="Cron 表达式" name="cron_expression" rules={[{ required: true, message: '请输入 cron 表达式' }]}>
+          <Form.Item
+            label="执行时间"
+            name="cron_expression"
+            rules={[{ required: true, message: '请选择或输入执行时间' }]}
+            extra={
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                不熟悉 Cron 表达式？直接点击下方的「常用时间模板」按钮即可自动填充。
+              </Text>
+            }
+          >
             <Input placeholder="例如：0 9 * * *" />
           </Form.Item>
-          <Form.Item label="任务类型" name="task_type" rules={[{ required: true, message: '请输入任务类型' }]}>
-            <Input placeholder="例如：analysis / backup" />
+          <Form.Item
+            label="任务类型"
+            name="task_type"
+            rules={[{ required: true, message: '请输入任务类型' }]}
+            extra={
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                指定任务的操作类型，例如：analysis（分析任务）、backup（备份），不同类型任务执行不同操作。
+              </Text>
+            }
+          >
+            <Input placeholder="例如：analysis、backup、data-import" />
           </Form.Item>
           <Form.Item style={{ marginBottom: 0 }}>
             <Button type="primary" htmlType="submit" loading={creating}>
-              {editingTaskId ? '保存修改' : '创建任务'}
+              {editingTaskId ? '保存修改' : '创建定时任务'}
             </Button>
           </Form.Item>
         </Form>
       </Card>
 
-      <Card title="平台联动" size="small">
+      <Card
+        title="常用时间模板"
+        size="small"
+        extra={<Text type="secondary" style={{ fontSize: 12 }}>点击按钮自动填充执行时间</Text>}
+      >
         <Space wrap>
-          <Link to="/tasks"><Button size="small">查看任务中心</Button></Link>
-          <Link to="/logs"><Button size="small">查看日志中心</Button></Link>
-          <Link to="/notifications"><Button size="small">查看通知中心</Button></Link>
+          <Button onClick={() => form.setFieldsValue({ cron_expression: '0 9 * * *' })}>
+            每天 9:00
+          </Button>
+          <Button onClick={() => form.setFieldsValue({ cron_expression: '0 9 * * 1-5' })}>
+            每周一到周五 9:00
+          </Button>
+          <Button onClick={() => form.setFieldsValue({ cron_expression: '0 9 1 * *' })}>
+            每月 1 日 9:00
+          </Button>
+          <Button onClick={() => form.setFieldsValue({ cron_expression: '0 * * * *' })}>
+            每小时整点
+          </Button>
+          <Button onClick={() => form.setFieldsValue({ cron_expression: '*/5 * * * *' })}>
+            每 5 分钟
+          </Button>
+          <Button onClick={() => form.setFieldsValue({ cron_expression: '0 0 * * *' })}>
+            每天午夜
+          </Button>
         </Space>
+        <div style={{ marginTop: 12 }}>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            <strong>看不懂 Cron 表达式？</strong> 这个字段表示"什么时候执行"，直接点上面的按钮选择常用时间即可，不需要自己填写。
+          </Text>
+        </div>
       </Card>
 
-      <Card title="常用 Cron 模板" size="small">
-        <Space wrap>
-          <Button size="small" onClick={() => form.setFieldsValue({ cron_expression: '0 9 * * *' })}>每天 9:00</Button>
-          <Button size="small" onClick={() => form.setFieldsValue({ cron_expression: '0 9 * * 1-5' })}>每周一到周五 9:00</Button>
-          <Button size="small" onClick={() => form.setFieldsValue({ cron_expression: '0 9 1 * *' })}>每月 1 日 9:00</Button>
-          <Button size="small" onClick={() => form.setFieldsValue({ cron_expression: '*/5 * * * *' })}>每 5 分钟</Button>
-          <Button size="small" onClick={() => form.setFieldsValue({ cron_expression: '0 * * * *' })}>每小时整点</Button>
-        </Space>
-      </Card>
-
-      <Card title="任务列表" size="small">
+      <Card title="定时任务列表" size="small">
         {loading ? (
           <div style={{ textAlign: 'center', padding: 32 }}>
             <Spin />
           </div>
         ) : tasks.length === 0 ? (
-          <Empty description="暂无定时任务" />
+          <Empty
+            description={
+              <Space direction="vertical" size={4}>
+                <Text type="secondary">还没有创建定时任务</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  定时任务可以在指定时间自动执行分析、备份等操作。
+                </Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  上方的「创建定时任务」表单或「常用时间模板」开始创建。
+                </Text>
+              </Space>
+            }
+          />
         ) : (
           <List
             dataSource={tasks}

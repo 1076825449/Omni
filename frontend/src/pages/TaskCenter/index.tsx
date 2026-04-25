@@ -233,28 +233,28 @@ export default function TaskCenter() {
             <Space direction="vertical" style={{ width: '100%' }}>
               <Descriptions size="small" column={2}>
                 <Descriptions.Item label="任务名称">{selectedTask.name}</Descriptions.Item>
-                <Descriptions.Item label="任务状态">
+                <Descriptions.Item label="当前状态">
                   <Tag color={(statusMap[selectedTask.status] || { color: 'default' }).color}>
                     {(statusMap[selectedTask.status] || { text: selectedTask.status }).text}
                   </Tag>
                 </Descriptions.Item>
-                <Descriptions.Item label="任务 ID">{selectedTask.task_id}</Descriptions.Item>
                 <Descriptions.Item label="所属模块">{selectedTask.module}</Descriptions.Item>
-                <Descriptions.Item label="文件数">{selectedTask.file_count}</Descriptions.Item>
-                <Descriptions.Item label="日志数">{selectedTask.log_count}</Descriptions.Item>
-                <Descriptions.Item label="关联对象">{selectedTask.related_record_count}</Descriptions.Item>
-                <Descriptions.Item label="任务类型">{selectedTask.type}</Descriptions.Item>
+                <Descriptions.Item label="任务类型">{typeMap[selectedTask.type] || selectedTask.type}</Descriptions.Item>
+                <Descriptions.Item label="关联文件">{selectedTask.file_count > 0 ? `${selectedTask.file_count} 个文件` : '无'}</Descriptions.Item>
+                <Descriptions.Item label="关联日志">{selectedTask.log_count > 0 ? `${selectedTask.log_count} 条日志` : '无'}</Descriptions.Item>
+                <Descriptions.Item label="关联对象">{selectedTask.related_record_count > 0 ? `${selectedTask.related_record_count} 个对象` : '无'}</Descriptions.Item>
                 <Descriptions.Item label="创建时间">{new Date(selectedTask.created_at).toLocaleString('zh-CN')}</Descriptions.Item>
-                <Descriptions.Item label="更新时间">{new Date(selectedTask.updated_at).toLocaleString('zh-CN')}</Descriptions.Item>
                 {selectedTask.completed_at && (
                   <Descriptions.Item label="完成时间">{new Date(selectedTask.completed_at).toLocaleString('zh-CN')}</Descriptions.Item>
                 )}
                 {selectedTask.status === 'failed' ? (
                   <Descriptions.Item label="失败原因" span={2}>
-                    <Text type="danger">{selectedTask.result_summary || '未知错误'}</Text>
+                    <Text type="danger">{selectedTask.result_summary || '未知错误，请查看操作日志获取详情'}</Text>
                   </Descriptions.Item>
                 ) : (
-                  <Descriptions.Item label="结果摘要" span={2}>{selectedTask.result_summary || '—'}</Descriptions.Item>
+                  selectedTask.result_summary && (
+                    <Descriptions.Item label="结果摘要" span={2}>{selectedTask.result_summary}</Descriptions.Item>
+                  )
                 )}
               </Descriptions>
               <Space wrap>
@@ -279,7 +279,19 @@ export default function TaskCenter() {
 
       <Card>
         {tasks.length === 0 && !loading ? (
-          <Empty description="暂无任务记录" />
+          <Empty
+            description={
+              <Space direction="vertical" size={4}>
+                <Text type="secondary">还没有任务记录</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  当你发起分析、导入、导出等操作时，对应的任务会显示在这里。
+                </Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  可以进入「模块中心」，选择一个模块开始使用。
+                </Text>
+              </Space>
+            }
+          />
         ) : (
           <>
             <Table

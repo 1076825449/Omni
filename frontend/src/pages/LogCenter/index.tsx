@@ -174,16 +174,18 @@ export default function LogCenter() {
           extra={<Button size="small" onClick={() => setSelectedLog(null)}>关闭</Button>}
         >
           <Descriptions size="small" column={2}>
-            <Descriptions.Item label="操作类型">{selectedLog.action}</Descriptions.Item>
+            <Descriptions.Item label="操作类型">
+              <Tag color={actionMap[selectedLog.action]?.color || 'default'}>
+                {actionMap[selectedLog.action]?.text || selectedLog.action}
+              </Tag>
+            </Descriptions.Item>
             <Descriptions.Item label="操作结果">
               <Tag color={selectedLog.result === 'success' ? 'success' : 'error'}>
                 {selectedLog.result === 'success' ? '成功' : '失败'}
               </Tag>
             </Descriptions.Item>
-            <Descriptions.Item label="目标类型">{selectedLog.target_type}</Descriptions.Item>
-            <Descriptions.Item label="目标ID">{selectedLog.target_id}</Descriptions.Item>
-            <Descriptions.Item label="所属模块">{selectedLog.module}</Descriptions.Item>
-            <Descriptions.Item label="操作人ID">{selectedLog.operator_id}</Descriptions.Item>
+            <Descriptions.Item label="操作对象">{(selectedLog as any).target_name || `${selectedLog.target_type} #${selectedLog.target_id}`}</Descriptions.Item>
+            <Descriptions.Item label="所属模块">{selectedLog.module || '—'}</Descriptions.Item>
             <Descriptions.Item label="操作时间">{new Date(selectedLog.created_at).toLocaleString('zh-CN')}</Descriptions.Item>
             <Descriptions.Item label="详细说明" span={2}>{selectedLog.detail || '—'}</Descriptions.Item>
           </Descriptions>
@@ -192,7 +194,19 @@ export default function LogCenter() {
 
       <Card>
         {logs.length === 0 && !loading ? (
-          <Empty description="暂无操作日志" />
+          <Empty
+            description={
+              <Space direction="vertical" size={4}>
+                <Text type="secondary">还没有操作日志</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  当你或团队成员在平台执行创建、修改、删除、导入等操作时，会自动记录在这里。
+                </Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  可以尝试调整筛选条件查看更多日志。
+                </Text>
+              </Space>
+            }
+          />
         ) : (
           <>
             <Table

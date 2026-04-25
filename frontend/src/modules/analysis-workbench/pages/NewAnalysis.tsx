@@ -1,5 +1,5 @@
 // 分析工作模块 - 新建分析
-import { Card, Form, Input, Button, Upload, Typography, Space, List, Row, Col, Alert, Tag, Select, InputNumber } from 'antd'
+import { Card, Form, Input, Button, Upload, Typography, Space, List, Row, Col, Alert, Tag, Select, InputNumber, Steps } from 'antd'
 import { UploadOutlined, FileOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -108,31 +108,51 @@ export default function NewAnalysis() {
     }
   }
 
+  const currentStep = taskId ? (fileList.length > 0 ? 2 : 1) : 0
+
+  const stepItems = [
+    { title: '第1步：填写任务信息' },
+    { title: '第2步：上传分析资料' },
+    { title: '第3步：确认资料识别结果' },
+    { title: '第4步：发起分析' },
+    { title: '第5步：查看分析结果' },
+  ]
+
   return (
     <div>
-      <Card title="税务资料上传规范" style={{ marginBottom: 16 }}>
+      <Card title="发起税务风险分析" style={{ marginBottom: 16 }}>
+        <Steps current={currentStep} size="small" items={stepItems.map(s => ({ title: s.title }))} />
+      </Card>
+
+      <Card title="上传资料说明" style={{ marginBottom: 16 }}>
         <Alert
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
-          message="推荐上传顺序"
-          description="先传发票明细，再传增值税/所得税申报，再传财务报表和费用明细。这样风险识别更完整，通知书与分析报告也会更具体。"
+          message="推荐上传顺序（按此顺序效果更好）"
+          description="先传发票明细，再传增值税/所得税申报，再传财务报表和费用明细。风险识别会更完整，通知书与分析报告也会更具体。"
         />
         <Row gutter={[12, 12]}>
           {uploadGuides.map((item) => (
             <Col xs={24} md={12} xl={8} key={item.key}>
               <Card size="small">
-                <Space direction="vertical" size={6}>
+                <Space direction="vertical" size={4}>
                   <Space>
                     <Text strong>{item.title}</Text>
-                    <Tag>{item.tag}</Tag>
                   </Space>
-                  <Text type="secondary">{item.examples}</Text>
+                  <Text type="secondary" style={{ fontSize: 12 }}>{item.examples}</Text>
                 </Space>
               </Card>
             </Col>
           ))}
         </Row>
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginTop: 12 }}
+          message="图片和 PDF 文件"
+          description="图片和 PDF 当前作为佐证材料保存，不会自动 OCR。请同时在下方「手工补录」中录入关键申报数据，以确保分析完整性。"
+        />
       </Card>
 
       <Card title="新建分析任务" style={{ marginBottom: 16 }}>
@@ -159,11 +179,10 @@ export default function NewAnalysis() {
       </Card>
 
       {taskId && (
-        <Card title="上传分析资料" style={{ marginBottom: 16 }}>
+        <Card title="上传分析资料（第2步）" style={{ marginBottom: 16 }}>
           <Space style={{ width: '100%' }} direction="vertical">
-            <Text type="secondary">当前任务 ID：{taskId}</Text>
             <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-              文件名建议直接包含资料类型，例如 `sales_invoices_2026-03.xlsx`、`vat_return_2026-03.csv`、`financial_statement_2026Q1.xlsx`。
+              文件名建议直接包含资料类型，例如：「2026年3月销项发票.xlsx」「增值税申报_2026-03.csv」「财务报表_2026Q1.xlsx」。
             </Paragraph>
             <Upload.Dragger
               accept=".csv,.xlsx,.json,.txt,.png,.jpg,.jpeg,.webp,.pdf"
@@ -174,7 +193,7 @@ export default function NewAnalysis() {
             >
               <p><UploadOutlined /></p>
               <p>点击或拖拽上传文件</p>
-              <Text type="secondary" style={{ fontSize: 12 }}>支持 CSV、XLSX、JSON、TXT、图片和 PDF。图片/PDF 当前作为佐证留存，请配合补录关键指标。</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>支持 CSV、XLSX、JSON、TXT、图片和 PDF</Text>
             </Upload.Dragger>
           </Space>
         </Card>
@@ -262,7 +281,7 @@ export default function NewAnalysis() {
       )}
 
       {taskId && fileList.length > 0 && (
-        <Card title="已上传文件">
+        <Card title="已上传文件确认（第3步）" style={{ marginBottom: 16 }}>
           <List
             size="small"
             dataSource={fileList}
@@ -271,7 +290,7 @@ export default function NewAnalysis() {
                 <Space direction="vertical" size={4} style={{ width: '100%' }}>
                   <Space wrap>
                     <FileOutlined />
-                    <Text>{f.name}</Text>
+                    <Text strong>{f.name}</Text>
                     <Tag color={f.profile.dataset_kind === 'unknown' ? 'warning' : 'blue'}>
                       {kindLabel[f.profile.dataset_kind] || f.profile.dataset_kind}
                     </Tag>
@@ -279,21 +298,27 @@ export default function NewAnalysis() {
                     <Text type="secondary">读取 {f.profile.row_count} 行</Text>
                   </Space>
                   {f.profile.headers.length > 0 && (
-                    <Text type="secondary">字段：{f.profile.headers.slice(0, 10).join('、')}</Text>
+                    <Text type="secondary" style={{ fontSize: 12 }}>识别的字段：{f.profile.headers.slice(0, 10).join('、')}{f.profile.headers.length > 10 ? '...' : ''}</Text>
                   )}
                   {f.profile.required_fields.length > 0 && (
-                    <Text type={f.profile.missing_required_fields.length > 0 ? 'warning' : 'success'}>
-                      字段确认：建议字段 {f.profile.required_fields.join('、')}
-                      {f.profile.missing_required_fields.length > 0 ? `；缺少 ${f.profile.missing_required_fields.join('、')}` : '；已满足建议字段'}
+                    <Text type={f.profile.missing_required_fields.length > 0 ? 'warning' : 'success'} style={{ fontSize: 12 }}>
+                      {f.profile.missing_required_fields.length > 0
+                        ? `⚠️ 缺少建议字段：${f.profile.missing_required_fields.join('、')}，分析结果可能受影响`
+                        : '✅ 字段已满足要求'}
                     </Text>
                   )}
                   {f.profile.warnings.length > 0 && (
-                    <Text type="warning">{f.profile.warnings.join('；')}</Text>
+                    <Text type="warning" style={{ fontSize: 12 }}>提醒：{f.profile.warnings.join('；')}</Text>
                   )}
                 </Space>
               </List.Item>
             )}
           />
+          <div style={{ marginTop: 16, textAlign: 'center' }}>
+            <Button type="primary" onClick={handleRun} size="large">
+              发起分析（第4步）
+            </Button>
+          </div>
         </Card>
       )}
     </div>

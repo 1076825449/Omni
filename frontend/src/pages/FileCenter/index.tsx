@@ -194,7 +194,19 @@ export default function FileCenter() {
 
       <Card>
         {files.length === 0 && !loading ? (
-          <Empty description="暂无文件记录" />
+          <Empty
+            description={
+              <Space direction="vertical" size={4}>
+                <Text type="secondary">还没有文件记录</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  当你在各模块上传文件（分析资料、导入数据等），文件会自动汇总到这里。
+                </Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  可以进入「模块中心」，选择分析或对象管理模块开始使用。
+                </Text>
+              </Space>
+            }
+          />
         ) : (
           <>
             <Table

@@ -108,7 +108,20 @@ export default function Notifications() {
         {loading ? (
           <div style={{ textAlign: 'center', padding: 48 }}><Spin /></div>
         ) : notifications.length === 0 ? (
-          <Empty description="暂无通知" />
+          <Empty
+            description={
+              <Space direction="vertical" size={4}>
+                <Text type="secondary">
+                  {isRead === false ? '没有未读通知' : isRead === true ? '没有已读通知' : '暂时没有通知'}
+                </Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {isRead !== undefined
+                    ? '可以尝试调整筛选条件，或清除筛选查看所有通知'
+                    : '当你有任务完成、导入结果、风险提醒等重要事件时，会在这里收到通知'}
+                </Text>
+              </Space>
+            }
+          />
         ) : (
           <List
             dataSource={notifications}

@@ -75,26 +75,34 @@ export default function Help() {
         }))} />
       </Card>
 
-      <Card title="平台规范">
+      <Card title="使用注意事项">
         <Space direction="vertical" style={{ width: '100%' }}>
           <div>
-            <Title level={5}>任务接入规范</Title>
-            <Paragraph type="secondary">所有耗时操作（分析执行、导入处理、批量操作、导出生成）必须接入平台任务中心，写入 Task 模型，全流程可追踪。</Paragraph>
+            <Title level={5}>📊 统计数据说明</Title>
+            <Paragraph type="secondary" style={{ marginBottom: 0 }}>
+              首页和数据看板中的统计数据来自平台真实操作记录，包括任务、文件、日志等。数据反映的是系统中实际发生的行为，不是预设目标。
+            </Paragraph>
           </div>
-          <Divider />
+          <Divider style={{ margin: '12px 0' }} />
           <div>
-            <Title level={5}>文件接入规范</Title>
-            <Paragraph type="secondary">所有模块产生的文件（上传原始文件、生成结果文件、导出文件）必须接入平台文件中心，写入 FileRecord 模型，可统一检索和归档。</Paragraph>
+            <Title level={5}>🔔 通知消息说明</Title>
+            <Paragraph type="secondary" style={{ marginBottom: 0 }}>
+              当任务完成、导入结束、分析有风险发现时，系统会在通知中心提醒你。如果没有看到通知，请检查「全部已读」筛选条件，或点击「全部标为已读」刷新状态。
+            </Paragraph>
           </div>
-          <Divider />
+          <Divider style={{ margin: '12px 0' }} />
           <div>
-            <Title level={5}>日志接入规范</Title>
-            <Paragraph type="secondary">所有用户操作（新建、修改、删除、状态变更）必须写入 OperationLog 模型，日志按模块分组，支持追溯。</Paragraph>
+            <Title level={5}>📋 风险状态说明</Title>
+            <Paragraph type="secondary" style={{ marginBottom: 0 }}>
+              风险台账中的状态流转：待核实 → 整改中 → 已整改，或待核实 → 已排除（核实后不是风险）。如果风险已移交其他部门，选择「已移交」并记录原因。
+            </Paragraph>
           </div>
-          <Divider />
+          <Divider style={{ margin: '12px 0' }} />
           <div>
-            <Title level={5}>权限模型</Title>
-            <Paragraph type="secondary">平台采用 RBAC 模型：Role → Permissions → User。admin 拥有全部权限，user 拥有常规操作权限，viewer 仅可读。具体权限点在角色管理中配置。</Paragraph>
+            <Title level={5}>💾 数据备份说明</Title>
+            <Paragraph type="secondary" style={{ marginBottom: 0 }}>
+              建议定期备份平台数据。备份文件包含数据库和所有上传文件。恢复时需要停服操作，并使用 CLI 命令执行。详情见「管理员手册」。
+            </Paragraph>
           </div>
         </Space>
       </Card>

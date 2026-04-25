@@ -16,7 +16,7 @@ cd backend && .venv/bin/pytest ../tests/backend -q
 - 使用仓库内现成的 `backend/.venv`
 - 当前后端测试集中在 [tests/backend/test_api.py](/Volumes/外接硬盘/vibe coding/网站/重做统一平台/tests/backend/test_api.py)
 - **最近一次实测结果：`36 passed`**
-- 测试覆盖：登录、权限差异、模块接口、任务中心、文件中心、日志中心、通知中心、搜索、统计、备份、7个正式模块核心接口
+- 测试覆盖：认证、权限差异、模块列表、任务中心、文件中心、日志中心、通知中心（is_read筛选）、搜索、统计、备份（创建/下载/恢复）、7个正式模块核心接口
 
 ### 前端冒烟测试
 

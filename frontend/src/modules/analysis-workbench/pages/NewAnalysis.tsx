@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { analysisApi, UploadProfile } from '../../../services/api'
 import { useAppMessage } from '../../../hooks/useAppMessage'
+import { useAuthStore } from '../../../stores/auth'
 
 const { Text, Paragraph } = Typography
 
@@ -45,8 +46,14 @@ export default function NewAnalysis() {
   const [taskId, setTaskId] = useState<string | null>(null)
   const navigate = useNavigate()
   const message = useAppMessage()
+  const { user } = useAuthStore()
+  const isViewer = user?.role === 'viewer'
 
   const handleUpload = async (file: File) => {
+    if (isViewer) {
+      message.warning('只读用户不能上传文件')
+      return false
+    }
     const filename = file.name.toLowerCase()
     if (filename.endsWith('.xls')) {
       message.error('当前优先支持 CSV、XLSX、JSON、TXT；旧版 XLS 请先另存为 XLSX 或 CSV 后上传')
@@ -70,6 +77,10 @@ export default function NewAnalysis() {
   }
 
   const handleCreate = async (values: { name: string; description: string }) => {
+    if (isViewer) {
+      message.warning('只读用户不能创建任务')
+      return
+    }
     try {
       const res = await analysisApi.createTask(values.name, values.description)
       if (res.success) {
@@ -82,6 +93,10 @@ export default function NewAnalysis() {
   }
 
   const handleRun = async () => {
+    if (isViewer) {
+      message.warning('只读用户不能发起分析')
+      return
+    }
     if (!taskId) return
     try {
       await analysisApi.runTask(taskId)
@@ -122,6 +137,15 @@ export default function NewAnalysis() {
     <div>
       <Card title="发起税务风险分析" style={{ marginBottom: 16 }}>
         <Steps current={currentStep} size="small" items={stepItems.map(s => ({ title: s.title }))} />
+        {isViewer && (
+          <Alert
+            type="warning"
+            showIcon
+            message="您当前是只读用户（访客账号）"
+            description="只读用户不能创建任务、上传文件或发起分析。您可以查看历史分析结果，但不能进行任何修改操作。"
+            style={{ marginTop: 12 }}
+          />
+        )}
       </Card>
 
       <Card title="上传资料说明" style={{ marginBottom: 16 }}>

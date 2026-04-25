@@ -1,11 +1,11 @@
 """
 Dashboard 模块 — 平台数据仪表盘
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 from datetime import datetime, timedelta
 from app.core.database import get_db
 from app.models import User
@@ -13,7 +13,7 @@ from app.models.record import Task, FileRecord, OperationLog
 from app.models.module import Module
 from app.routers.auth import get_current_user
 
-router = APIRouter(prefix="/api/modules/dashboard", tags=["Dashboard模块"])
+router = APIRouter(prefix="/api/modules/dashboard-workbench", tags=["Dashboard模块"])
 
 
 class StatCard(BaseModel):
@@ -41,6 +41,7 @@ class RecentActivity(BaseModel):
     module: str
     result: str
     created_at: str
+    target_url: Optional[str] = None
 
 
 class DashboardResponse(BaseModel):
@@ -52,6 +53,7 @@ class DashboardResponse(BaseModel):
 
 @router.get("/overview", response_model=DashboardResponse)
 def dashboard_overview(
+    days: int = Query(7, ge=7, le=30),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -82,10 +84,10 @@ def dashboard_overview(
         StatCard(label="活跃模块", value=module_active),
     ]
 
-    # 7天任务趋势
+    # 任务趋势
     task_trend = []
     today = datetime.utcnow().date()
-    for i in range(6, -1, -1):
+    for i in range(days - 1, -1, -1):
         day = today - timedelta(days=i)
         count = db.query(Task).filter(
             Task.creator_id == current_user.id,
@@ -128,17 +130,27 @@ def dashboard_overview(
         OperationLog.operator_id == current_user.id,
     ).order_by(OperationLog.created_at.desc()).limit(8).all()
 
-    recent_activity = [
-        RecentActivity(
+    recent_activity = []
+    for log in logs:
+        target_url = None
+        if log.module == "analysis-workbench":
+            target_url = f"/modules/analysis-workbench/results/{log.target_id}"
+        elif log.module == "schedule-workbench":
+            target_url = "/modules/schedule-workbench"
+        elif log.module == "record-operations":
+            target_url = f"/modules/record-operations/{log.target_id}" if str(log.target_id).startswith("rec-") else "/modules/record-operations/list"
+        elif log.module:
+            target_url = f"/modules/{log.module}"
+
+        recent_activity.append(RecentActivity(
             action=log.action,
             target_type=log.target_type or "",
             detail=log.detail or "",
             module=log.module or "",
             result=log.result or "",
             created_at=log.created_at.isoformat() if log.created_at else "",
-        )
-        for log in logs
-    ]
+            target_url=target_url,
+        ))
 
     return DashboardResponse(
         stat_cards=stat_cards,

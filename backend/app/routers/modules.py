@@ -1,7 +1,7 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from app.core.database import get_db
 from app.models.module import Module
 from app.routers.auth import get_current_user, require_permission
@@ -11,6 +11,8 @@ router = APIRouter(prefix="/api/modules", tags=["模块"])
 
 
 class ModuleSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     key: str
     name: str
@@ -20,10 +22,6 @@ class ModuleSchema(BaseModel):
     status: str
     icon: str
     is_active: bool
-
-    class Config:
-        from_attributes = True
-
 
 class ModuleListResponse(BaseModel):
     modules: List[ModuleSchema]
@@ -87,12 +85,12 @@ def register_module(
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="仅管理员可注册模块")
 
-    existing = db.query(Module).filter(Module.module_id == body.key).first()
+    existing = db.query(Module).filter(Module.key == body.key).first()
     if existing:
         raise HTTPException(status_code=409, detail=f"模块 {body.key} 已存在")
 
     module = Module(
-        module_id=body.key,
+        key=body.key,
         name=body.name,
         description=body.description,
         type=body.type,
@@ -106,7 +104,7 @@ def register_module(
     db.refresh(module)
     return ModuleSchema(
         id=module.id,
-        key=module.module_id,
+        key=module.key,
         name=module.name,
         description=module.description,
         type=module.type,
@@ -124,11 +122,11 @@ def get_module_config(
     current_user: User = Depends(get_current_user),
 ):
     """获取指定模块的配置"""
-    m = db.query(Module).filter(Module.module_id == module_key).first()
+    m = db.query(Module).filter(Module.key == module_key).first()
     if not m:
         raise HTTPException(status_code=404, detail="模块不存在")
     return {
-        "key": m.module_id,
+        "key": m.key,
         "name": m.name,
         "description": m.description,
         "type": m.type,
@@ -151,7 +149,7 @@ def update_module_config(
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="仅管理员可更新模块配置")
 
-    m = db.query(Module).filter(Module.module_id == module_key).first()
+    m = db.query(Module).filter(Module.key == module_key).first()
     if not m:
         raise HTTPException(status_code=404, detail="模块不存在")
 

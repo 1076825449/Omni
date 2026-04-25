@@ -1,8 +1,9 @@
 // 学习训练模块 - 训练集列表
-import { Card, List, Tag, Button, Space, Typography, Skeleton, message } from 'antd'
+import { Card, List, Tag, Button, Space, Typography, Skeleton } from 'antd'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { learningLabApi, TrainingSet } from '../../../services/api'
+import { useAppMessage } from '../../../hooks/useAppMessage'
 
 const { Title, Text } = Typography
 
@@ -16,6 +17,7 @@ export default function SetList() {
   const [sets, setSets] = useState<TrainingSet[]>([])
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
+  const message = useAppMessage()
 
   useEffect(() => {
     learningLabApi.listSets().then(data => {

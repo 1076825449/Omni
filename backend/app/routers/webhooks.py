@@ -4,7 +4,7 @@ Webhook 管理接口
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from app.core.database import get_db
 from app.models import User, Webhook
 from app.routers.auth import get_current_user
@@ -14,6 +14,8 @@ router = APIRouter(prefix="/api/webhooks", tags=["Webhook"])
 
 
 class WebhookSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     url: str
@@ -23,10 +25,6 @@ class WebhookSchema(BaseModel):
     last_triggered_at: Optional[str] = None
     last_response_code: Optional[int] = None
     failure_count: int
-
-    class Config:
-        from_attributes = True
-
 
 class WebhookCreate(BaseModel):
     name: str

@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/auth", tags=["认证"])
 
 
 def get_current_user(
-    session_id: Optional[str] = Cookie(None),
+    session_id: Optional[str] = Cookie(None, alias=SESSION_COOKIE_NAME),
     db: SASession = Depends(get_db),
 ) -> User:
     """返回当前登录用户，未登录则 raise 401"""
@@ -37,7 +37,7 @@ def get_current_user(
 
 
 def get_optional_user(
-    session_id: Optional[str] = Cookie(None),
+    session_id: Optional[str] = Cookie(None, alias=SESSION_COOKIE_NAME),
     db: SASession = Depends(get_db),
 ) -> Optional[User]:
     """可选当前用户（用于 /me 等端点）"""
@@ -120,7 +120,7 @@ def login(
 @router.post("/logout", response_model=LogoutResponse)
 def logout(
     response: Response,
-    session_id: Optional[str] = Cookie(None),
+    session_id: Optional[str] = Cookie(None, alias=SESSION_COOKIE_NAME),
     db: SASession = Depends(get_db),
 ):
     """退出登录。清除 session cookie。"""

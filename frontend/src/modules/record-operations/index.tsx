@@ -6,6 +6,7 @@ import RecordOperationsWorkbench from './pages/Workbench'
 import RecordList from './pages/List'
 import RecordImport from './pages/Import'
 import RecordDetail from './pages/Detail'
+import NewRecord from './pages/NewRecord'
 
 const tabItems = [
   { key: 'workbench', label: '工作台', path: '/modules/record-operations' },
@@ -24,6 +25,7 @@ export default function RecordOperations() {
         <Routes>
           <Route index element={<RecordOperationsWorkbench />} />
           <Route path="list" element={<RecordList />} />
+          <Route path="new" element={<NewRecord />} />
           <Route path="import" element={<RecordImport />} />
           <Route path=":id" element={<RecordDetail />} />
         </Routes>

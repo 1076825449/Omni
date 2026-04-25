@@ -35,7 +35,7 @@ class PracticeSession(Base):
     started_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
 
-    # 题目内容（JSON格式，模拟题库）
+    # 题目内容（JSON格式，来自 learning-lab 内容配置）
     questions = Column(JSON, default=list)  # [{id, question, options, answer, user_answer, is_correct}]
 
 

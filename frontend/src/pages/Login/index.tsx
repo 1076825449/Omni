@@ -1,13 +1,15 @@
-import { Form, Input, Button, Typography, message, Checkbox } from 'antd'
+import { Form, Input, Button, Typography, Checkbox } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { useAuthStore } from '../../stores/auth'
+import { useAppMessage } from '../../hooks/useAppMessage'
 
 const { Title, Text } = Typography
 
 export default function Login() {
   const [form] = Form.useForm()
   const navigate = useNavigate()
+  const message = useAppMessage()
   const login = useAuthStore(s => s.login)
   const [remember, setRemember] = useState(() => {
     return localStorage.getItem('omni-remember') === 'true'

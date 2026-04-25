@@ -1,6 +1,6 @@
 // 帮助中心 - 新手起步
-import { Card, Steps, Typography, Space, Button, Tag } from 'antd'
-import { Link, useNavigate } from 'react-router-dom'
+import { Card, Steps, Typography, Space, Button } from 'antd'
+import { useNavigate } from 'react-router-dom'
 
 const { Title, Text, Paragraph } = Typography
 
@@ -19,8 +19,8 @@ const steps = [
   },
   {
     title: '发起第一个任务',
-    desc: '进入「分析工作台」，上传文件并发起分析任务，任务完成后查看结果和日志。',
-    action: '分析工作台',
+    desc: '进入「分析工作模块」，上传文件并发起分析任务，任务完成后查看结果和日志。',
+    action: '分析工作模块',
     path: '/modules/analysis-workbench',
   },
   {
@@ -55,7 +55,6 @@ export default function GettingStarted() {
       <Card title="Omni 平台使用流程" style={{ marginBottom: 16 }}>
         <Steps
           current={-1}
-          direction="vertical"
           items={steps.map((s, i) => ({
             title: s.title,
             description: (
@@ -75,11 +74,11 @@ export default function GettingStarted() {
       </Card>
 
       <Card title="平台核心概念">
-        <Space direction="vertical" style={{ width: '100%' }}>
+        <Space style={{ width: '100%' }} direction="vertical">
           <div>
             <Text strong>模块</Text>
             <Paragraph type="secondary" style={{ marginBottom: 4 }}>
-              平台的功能单元。每个模块独立功能，如「分析工作台」「对象管理」。模块之间可联动跳转。
+              平台的功能单元。当前正式模块包括分析工作模块、对象管理模块、学习训练模块、数据仪表盘和定时调度。
             </Paragraph>
           </div>
           <div>

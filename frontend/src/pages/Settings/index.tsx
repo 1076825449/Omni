@@ -1,8 +1,9 @@
 // 系统设置 - 含备份中心 + 角色管理
-import { Card, Tabs, Typography, Form, Input, Button, Space, List, Tag, Checkbox, message, Spin, Descriptions, Divider, Result } from 'antd'
+import { Card, Tabs, Typography, Form, Input, Button, Space, List, Tag, Checkbox, Spin, Descriptions, Divider, Result } from 'antd'
 import { useState, useEffect } from 'react'
 import { backupApi, BackupRecord, rolesApi, RoleRecord } from '../../services/api'
 import { useAuthStore } from '../../stores/auth'
+import { useAppMessage } from '../../hooks/useAppMessage'
 
 const { Title, Text, Paragraph } = Typography
 
@@ -57,15 +58,8 @@ const PERMISSION_GROUPS: Record<string, string[]> = {
 }
 
 function PermissionGroupEditor({ permissions, value, onChange }: { permissions: string[]; value: string[]; onChange: (v: string[]) => void }) {
-  const toggle = (p: string) => {
-    if (value.includes(p)) {
-      onChange(value.filter(x => x !== p))
-    } else {
-      onChange([...value, p])
-    }
-  }
   return (
-    <Space direction="vertical" style={{ width: '100%' }}>
+    <Space style={{ width: '100%' }} direction="vertical">
       {Object.entries(PERMISSION_GROUPS).map(([group, perms]) => {
         const groupPerms = perms.filter(p => permissions.includes(p))
         if (groupPerms.length === 0) return null
@@ -96,6 +90,7 @@ function PermissionGroupEditor({ permissions, value, onChange }: { permissions: 
 export default function Settings() {
   const [form] = Form.useForm()
   const [backupForm] = Form.useForm()
+  const message = useAppMessage()
   const [backups, setBackups] = useState<BackupRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
@@ -185,7 +180,7 @@ export default function Settings() {
   )
 
   const backupTab = (
-    <Space direction="vertical" style={{ width: '100%' }} size="middle">
+    <Space style={{ width: '100%' }} direction="vertical" size="middle">
       <Card size="small" title="发起备份">
         <Paragraph type="secondary" style={{ fontSize: 13, marginBottom: 12 }}>
           备份将打包数据库和所有上传文件为一个 ZIP 文件，可用于数据迁移或灾难恢复。
@@ -240,7 +235,7 @@ export default function Settings() {
   const roleTab = !isAdmin ? (
     <Result status="403" title="权限不足" subTitle="只有管理员可以管理角色" />
   ) : (
-    <Space direction="vertical" style={{ width: '100%' }}>
+    <Space style={{ width: '100%' }} direction="vertical">
       <Card size="small" title="角色列表">
         {roleLoading ? <div style={{ textAlign: 'center', padding: 24 }}><Spin /></div>
          : (

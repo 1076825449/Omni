@@ -1,9 +1,10 @@
 // 对象管理模块 - 导入页
-import { Card, Upload, Button, Typography, message, List, Space } from 'antd'
+import { Card, Upload, Button, Typography, List, Space } from 'antd'
 import { UploadOutlined, FileOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { recordsApi } from '../../../services/api'
+import { useAppMessage } from '../../../hooks/useAppMessage'
 
 const { Title, Text } = Typography
 
@@ -11,6 +12,7 @@ export default function RecordImport() {
   const [uploading, setUploading] = useState(false)
   const [done, setDone] = useState<{ name: string; count: number } | null>(null)
   const navigate = useNavigate()
+  const message = useAppMessage()
 
   const handleUpload = async (file: File) => {
     setUploading(true)
@@ -33,7 +35,7 @@ export default function RecordImport() {
 
   return (
     <Card title="导入对象数据">
-      <Space direction="vertical" style={{ width: '100%' }}>
+      <Space style={{ width: '100%' }} direction="vertical">
         <div>
           <Title level={5}>上传 CSV 文件</Title>
           <Text type="secondary">

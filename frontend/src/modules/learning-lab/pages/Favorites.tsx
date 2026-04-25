@@ -1,13 +1,15 @@
 // 学习训练模块 - 收藏页
-import { Card, List, Button, Space, Typography, Tag, Popconfirm, message } from 'antd'
+import { Card, List, Button, Space, Typography, Tag, Popconfirm } from 'antd'
 import { useEffect, useState } from 'react'
 import { learningLabApi, FavoriteItem } from '../../../services/api'
+import { useAppMessage } from '../../../hooks/useAppMessage'
 
 const { Title, Text } = Typography
 
 export default function Favorites() {
   const [favorites, setFavorites] = useState<FavoriteItem[]>([])
   const [loading, setLoading] = useState(true)
+  const message = useAppMessage()
 
   const load = () => {
     learningLabApi.listFavorites().then(data => {

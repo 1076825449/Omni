@@ -1,5 +1,5 @@
 // 帮助中心页
-import { Card, Typography, List, Space, Divider, Tag, Collapse, Button } from 'antd'
+import { Card, Typography, Space, Divider, Tag, Collapse, Button } from 'antd'
 import { useNavigate } from 'react-router-dom'
 
 const { Title, Text, Paragraph } = Typography
@@ -32,9 +32,11 @@ const faqs = [
 ]
 
 const modules = [
-  { key: 'analysis-workbench', label: '分析工作台', type: '工作流型', desc: '发起分析 → 执行 → 查看结果 → 日志全链路追踪', color: 'blue' },
-  { key: 'record-operations', label: '对象管理', type: '列表型', desc: '导入 → 列表管理 → 分类/分配 → 批量操作 → 导出', color: 'green' },
-  { key: 'learning-lab', label: '学习实验室', type: '学习型', desc: '课程管理 → 章节跟踪 → 进度可视化', color: 'purple' },
+  { key: 'analysis-workbench', label: '分析工作模块', type: '工作流型', desc: '创建任务 → 上传资料 → 发起分析 → 查看结果与报告', color: 'blue' },
+  { key: 'record-operations', label: '对象管理模块', type: '列表型', desc: '导入 → 列表管理 → 分类/分配 → 批量操作', color: 'green' },
+  { key: 'learning-lab', label: '学习训练模块', type: '轻交互型', desc: '选择题集 → 开始练习 → 查看结果 → 收藏与统计', color: 'purple' },
+  { key: 'dashboard-workbench', label: '数据仪表盘', type: '看板型', desc: '查看平台统计、趋势和最近活动', color: 'cyan' },
+  { key: 'schedule-workbench', label: '定时调度', type: '工作流型', desc: '创建 cron 任务 → 手动执行 → 进入任务/日志中心追踪', color: 'orange' },
 ]
 
 export default function Help() {
@@ -50,7 +52,7 @@ export default function Help() {
       </div>
 
       <Card title="平台模块概览" style={{ marginBottom: 16 }}>
-        <Space direction="vertical" style={{ width: '100%' }}>
+        <Space style={{ width: '100%' }} direction="vertical">
           {modules.map(m => (
             <Card key={m.key} type="inner" size="small">
               <Space style={{ width: '100%', justifyContent: 'space-between' }}>

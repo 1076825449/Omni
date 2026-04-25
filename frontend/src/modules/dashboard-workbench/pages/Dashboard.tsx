@@ -1,20 +1,26 @@
 // Dashboard 主页面
 import { useEffect, useState } from 'react'
-import { Card, Row, Col, Statistic, Table, Tag, Timeline, Spin, message } from 'antd'
+import { Card, Row, Col, Statistic, Table, Tag, Timeline, Spin, Button, Space, Select } from 'antd'
 import { CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons'
+import { Link, useNavigate } from 'react-router-dom'
 import { dashboardApi } from '../../../services/api'
+import { useAppMessage } from '../../../hooks/useAppMessage'
 import './Dashboard.css'
 
 export default function Dashboard() {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [days, setDays] = useState(7)
+  const message = useAppMessage()
+  const navigate = useNavigate()
 
   useEffect(() => {
-    dashboardApi.overview()
+    setLoading(true)
+    dashboardApi.overview(days)
       .then(setData)
       .catch(() => message.error('加载仪表盘失败'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [days])
 
   if (loading || !data) {
     return <Spin size="large" style={{ display: 'flex', justifyContent: 'center', marginTop: 100 }} />
@@ -47,7 +53,17 @@ export default function Dashboard() {
 
       <Row gutter={16}>
         <Col span={12}>
-          <Card title="📈 7天任务趋势" style={{ marginBottom: 16 }}>
+          <Card
+            title={`📈 ${days}天任务趋势`}
+            style={{ marginBottom: 16 }}
+            extra={(
+              <Select value={days} size="small" style={{ width: 120 }} onChange={setDays}>
+                <Select.Option value={7}>近 7 天</Select.Option>
+                <Select.Option value={14}>近 14 天</Select.Option>
+                <Select.Option value={30}>近 30 天</Select.Option>
+              </Select>
+            )}
+          >
             <div className="trend-bars">
               {task_trend.map((t: any, i: number) => (
                 <div key={i} className="trend-bar-item">
@@ -96,6 +112,16 @@ export default function Dashboard() {
 
       <Row gutter={16}>
         <Col span={24}>
+          <Card title="平台联动" style={{ marginBottom: 16 }}>
+            <Space wrap>
+              <Link to="/tasks"><Button size="small">查看任务中心</Button></Link>
+              <Link to="/logs"><Button size="small">查看日志中心</Button></Link>
+              <Link to="/stats"><Button size="small">查看平台统计</Button></Link>
+              <Button size="small" onClick={() => navigate('/tasks?status=failed')}>直达失败任务</Button>
+            </Space>
+          </Card>
+        </Col>
+        <Col span={24}>
           <Card title="🕐 最近活动">
             <Timeline
               items={recent_activity.map((a: any, i: number) => ({
@@ -109,6 +135,11 @@ export default function Dashboard() {
                     <span className="activity-time">
                       {a.created_at ? new Date(a.created_at).toLocaleString('zh-CN') : ''}
                     </span>
+                    {a.target_url && (
+                      <Button size="small" style={{ marginLeft: 8 }} onClick={() => navigate(a.target_url)}>
+                        查看
+                      </Button>
+                    )}
                   </div>
                 ),
               }))}

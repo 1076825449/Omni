@@ -1,7 +1,7 @@
 """
 WebSocket 实时通知
 连接地址: ws://localhost:3000/ws
-认证: 通过 Cookie 中的 session_id 验证
+认证: 通过 Cookie 中的 omni_session 验证
 """
 import asyncio
 import json
@@ -9,6 +9,7 @@ from typing import Dict, Set, Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Cookie, Query
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
+from app.core.config import SESSION_COOKIE_NAME
 from app.models import User, Session as SessionModel
 from datetime import datetime
 
@@ -84,7 +85,7 @@ def get_user_from_cookie(session_id: str) -> Optional[int]:
 @router.websocket("/ws")
 async def websocket_endpoint(
     websocket: WebSocket,
-    session_id: str = Cookie(None),
+    session_id: str = Cookie(None, alias=SESSION_COOKIE_NAME),
 ):
     """WebSocket 端点，需要有效的 session cookie"""
     if not session_id:

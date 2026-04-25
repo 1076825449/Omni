@@ -1,8 +1,9 @@
 // 分析工作模块 - 分析结果页
 import { useEffect, useState } from 'react'
-import { Card, Tag, Button, Space, Typography, Skeleton, Result, Descriptions } from 'antd'
+import { Card, Tag, Button, Space, Typography, Skeleton, Result, Descriptions, List, Alert, Divider, Modal, Segmented, Select } from 'antd'
 import { useParams, useNavigate } from 'react-router-dom'
 import { analysisApi, AnalysisTaskDetail } from '../../../services/api'
+import { useAppMessage } from '../../../hooks/useAppMessage'
 
 const { Title, Text, Paragraph } = Typography
 
@@ -14,11 +15,31 @@ const statusMap: Record<string, { text: string; color: string }> = {
   cancelled: { text: '已取消', color: 'default' },
 }
 
+const severityMap: Record<string, { label: string; color: string }> = {
+  high: { label: '高', color: 'red' },
+  medium: { label: '中', color: 'orange' },
+  low: { label: '低', color: 'blue' },
+}
+
+const reviewStatusMap: Record<string, { label: string; color: string }> = {
+  pending_review: { label: '待核实', color: 'processing' },
+  confirmed: { label: '已确认', color: 'red' },
+  false_positive: { label: '误报', color: 'default' },
+  rectified: { label: '已整改', color: 'green' },
+  transferred: { label: '已移交', color: 'purple' },
+  not_synced: { label: '未同步对象', color: 'default' },
+}
+
 export default function Results() {
   const { id } = useParams<{ id: string }>()
   const [task, setTask] = useState<AnalysisTaskDetail | null>(null)
   const [loading, setLoading] = useState(true)
+  const [docOpen, setDocOpen] = useState(false)
+  const [docType, setDocType] = useState<'analysis' | 'notice'>('analysis')
+  const [docContent, setDocContent] = useState('')
+  const [docLoading, setDocLoading] = useState(false)
   const navigate = useNavigate()
+  const message = useAppMessage()
 
   useEffect(() => {
     if (!id) return
@@ -42,6 +63,47 @@ export default function Results() {
 
   const status = statusMap[task.status] || { text: task.status, color: 'default' }
 
+  const handleRerun = async () => {
+    if (!task) return
+    try {
+      const next = await analysisApi.rerunTask(task.task_id)
+      navigate(`/modules/analysis-workbench/results/${next.task_id}`)
+    } catch {
+      // ignore
+    }
+  }
+
+  const handlePreviewDoc = async (type: 'analysis' | 'notice') => {
+    if (!task) return
+    setDocType(type)
+    setDocOpen(true)
+    setDocLoading(true)
+    try {
+      const content = await analysisApi.reportText(task.task_id, type)
+      setDocContent(content)
+    } catch {
+      setDocContent('文书预览加载失败')
+    } finally {
+      setDocLoading(false)
+    }
+  }
+
+  const handleReviewChange = async (recordId: string | null | undefined, status: string) => {
+    if (!task || !recordId) return
+    try {
+      await analysisApi.updateRiskReview(task.task_id, recordId, status)
+      setTask({
+        ...task,
+        risks: task.risks.map((risk) =>
+          risk.review_record_id === recordId ? { ...risk, review_status: status } : risk,
+        ),
+      })
+      message.success('复核状态已更新')
+    } catch {
+      message.error('复核状态更新失败')
+    }
+  }
+
   return (
     <div>
       <Card title="分析结果" style={{ marginBottom: 16 }}>
@@ -53,7 +115,13 @@ export default function Results() {
 
           <Descriptions size="small" column={2}>
             <Descriptions.Item label="任务ID">{task.task_id}</Descriptions.Item>
+            <Descriptions.Item label="企业名称">{task.company_name || '未识别'}</Descriptions.Item>
+            <Descriptions.Item label="纳税人识别号">{task.taxpayer_id || '未识别'}</Descriptions.Item>
             <Descriptions.Item label="文件数">{task.file_count}</Descriptions.Item>
+            <Descriptions.Item label="日志数">{task.log_count}</Descriptions.Item>
+            <Descriptions.Item label="关联对象">{task.related_record_count}</Descriptions.Item>
+            <Descriptions.Item label="识别风险">{task.risk_count}</Descriptions.Item>
+            <Descriptions.Item label="分析期间">{task.periods.length ? task.periods.join(' / ') : '未识别'}</Descriptions.Item>
             <Descriptions.Item label="创建时间">{new Date(task.created_at).toLocaleString('zh-CN')}</Descriptions.Item>
             {task.completed_at && (
               <Descriptions.Item label="完成时间">{new Date(task.completed_at).toLocaleString('zh-CN')}</Descriptions.Item>
@@ -76,12 +144,23 @@ export default function Results() {
             title="分析完成"
             subTitle={task.result_summary || '分析已完成，报告可导出'}
             extra={
-              <Button
-                type="primary"
-                onClick={() => navigate(`/modules/analysis-workbench/reports/${task?.task_id}`)}
-              >
-                导出报告
-              </Button>
+              <Space>
+                <Button
+                  type="primary"
+                  onClick={() => navigate(`/modules/analysis-workbench/reports/${task?.task_id}`)}
+                >
+                  导出报告
+                </Button>
+                <Button onClick={() => handlePreviewDoc('analysis')}>
+                  预览分析报告
+                </Button>
+                <Button onClick={() => handlePreviewDoc('notice')}>
+                  预览通知书
+                </Button>
+                <Button onClick={handleRerun}>
+                  以当前文件重跑
+                </Button>
+              </Space>
             }
           />
         )}
@@ -116,15 +195,125 @@ export default function Results() {
 
       {task.status === 'succeeded' && (
         <Card title="结果详情" style={{ marginTop: 16 }}>
-          <Paragraph>
-            {task.result_summary || '本次分析共产出 1 份报告，包含以下关键发现：'}
-          </Paragraph>
-          <ul>
-            <li>关键发现一：数据分布呈现显著特征</li>
-            <li>关键发现二：存在 3 条异常记录需要关注</li>
-            <li>关键发现三：趋势分析显示增长潜力</li>
-          </ul>
-          <Text type="secondary">* 以上为模拟结果，实际分析取决于上传的原始数据</Text>
+          <Paragraph>{task.result_summary || '本次分析未生成额外摘要。'}</Paragraph>
+          {task.data_warnings.length > 0 && (
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message="数据提醒"
+              description={task.data_warnings.join('；')}
+            />
+          )}
+          <Descriptions size="small" column={2}>
+            <Descriptions.Item label="已处理文件">{task.file_count}</Descriptions.Item>
+            <Descriptions.Item label="生成对象">{task.related_record_count}</Descriptions.Item>
+            <Descriptions.Item label="结果页">
+              <Button type="link" style={{ padding: 0 }} onClick={() => navigate('/tasks')}>
+                查看平台任务中心
+              </Button>
+            </Descriptions.Item>
+            <Descriptions.Item label="操作日志">
+              <Button type="link" style={{ padding: 0 }} onClick={() => navigate('/logs')}>
+                查看平台日志中心
+              </Button>
+            </Descriptions.Item>
+          </Descriptions>
+        </Card>
+      )}
+
+      {task.status === 'succeeded' && (
+        <Card title="税务风险清单" style={{ marginTop: 16 }}>
+          {task.risks.length === 0 ? (
+            <Result
+              status="success"
+              title="未识别出明确风险"
+              subTitle="当前更接近资料不完整或未形成足够交叉校验条件，建议补齐申报、报表与发票明细后再次分析。"
+            />
+          ) : (
+            <List
+              dataSource={task.risks}
+              renderItem={(risk, index) => {
+                const severity = severityMap[risk.severity] || { label: risk.severity, color: 'default' }
+                return (
+                  <List.Item>
+                    <Card
+                      size="small"
+                      style={{ width: '100%' }}
+                      title={
+                        <Space>
+                          <Text strong>{index + 1}. {risk.risk_type}</Text>
+                          <Tag color={severity.color}>{severity.label}风险</Tag>
+                          <Tag>{risk.period}</Tag>
+                          <Tag color="geekblue">置信度 {Math.round((risk.confidence || 0) * 100)}%</Tag>
+                          <Tag color={reviewStatusMap[risk.review_status || 'not_synced']?.color}>
+                            {reviewStatusMap[risk.review_status || 'not_synced']?.label || risk.review_status}
+                          </Tag>
+                        </Space>
+                      }
+                      extra={risk.review_record_id ? (
+                        <Select
+                          size="small"
+                          value={risk.review_status || 'pending_review'}
+                          style={{ width: 120 }}
+                          onChange={(value) => handleReviewChange(risk.review_record_id, value)}
+                          options={[
+                            { label: '待核实', value: 'pending_review' },
+                            { label: '已确认', value: 'confirmed' },
+                            { label: '误报', value: 'false_positive' },
+                            { label: '已整改', value: 'rectified' },
+                            { label: '已移交', value: 'transferred' },
+                          ]}
+                        />
+                      ) : null}
+                    >
+                      <Paragraph>{risk.issue}</Paragraph>
+                      <Text strong>证据要点</Text>
+                      <List
+                        size="small"
+                        dataSource={risk.evidence}
+                        renderItem={(item) => <List.Item>{item}</List.Item>}
+                      />
+                      <Divider style={{ margin: '12px 0' }} />
+                      <Text strong>企业整改要求</Text>
+                      <Paragraph>{risk.rectify_advice}</Paragraph>
+                      <Text strong>税务核查方向</Text>
+                      <Paragraph>{risk.verification_focus}</Paragraph>
+                      <Text strong>需调取资料</Text>
+                      <Paragraph>{risk.required_materials.join('、') || '—'}</Paragraph>
+                      <Text strong>判断标准</Text>
+                      <Paragraph>{risk.judgment_rule}</Paragraph>
+                    </Card>
+                  </List.Item>
+                )
+              }}
+            />
+          )}
+        </Card>
+      )}
+
+      {task.status === 'succeeded' && task.material_gap_list.length > 0 && (
+        <Card title="资料缺口清单" style={{ marginTop: 16 }}>
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message="建议优先向企业调取以下资料"
+            description="该清单由已识别风险的核查材料要求汇总生成，用于下一步核实和通知书准备。"
+          />
+          <Space wrap>
+            {task.material_gap_list.map((item) => <Tag key={item}>{item}</Tag>)}
+          </Space>
+        </Card>
+      )}
+
+      {task.files.length > 0 && (
+        <Card title="输入文件" style={{ marginTop: 16 }}>
+          <List
+            size="small"
+            dataSource={task.files}
+            renderItem={(item) => <List.Item>{item}</List.Item>}
+          />
         </Card>
       )}
 
@@ -145,6 +334,32 @@ export default function Results() {
           </Button>
         </Card>
       )}
+
+      <Modal
+        title={docType === 'analysis' ? '分析报告预览' : '税务事项通知书预览'}
+        open={docOpen}
+        onCancel={() => setDocOpen(false)}
+        footer={null}
+        width={900}
+      >
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Segmented
+            value={docType}
+            onChange={(value) => handlePreviewDoc(value as 'analysis' | 'notice')}
+            options={[
+              { label: '分析报告', value: 'analysis' },
+              { label: '通知书', value: 'notice' },
+            ]}
+          />
+          {docLoading ? (
+            <Skeleton active paragraph={{ rows: 12 }} />
+          ) : (
+            <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0, fontFamily: 'Menlo, monospace', fontSize: 13 }}>
+              {docContent}
+            </pre>
+          )}
+        </Space>
+      </Modal>
     </div>
   )
 }

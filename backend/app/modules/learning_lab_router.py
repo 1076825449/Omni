@@ -1,9 +1,12 @@
 import secrets
+import json
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from sqlalchemy.orm.attributes import flag_modified
+from pydantic import BaseModel, ConfigDict
 from app.core.database import get_db
 from app.models import User
 from app.models.record import OperationLog
@@ -25,77 +28,19 @@ def log_action(db: Session, action: str, target_id: str, operator_id: int, detai
     ))
 
 
-# --- Sample question bank ---
-SAMPLE_QUESTIONS = [
-    {
-        "id": "q1",
-        "question": "以下哪个是平台模块的正确描述？",
-        "options": ["A. 模块必须独立运行完整服务", "B. 模块服从平台统一任务、文件、日志规范", "C. 模块可以自由定义自己的文件存储", "D. 模块不需要接入平台日志中心"],
-        "answer": "B",
-    },
-    {
-        "id": "q2",
-        "question": "平台任务中心的作用是什么？",
-        "options": ["A. 只记录成功任务", "B. 统一管理所有耗时操作的全流程状态", "C. 只管理用户创建的任务", "D. 替代所有模块的内部状态管理"],
-        "answer": "B",
-    },
-    {
-        "id": "q3",
-        "question": "文件中心要求所有文件必须：",
-        "options": ["A. 存储在模块私有目录", "B. 接入平台文件中心并记录元数据", "C. 仅通过邮件传递", "D. 不需要记录文件信息"],
-        "answer": "B",
-    },
-    {
-        "id": "q4",
-        "question": "RBAC权限模型中的三个核心概念是：",
-        "options": ["A. 用户、权限、系统", "B. 角色、权限、用户", "C. 角色、资源、访问", "D. 用户、角色、资源"],
-        "answer": "B",
-    },
-    {
-        "id": "q5",
-        "question": "模块联动规范要求跨模块跳转必须：",
-        "options": ["A. 直接读写对方数据库", "B. 通过平台 Record Link 统一实现", "C. 绕过平台日志记录", "D. 使用模块间私有 API"],
-        "answer": "B",
-    },
-    {
-        "id": "q6",
-        "question": "分析工作台模块属于哪种模块形态？",
-        "options": ["A. 列表型", "B. 工作流型", "C. 轻交互型", "D. 文档型"],
-        "answer": "B",
-    },
-    {
-        "id": "q7",
-        "question": "学习训练模块的典型流程是：",
-        "options": ["A. 上传 → 分析 → 报告", "B. 选择 → 练习 → 反馈 → 复盘 → 统计", "C. 导入 → 列表 → 导出", "D. 创建 → 分配 → 批量操作"],
-        "answer": "B",
-    },
-    {
-        "id": "q8",
-        "question": "平台通知机制的第一优先场景是：",
-        "options": ["A. 用户修改昵称", "B. 任务完成或失败等关键事件", "C. 定时心跳", "D. 每日汇总"],
-        "answer": "B",
-    },
-    {
-        "id": "q9",
-        "question": "全局搜索的搜索范围包括：",
-        "options": ["A. 只能搜索任务", "B. 只能搜索文件", "C. 任务、文件、日志、模块跨类型搜索", "D. 只能搜索模块名称"],
-        "answer": "C",
-    },
-    {
-        "id": "q10",
-        "question": "备份文件的存放位置是：",
-        "options": ["A. 项目根目录", "B. ~/.omni/backups/", "C. /tmp/", "D. 数据库内嵌"],
-        "answer": "B",
-    },
-]
+LEARNING_LAB_CONTENT_PATH = Path(__file__).resolve().parents[1] / "data" / "learning_lab_content.json"
 
 
-# Predefined training sets
-PREDEFINED_SETS = [
-    {"id": "set-platform-basics", "name": "平台规范入门", "description": "测试对 Omni 平台基础规范的掌握程度", "category": "平台规范", "difficulty": "easy", "tags": "平台,规范,入门"},
-    {"id": "set-module-design", "name": "模块设计规范", "description": "验证对模块接入规范和联动机制的理解", "category": "模块设计", "difficulty": "medium", "tags": "模块,联动,规范"},
-    {"id": "set-workflow", "name": "工作流与任务管理", "description": "理解平台任务体系和文件日志接入规则", "category": "工作流", "difficulty": "medium", "tags": "任务,文件,日志"},
-]
+def load_learning_lab_content() -> dict:
+    with open(LEARNING_LAB_CONTENT_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def get_content_maps() -> tuple[list[dict], dict[str, dict]]:
+    content = load_learning_lab_content()
+    sets = content.get("sets", [])
+    questions = {item["id"]: item for item in content.get("questions", [])}
+    return sets, questions
 
 
 # --- Schemas ---
@@ -109,6 +54,8 @@ class QuestionSchema(BaseModel):
 
 
 class TrainingSetSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     set_id: str
     name: str
@@ -119,20 +66,10 @@ class TrainingSetSchema(BaseModel):
     tags: str
     is_active: bool
 
-    class Config:
-        from_attributes = True
-
-
-class QuestionSchema(BaseModel):
-    id: str
-    question: str
-    options: list[str]
-    answer: str
-    user_answer: Optional[str] = None
-    is_correct: Optional[bool] = None
-
 
 class PracticeSessionSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     session_id: str
     set_id: str
     set_name: str
@@ -143,10 +80,6 @@ class PracticeSessionSchema(BaseModel):
     questions: list[QuestionSchema]
     started_at: datetime
     completed_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
-
 
 class SessionListResponse(BaseModel):
     sessions: list
@@ -159,8 +92,10 @@ def list_sets(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    predefined_sets, question_bank = get_content_maps()
+
     # 确保有预设题集
-    for ps in PREDEFINED_SETS:
+    for ps in predefined_sets:
         existing = db.query(TrainingSet).filter(TrainingSet.set_id == ps["id"]).first()
         if not existing:
             ts = TrainingSet(
@@ -170,7 +105,7 @@ def list_sets(
                 category=ps["category"],
                 difficulty=ps["difficulty"],
                 tags=ps["tags"],
-                question_count=len(SAMPLE_QUESTIONS),
+                question_count=len([qid for qid in ps.get("question_ids", []) if qid in question_bank]),
             )
             db.add(ts)
     db.commit()
@@ -218,18 +153,28 @@ def start_practice(
     if not ts:
         raise HTTPException(status_code=404, detail="训练集不存在")
 
-    # 把预设题目注入 session（带空 user_answer）
+    predefined_sets, question_bank = get_content_maps()
+    set_config = next((item for item in predefined_sets if item["id"] == set_id), None)
+    if not set_config:
+        raise HTTPException(status_code=404, detail="训练集配置不存在")
+
+    # 把题目注入 session（带空 user_answer）
     questions = []
-    for q in SAMPLE_QUESTIONS:
+    for question_id in set_config.get("question_ids", []):
+        q = question_bank.get(question_id)
+        if not q:
+            continue
         questions.append({
             **q,
             "user_answer": None,
             "is_correct": None,
         })
+    if not questions:
+        raise HTTPException(status_code=400, detail="训练集未配置可用题目")
 
     session_id = f"session-{secrets.token_hex(6)}"
     session = PracticeSession(
-        session_id=sid,
+        session_id=session_id,
         set_id=set_id,
         set_name=ts.name,
         user_id=current_user.id,
@@ -238,7 +183,7 @@ def start_practice(
         questions=questions,
     )
     db.add(session)
-    log_action(db, "start", sid, current_user.id, detail=f"开始练习: {ts.name}")
+    log_action(db, "start", session_id, current_user.id, detail=f"开始练习: {ts.name}")
     db.commit()
     db.refresh(session)
     return session
@@ -283,6 +228,8 @@ def submit_answer(
             q["user_answer"] = user_answer
             q["is_correct"] = (user_answer == q["answer"])
             break
+    session.questions = questions
+    flag_modified(session, "questions")
 
     # 检查是否全部作答
     all_answered = all(q.get("user_answer") is not None for q in questions)
@@ -291,7 +238,7 @@ def submit_answer(
         session.status = "completed"
         session.correct_count = correct
         session.score = int(correct / len(questions) * 100)
-        session.completed_at = datetime.utcnow
+        session.completed_at = datetime.utcnow()
         log_action(db, "complete", sid, current_user.id, detail=f"完成练习: {session.set_name}，得分 {session.score}")
 
         # 更新统计

@@ -1,9 +1,11 @@
 // 文件中心
 import { useEffect, useState } from 'react'
-import { Card, Table, Tag, Button, Space, Input, Select, Typography, Empty, Pagination } from 'antd'
+import { Card, Table, Tag, Button, Space, Input, Select, Typography, Empty, Pagination, Modal, Image } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import type { FileRecord } from '../../services/api'
-import { filesApi } from '../../services/api'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import type { FilePreview, FileRecord, Module } from '../../services/api'
+import { filesApi, modulesApi } from '../../services/api'
+import { useAppMessage } from '../../hooks/useAppMessage'
 
 const { Title, Text } = Typography
 
@@ -61,15 +63,23 @@ const columns: ColumnsType<FileRecord> = [
 
 export default function FileCenter() {
   const [files, setFiles] = useState<FileRecord[]>([])
+  const [modules, setModules] = useState<Module[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
+  const [query, setQuery] = useState('')
   const [module, setModule] = useState<string | undefined>()
   const [status, setStatus] = useState<string | undefined>()
+  const [preview, setPreview] = useState<FilePreview | null>(null)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const message = useAppMessage()
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
 
-  const load = (p = 1, m?: string, s?: string) => {
+  const load = (p = 1, q?: string, m?: string, s?: string) => {
     setLoading(true)
-    filesApi.list({ module: m, status: s, limit: 10, offset: (p - 1) * 10 })
+    filesApi.list({ q, module: m, status: s, limit: 10, offset: (p - 1) * 10 })
       .then(({ files: data, total: n }) => {
         setFiles(data)
         setTotal(n)
@@ -78,7 +88,60 @@ export default function FileCenter() {
       .catch(() => setLoading(false))
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    modulesApi.list().then(({ modules: data }) => {
+      setModules(data.filter(item => item.status === 'active'))
+    }).catch(() => {})
+    const q = searchParams.get('q') || ''
+    const moduleValue = searchParams.get('module') || undefined
+    const statusValue = searchParams.get('status') || undefined
+    setQuery(q)
+    setModule(moduleValue)
+    setStatus(statusValue)
+    load(1, q || undefined, moduleValue, statusValue)
+  }, [])
+
+  const handleArchive = async (fileId: string) => {
+    try {
+      await filesApi.archive(fileId)
+      void message.success('文件已归档')
+      load(page, query || undefined, module, status)
+    } catch {
+      void message.error('归档失败')
+    }
+  }
+
+  const handlePreview = async (fileId: string) => {
+    setPreviewLoading(true)
+    setPreviewOpen(true)
+    try {
+      const data = await filesApi.preview(fileId)
+      setPreview(data)
+    } catch {
+      void message.error('加载预览失败')
+      setPreview(null)
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
+
+  const columnsWithAction: ColumnsType<FileRecord> = columns.map(column => {
+    if (column.key !== 'action') return column
+    return {
+      ...column,
+      render: (_, record) => (
+        <Space>
+          <Button size="small" onClick={() => void handlePreview(record.file_id)}>
+            预览
+          </Button>
+          <Button size="small" onClick={() => navigate(`/modules/${record.module}`)}>来源模块</Button>
+          <Button size="small" disabled={record.status !== 'active'} onClick={() => void handleArchive(record.file_id)}>
+            归档
+          </Button>
+        </Space>
+      ),
+    }
+  })
 
   return (
     <div className="omni-page">
@@ -92,29 +155,40 @@ export default function FileCenter() {
           <Input
             placeholder="搜索文件名"
             style={{ width: 200 }}
-            onChange={e => load(1, e.target.value || undefined, status)}
+            value={query}
+            onChange={e => setQuery(e.target.value)}
           />
           <Select
             placeholder="所属模块"
             style={{ width: 180 }}
             allowClear
-            onChange={v => { setModule(v ?? undefined); load(1, v ?? module, status) }}
+            value={module}
+            onChange={v => setModule(v ?? undefined)}
           >
-            <Select.Option value="analysis-workbench">分析工作模块</Select.Option>
-            <Select.Option value="record-operations">对象管理模块</Select.Option>
-            <Select.Option value="learning-lab">学习训练模块</Select.Option>
+            {modules.map(item => (
+              <Select.Option key={item.key} value={item.key}>{item.name}</Select.Option>
+            ))}
           </Select>
           <Select
             placeholder="文件状态"
             style={{ width: 120 }}
             allowClear
-            onChange={v => { setStatus(v ?? undefined); load(1, module, v ?? undefined) }}
+            value={status}
+            onChange={v => setStatus(v ?? undefined)}
           >
             <Select.Option value="active">正常</Select.Option>
             <Select.Option value="archived">已归档</Select.Option>
             <Select.Option value="deleted">已删除</Select.Option>
           </Select>
-          <Button onClick={() => load(1, module, status)}>搜索</Button>
+          <Button onClick={() => {
+            const next = new URLSearchParams()
+            if (query) next.set('q', query)
+            if (module) next.set('module', module)
+            if (status) next.set('status', status)
+            setSearchParams(next)
+            setPage(1)
+            load(1, query || undefined, module, status)
+          }}>搜索</Button>
         </Space>
       </Card>
 
@@ -124,7 +198,7 @@ export default function FileCenter() {
         ) : (
           <>
             <Table
-              columns={columns}
+              columns={columnsWithAction}
               dataSource={files}
               rowKey="id"
               size="small"
@@ -137,7 +211,7 @@ export default function FileCenter() {
                   current={page}
                   total={total}
                   pageSize={10}
-                  onChange={p => { setPage(p); load(p, module, status) }}
+                  onChange={p => { setPage(p); load(p, query || undefined, module, status) }}
                   showSizeChanger={false}
                 />
               </div>
@@ -145,6 +219,26 @@ export default function FileCenter() {
           </>
         )}
       </Card>
+
+      <Modal
+        title={preview?.original_name || '文件预览'}
+        open={previewOpen}
+        onCancel={() => { setPreviewOpen(false); setPreview(null) }}
+        footer={null}
+        width={800}
+      >
+        {previewLoading ? (
+          <Text type="secondary">加载中...</Text>
+        ) : !preview ? (
+          <Text type="secondary">暂无预览内容</Text>
+        ) : preview.preview_type === 'image' && preview.preview_url ? (
+          <Image src={preview.preview_url} alt={preview.original_name} style={{ maxHeight: 480, objectFit: 'contain' }} />
+        ) : (
+          <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 480, overflow: 'auto', margin: 0 }}>
+            {preview.content || '暂无可展示内容'}
+          </pre>
+        )}
+      </Modal>
     </div>
   )
 }

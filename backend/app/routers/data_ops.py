@@ -11,6 +11,8 @@ from typing import Any, Dict
 from app.core.database import get_db
 from app.models import User, Role, Module, Task, FileRecord, OperationLog
 from app.models.records import Record
+from app.models.taxpayer import TaxpayerInfo
+from app.models.risk_ledger import RiskDossier, RiskLedgerEntry
 from app.models.learning import TrainingSet, PracticeSession
 from app.routers.auth import get_current_user
 
@@ -113,6 +115,57 @@ def make_export(user_id: int, db: Session) -> Dict[str, Any]:
                 "created_at": r.created_at.isoformat() if r.created_at else None,
             }
             for r in db.query(Record).filter(Record.owner_id == user_id).all()
+        ],
+
+        "taxpayer_infos": [
+            {
+                "taxpayer_id": item.taxpayer_id,
+                "company_name": item.company_name,
+                "legal_person": item.legal_person,
+                "taxpayer_type": item.taxpayer_type,
+                "registration_status": item.registration_status,
+                "industry": item.industry,
+                "region": item.region,
+                "tax_bureau": item.tax_bureau,
+                "manager_department": item.manager_department,
+                "tax_officer": item.tax_officer,
+                "credit_rating": item.credit_rating,
+                "risk_level": item.risk_level,
+                "address": item.address,
+                "phone": item.phone,
+                "business_scope": item.business_scope,
+                "source_batch": item.source_batch,
+                "created_at": item.created_at.isoformat() if item.created_at else None,
+            }
+            for item in db.query(TaxpayerInfo).filter(TaxpayerInfo.owner_id == user_id).all()
+        ],
+
+        "risk_dossiers": [
+            {
+                "taxpayer_id": item.taxpayer_id,
+                "company_name": item.company_name,
+                "registration_status": item.registration_status,
+                "tax_officer": item.tax_officer,
+                "address": item.address,
+                "is_temporary": item.is_temporary,
+                "source": item.source,
+                "created_at": item.created_at.isoformat() if item.created_at else None,
+                "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+            }
+            for item in db.query(RiskDossier).filter(RiskDossier.owner_id == user_id).all()
+        ],
+
+        "risk_ledger_entries": [
+            {
+                "entry_id": item.entry_id,
+                "taxpayer_id": item.taxpayer_id,
+                "recorded_at": item.recorded_at.isoformat() if item.recorded_at else None,
+                "content": item.content,
+                "entry_status": item.entry_status,
+                "note": item.note,
+                "created_at": item.created_at.isoformat() if item.created_at else None,
+            }
+            for item in db.query(RiskLedgerEntry).filter(RiskLedgerEntry.owner_id == user_id).all()
         ],
 
         # 联动日志（当前用户）

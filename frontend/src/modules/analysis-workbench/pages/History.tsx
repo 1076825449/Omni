@@ -39,6 +39,15 @@ export default function History() {
     }
   }
 
+  const handleRerun = async (taskId: string) => {
+    try {
+      const next = await analysisApi.rerunTask(taskId)
+      navigate(`/modules/analysis-workbench/results/${next.task_id}`)
+    } catch {
+      // ignore
+    }
+  }
+
   const columns: ColumnsType<AnalysisTask> = [
     {
       title: '任务名称',
@@ -82,6 +91,11 @@ export default function History() {
           <Button size="small" onClick={() => navigate(`/modules/analysis-workbench/results/${r.task_id}`)}>
             查看
           </Button>
+          {r.file_count > 0 && (
+            <Button size="small" onClick={() => handleRerun(r.task_id)}>
+              重跑
+            </Button>
+          )}
           {r.status === 'queued' && (
             <Button size="small" danger onClick={() => handleCancel(r.task_id)}>
               取消

@@ -1,7 +1,9 @@
+from datetime import datetime
 from typing import Optional, List
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from sqlalchemy import or_
+from pydantic import BaseModel, ConfigDict
 from app.core.database import get_db
 from app.models import User
 from app.models.record import OperationLog
@@ -11,6 +13,8 @@ router = APIRouter(prefix="/api/logs", tags=["日志"])
 
 
 class LogSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     action: str
     target_type: str
@@ -19,11 +23,7 @@ class LogSchema(BaseModel):
     operator_id: int
     detail: str
     result: str
-    created_at: str
-
-    class Config:
-        from_attributes = True
-
+    created_at: datetime
 
 class LogListResponse(BaseModel):
     logs: List[LogSchema]
@@ -32,6 +32,7 @@ class LogListResponse(BaseModel):
 
 @router.get("", response_model=LogListResponse)
 def list_logs(
+    q: Optional[str] = Query(None),
     action: Optional[str] = Query(None),
     module: Optional[str] = Query(None),
     result: Optional[str] = Query(None),
@@ -40,13 +41,22 @@ def list_logs(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    q = db.query(OperationLog)
+    query = db.query(OperationLog).filter(OperationLog.operator_id == current_user.id)
+    if q:
+        like = f"%{q}%"
+        query = query.filter(
+            or_(
+                OperationLog.detail.like(like),
+                OperationLog.target_type.like(like),
+                OperationLog.target_id.like(like),
+            )
+        )
     if action:
-        q = q.filter(OperationLog.action == action)
+        query = query.filter(OperationLog.action == action)
     if module:
-        q = q.filter(OperationLog.module == module)
+        query = query.filter(OperationLog.module == module)
     if result:
-        q = q.filter(OperationLog.result == result)
-    total = q.count()
-    logs = q.order_by(OperationLog.created_at.desc()).offset(offset).limit(limit).all()
+        query = query.filter(OperationLog.result == result)
+    total = query.count()
+    logs = query.order_by(OperationLog.created_at.desc()).offset(offset).limit(limit).all()
     return LogListResponse(logs=logs, total=total)

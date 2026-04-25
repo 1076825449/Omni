@@ -10,6 +10,8 @@ ALL_PERMISSIONS = {
     "module:analysis-workbench:export",
     "module:record-operations:view",
     "module:record-operations:operate",
+    "module:risk-ledger:view",
+    "module:risk-ledger:operate",
     "module:learning-lab:view",
     "module:learning-lab:operate",
     # 平台公共
@@ -33,6 +35,8 @@ ROLE_PERMISSIONS = {
         "module:analysis-workbench:export",
         "module:record-operations:view",
         "module:record-operations:operate",
+        "module:risk-ledger:view",
+        "module:risk-ledger:operate",
         "module:learning-lab:view",
         "module:learning-lab:operate",
         "platform:task:view",
@@ -44,6 +48,7 @@ ROLE_PERMISSIONS = {
     "viewer": [
         "module:analysis-workbench:view",
         "module:record-operations:view",
+        "module:risk-ledger:view",
         "module:learning-lab:view",
         "platform:task:view",
         "platform:file:view",

@@ -11,6 +11,7 @@ const typeMap: Record<string, { label: string; color: string }> = {
   workflow: { label: '工作流型', color: 'blue' },
   list: { label: '列表型', color: 'gold' },
   interactive: { label: '轻交互型', color: 'green' },
+  dashboard: { label: '看板型', color: 'cyan' },
 }
 
 const priorityMap: Record<string, { label: string; color: string }> = {
@@ -78,7 +79,7 @@ export default function ModuleCenter() {
           {filtered.map(m => (
             <Col xs={24} sm={12} lg={8} key={m.key}>
               <Card hoverable className="omni-module-card">
-                <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                <Space style={{ width: '100%' }} direction="vertical" size={8}>
                   <Space style={{ width: '100%', justifyContent: 'space-between' }}>
                     <Space>
                       <Text style={{ fontSize: 20 }}>{m.icon}</Text>

@@ -19,6 +19,8 @@ from app.modules.records_router import router as records_router
 from app.modules.learning_lab_router import router as learning_lab_router
 from app.modules.dashboard_router import router as dashboard_router
 from app.modules.schedule_router import router as schedule_router
+from app.modules.info_query_router import router as info_query_router
+from app.modules.risk_ledger_router import router as risk_ledger_router
 from app.routers.webhooks import router as webhooks_router
 from app.routers.ws import websocket_endpoint
 from app.routers.data_ops import router as data_ops_router
@@ -79,7 +81,10 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -107,6 +112,8 @@ app.include_router(cross_links_router)
 app.include_router(webhooks_router)
 app.include_router(dashboard_router)
 app.include_router(schedule_router)
+app.include_router(info_query_router)
+app.include_router(risk_ledger_router)
 app.include_router(data_ops_router)
 
 # WebSocket

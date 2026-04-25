@@ -2,8 +2,9 @@ import secrets, csv, io
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Query
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from app.core.database import get_db
 from app.models import User
 from app.models.record import FileRecord, OperationLog
@@ -29,6 +30,8 @@ def log_action(db: Session, action: str, target_id: str, operator_id: int,
 
 # --- Schemas ---
 class RecordSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     record_id: str
     name: str
@@ -41,10 +44,6 @@ class RecordSchema(BaseModel):
     owner_id: int
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
-
 
 class RecordListResponse(BaseModel):
     records: list[RecordSchema]
@@ -75,12 +74,42 @@ class BatchRequest(BaseModel):
     status: Optional[str] = None
 
 
+class TagUpdateRequest(BaseModel):
+    tags: str = ""
+
+
+class RelatedLogSchema(BaseModel):
+    id: int
+    action: str
+    detail: str
+    result: str
+    module: str
+    created_at: datetime
+
+
+class RelatedFileSchema(BaseModel):
+    file_id: str
+    original_name: str
+    module: str
+    created_at: datetime
+
+
+class RecordRelationsResponse(BaseModel):
+    source_module: Optional[str] = None
+    source_task_id: Optional[str] = None
+    source_batch: Optional[str] = None
+    logs: list[RelatedLogSchema] = []
+    files: list[RelatedFileSchema] = []
+
+
 # --- Routes ---
 @router.get("/records", response_model=RecordListResponse)
 def list_records(
     category: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     assignee: Optional[str] = Query(None),
+    tags: Optional[str] = Query(None),
+    batch: Optional[str] = Query(None),
     q: Optional[str] = Query(None),
     limit: int = Query(20, le=100),
     offset: int = Query(0),
@@ -94,8 +123,19 @@ def list_records(
         query = query.filter(Record.status == status)
     if assignee:
         query = query.filter(Record.assignee.like(f"%{assignee}%"))
+    if tags:
+        query = query.filter(Record.tags.like(f"%{tags}%"))
+    if batch:
+        query = query.filter(Record.import_batch == batch)
     if q:
-        query = query.filter(Record.name.like(f"%{q}%"))
+        like = f"%{q}%"
+        query = query.filter(
+            or_(
+                Record.name.like(like),
+                Record.detail.like(like),
+                Record.tags.like(like),
+            )
+        )
     total = query.count()
     records = query.order_by(Record.created_at.desc()).offset(offset).limit(limit).all()
     return RecordListResponse(records=records, total=total)
@@ -136,6 +176,88 @@ def get_record(
     return r
 
 
+@router.get("/records/{record_id}/relations", response_model=RecordRelationsResponse)
+def get_record_relations(
+    record_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    record = db.query(Record).filter(
+        Record.record_id == record_id,
+        Record.owner_id == current_user.id,
+    ).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="对象不存在")
+
+    source_module = None
+    source_task_id = None
+    if record.import_batch.startswith("analysis-"):
+        source_module = "analysis-workbench"
+        source_task_id = record.import_batch[len("analysis-"):]
+
+    logs_query = db.query(OperationLog).filter(OperationLog.operator_id == current_user.id)
+    if record.import_batch and source_task_id:
+        logs_query = logs_query.filter(
+            or_(
+                OperationLog.target_id == record.record_id,
+                OperationLog.target_id == source_task_id,
+                OperationLog.detail.like(f"%{record.import_batch}%"),
+            )
+        )
+    elif record.import_batch:
+        logs_query = logs_query.filter(
+            or_(
+                OperationLog.target_id == record.record_id,
+                OperationLog.detail.like(f"%{record.import_batch}%"),
+            )
+        )
+    else:
+        logs_query = logs_query.filter(OperationLog.target_id == record.record_id)
+    logs = logs_query.order_by(OperationLog.created_at.desc()).limit(12).all()
+
+    files_query = db.query(FileRecord).filter(FileRecord.owner_id == current_user.id)
+    if source_task_id:
+        files_query = files_query.filter(
+            FileRecord.module == "analysis-workbench",
+            FileRecord.name.like(f"{source_task_id}%"),
+        )
+    elif record.import_batch:
+        source_module = "record-operations"
+        files_query = files_query.filter(
+            FileRecord.module == "record-operations",
+            FileRecord.name.like(f"{record.import_batch}%"),
+        )
+    else:
+        files_query = files_query.filter(FileRecord.id == -1)
+
+    files = files_query.order_by(FileRecord.created_at.desc()).limit(8).all()
+    return RecordRelationsResponse(
+        source_module=source_module,
+        source_task_id=source_task_id,
+        source_batch=record.import_batch or None,
+        logs=[
+            RelatedLogSchema(
+                id=item.id,
+                action=item.action,
+                detail=item.detail,
+                result=item.result,
+                module=item.module,
+                created_at=item.created_at,
+            )
+            for item in logs
+        ],
+        files=[
+            RelatedFileSchema(
+                file_id=item.file_id,
+                original_name=item.original_name,
+                module=item.module,
+                created_at=item.created_at,
+            )
+            for item in files
+        ],
+    )
+
+
 @router.put("/records/{record_id}", response_model=RecordSchema)
 def update_record(
     record_id: str,
@@ -172,23 +294,31 @@ def delete_record(
 @router.post("/records/{record_id}/tags")
 def update_tags(
     record_id: str,
-    body: BatchRequest,
+    body: TagUpdateRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """更新标签（批量）"""
-    records = db.query(Record).filter(
-        Record.record_id.in_(body.record_ids),
+    """更新单条对象的标签。"""
+    record = db.query(Record).filter(
+        Record.record_id == record_id,
         Record.owner_id == current_user.id,
-    ).all()
-    updated = 0
-    for r in records:
-        if body.assignee is not None:
-            r.tags = body.assignee  # reuse assignee field as tags placeholder
-        log_action(db, "update", r.record_id, current_user.id, detail=f"更新标签: {r.name}")
-        updated += 1
+    ).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="对象不存在")
+
+    normalized_parts: list[str] = []
+    seen = set()
+    for part in body.tags.split(","):
+        cleaned = part.strip()
+        if not cleaned or cleaned in seen:
+            continue
+        seen.add(cleaned)
+        normalized_parts.append(cleaned)
+    tags = ",".join(normalized_parts)
+    record.tags = tags
+    log_action(db, "update", record.record_id, current_user.id, detail=f"更新标签: {record.name}")
     db.commit()
-    return {"success": True, "message": f"已更新 {updated} 条记录"}
+    return {"success": True, "message": "标签已更新", "tags": tags}
 
 
 @router.get("/records/tags/suggestions")

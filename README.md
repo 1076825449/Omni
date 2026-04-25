@@ -1,120 +1,102 @@
 # Omni 统一平台
 
-全新统一平台项目，从零开始定义和构建。Phase 1 已完成并可运行。
+当前仓库的唯一执行基线是：
 
-## 项目结构
+1. `ROADMAP.md`
+2. `最终验收清单.md`
 
-```
-Omni/
-├── docs/                    # 产品规范文档
-├── frontend/               # 平台前端（React + TypeScript + Vite + Ant Design）
-├── backend/                # 平台后端（FastAPI + Python + SQLAlchemy）
-│   └── app/plugins/         # 插件系统
-├── scripts/                # 启动脚本
-├── cli.py                  # CLI 管理工具
-├── docker-compose.yml      # Docker Compose 一键部署
-└── tests/                  # 平台级测试（pytest + Playwright）
-```
+在开始任何开发前，后续 agent 必须先阅读这两份文档；如果与旧阶段报告、旧任务包或历史 README 冲突，以上述两份文件为准。
 
-## 技术栈
+## 当前真实状态
 
-| 层 | 技术 |
-|---|---|
-| 前端 | React + TypeScript + Vite + Ant Design + React Router + Zustand |
-| 后端 | FastAPI + Python + SQLAlchemy + Pydantic |
-| 数据库 | SQLite（第一阶段） |
-| 认证 | Session + Cookie |
-| 模块形态 | 工作流型（分析工作台）+ 列表型（对象管理）+ 轻交互型（学习训练） |
+这个项目已经具备统一平台骨架、5 个正式模块、一套可运行的前后端，以及通过验证的当前执行基线。
 
-## 快速启动
+当前已验证通过的基础项：
 
-```bash
-# 方式一：脚本启动（推荐）
-bash scripts/start.sh
+- 前端 `npm run build`
+- 前端 `npm run lint`
+- 后端 `cd backend && .venv/bin/pytest ../tests/backend -q`
+- 前端冒烟测试 `cd frontend && npm run test:e2e`
+- CLI 基础命令 `python3 cli.py db status`
 
-# 方式二：手动启动
-cd backend && .venv/bin/uvicorn app.main:app --reload --port 3000
-cd frontend && npm run dev
+当前仍明确存在的非阻塞问题：
 
-# 方式三：Docker Compose
-cp .env.example .env
-docker-compose up -d
-```
+- 少量模块仍采用轻量内置规则而非外部专业引擎，但当前主流程均已真实接通
+- 文档区仍有部分历史材料保留旧说法，仅 `ROADMAP.md` / `最终验收清单.md` 可作为执行和验收依据
 
-**测试账号：** `admin / admin123`
+## 已纳入的正式模块
 
-**CLI 工具：**
-```bash
-python cli.py --help                    # 查看所有命令
-python cli.py user create <u> <p>      # 创建用户
-python cli.py db status                # 数据库状态
-python cli.py server status            # 服务状态
-python cli.py session cleanup           # 清理过期会话
-```
+- `analysis-workbench`
+- `record-operations`
+- `learning-lab`
+- `dashboard-workbench`
+- `schedule-workbench`
 
-## 已完成功能
+平台公共页包括：
 
-**Phase 1 — 平台骨架 + 样板模块 ✅**
-- ✅ 统一登录与会话（Session + Cookie）
-- ✅ RBAC 权限体系（admin / user / viewer + 自定义权限）
-- ✅ 统一任务中心（全平台耗时操作可追踪）
-- ✅ 统一文件中心（模块文件统一管理 + 归档）
-- ✅ 统一日志中心（操作审计追溯）
-- ✅ 全局搜索（跨任务/文件/日志/模块）
-- ✅ 通知中心（分析完成自动推送 + 未读 badge）
-- ✅ 平台统计（任务/文件/对象/日志 指标）
-- ✅ 备份与恢复（手动打包 ZIP）
-- ✅ 帮助中心 + 新手起步引导
-- ✅ 模块联动规范（CrossLinkLog + 分析→对象管理联动示例）
+- 登录
+- 首页
+- 模块中心
+- 任务中心
+- 文件中心
+- 日志中心
+- 通知中心
+- 搜索
+- 统计
+- 设置
+- 帮助
 
-**Phase 2 — 部署 + 测试 ✅**
-- ✅ Docker Compose 一键部署（后端+前端+PostgreSQL）
-- ✅ PostgreSQL 支持（DATABASE_URL 环境变量切换）
-- ✅ 自动化测试（10/10 pytest 通过，Playwright 冒烟测试）
-- ✅ 配置外置（.env 环境变量）
+## 本地启动
 
-**Phase 3 — 开发者工具 + API + 插件 ✅**
-- ✅ CLI 管理工具（user/db/session/server/module）
-- ✅ OpenAPI 文档增强（/docs + /redoc）
-- ✅ API 版本管理（/api/v1/ 与 /api/ 完全兼容）
-- ✅ Webhook 通知系统（HMAC签名/异步投递/CRUD管理）
-- ✅ 插件系统基础架构（PluginManager + 示例插件）
-
-**Phase 4 — 新样板模块 + 实时能力 + 生产加固 ✅**
-- ✅ Dashboard 数据仪表盘（统计卡片/7天趋势/模块统计/活动时间线）
-- ✅ Schedule 定时任务模块（CRUD + 手动触发）
-- ✅ WebSocket 实时通知（/ws 端点 + ConnectionManager）
-- ✅ 前端全局状态管理（Zustand: auth/notification/theme stores）
-- ✅ 登录页增强（记住用户名 Checkbox）
-- ✅ 顶部导航增强（仪表盘入口 + 用户菜单显示角色）
-
-**Phase 5 — 生产加固 + 易用性 ✅**
-- ✅ Rate Limiting 中间件（登录5次/分钟，API100次/分钟，localhost白名单）
-- ✅ 数据导入/导出模块（JSON格式，GET /export + POST /import）
-- ✅ Audit Log 服务（app/services/audit.py，IP/User-Agent记录）
-- ✅ 模块注册API（POST /register，GET/PUT /{key}/config，admin only）
-- ✅ 对象管理增强（批量删除弹窗确认 + 标签AutoComplete + 分页显示总数）
-
-**样板模块：**
-- ✅ 分析工作台（analysis-workbench）— 工作流型
-- ✅ 对象管理（record-operations）— 列表型
-- ✅ 学习训练（learning-lab）— 轻交互型
-- ✅ 数据仪表盘（dashboard-workbench）— 数据展示型
-- ✅ 定时调度（schedule-workbench）— 任务调度型
-
-## 开发规范
-
-- `03-统一平台总规范.md` — 平台总体规则
-- `04-模块设计规范.md` — 模块接入规范
-- `05-AI开发协作规范.md` — AI 开发约束
-- `docs/模块联动规范.md` — 模块联动规则
-
-## Git
+### 后端
 
 ```bash
-git clone https://github.com/1076825449/Omni.git
-cd Omni
+cd backend
+.venv/bin/uvicorn app.main:app --reload --port 3000
 ```
 
-**当前 commit：** `0838588`
-**GitHub：** https://github.com/1076825449/Omni
+### 前端
+
+```bash
+cd frontend
+npm run dev
+```
+
+默认访问：
+
+- 前端：`http://127.0.0.1:5173`
+- 后端：`http://127.0.0.1:3000`
+
+测试账号：
+
+```text
+admin / admin123
+```
+
+## 常用验证命令
+
+```bash
+cd frontend && npm run lint
+cd frontend && npm run build
+cd backend && .venv/bin/pytest ../tests/backend -q
+cd frontend && npm run test:e2e
+python3 cli.py db status
+```
+
+## 目录说明
+
+```text
+backend/      FastAPI 后端
+frontend/     React + TypeScript 前端
+tests/        pytest 与 Playwright 测试
+docs/         历史文档与产品材料
+scripts/      启停脚本
+cli.py        本地管理命令入口
+```
+
+## 说明
+
+如果你要继续推进这个项目，不要从 README 自己猜状态，直接对照：
+
+- [ROADMAP.md](/Volumes/外接硬盘/vibe coding/网站/重做统一平台/ROADMAP.md)
+- [最终验收清单.md](/Volumes/外接硬盘/vibe coding/网站/重做统一平台/最终验收清单.md)

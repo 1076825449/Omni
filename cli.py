@@ -7,9 +7,15 @@ import sys
 import os
 import argparse
 import secrets
+from pathlib import Path
 
-# 确保 backend 在路径中
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "backend"))
+ROOT_DIR = Path(__file__).resolve().parent
+BACKEND_DIR = ROOT_DIR / "backend"
+
+# 确保 backend 和虚拟环境依赖在路径中
+for site_packages in sorted((BACKEND_DIR / ".venv").glob("lib/python*/site-packages")):
+    sys.path.insert(0, str(site_packages))
+sys.path.insert(0, str(BACKEND_DIR))
 
 from app.core.database import engine, Base, SessionLocal, get_db
 from app.models import User, Role, Module, Session as SessionModel
@@ -149,7 +155,7 @@ def module_list():
             print("[module:list] 无模块")
             return
         for m in modules:
-            print(f"  {m.module_id} | {m.name} | v{m.version} | enabled={m.is_enabled}")
+            print(f"  {m.key} | {m.name} | type={m.type} | status={m.status}")
     finally:
         db.close()
 

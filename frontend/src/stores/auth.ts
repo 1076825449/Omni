@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { API_BASE } from '../services/api'
 
 interface User {
   id: number
@@ -17,8 +18,6 @@ interface AuthState {
   checkSession: () => Promise<void>
   hasPermission: (permission: string) => boolean
 }
-
-const API_BASE = 'http://localhost:3000'
 
 export const useAuthStore = create<AuthState>()(
   persist(

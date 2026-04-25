@@ -1,13 +1,15 @@
 // 学习训练模块 - 统计页
-import { Card, Row, Col, Statistic, Progress, List, Tag, Space, Typography, Spin } from 'antd'
+import { Card, Row, Col, Statistic, Progress, List, Tag, Space, Typography, Spin, Button } from 'antd'
 import { useEffect, useState } from 'react'
 import { learningLabApi, LearningStats } from '../../../services/api'
+import { useNavigate } from 'react-router-dom'
 
 const { Title, Text } = Typography
 
 export default function Stats() {
   const [stats, setStats] = useState<LearningStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const navigate = useNavigate()
 
   useEffect(() => {
     learningLabApi.getStats().then(data => {
@@ -60,6 +62,11 @@ export default function Stats() {
                       <Tag color={s.status === 'completed' ? 'green' : 'default'}>
                         {s.status === 'completed' ? '已完成' : '进行中'}
                       </Tag>
+                      {s.status === 'in_progress' && (
+                        <Button size="small" onClick={() => navigate(`/modules/learning-lab/practice/${s.session_id}`)}>
+                          继续练习
+                        </Button>
+                      )}
                     </Space>
                   }
                   description={

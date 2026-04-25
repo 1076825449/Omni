@@ -1,8 +1,9 @@
 // 学习训练模块 - 练习页
-import { Card, Button, Space, Typography, Radio, Progress, message, Alert, Tag, Spin } from 'antd'
+import { Card, Button, Space, Typography, Radio, Progress, Alert, Tag, Spin } from 'antd'
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { learningLabApi, PracticeSession, Question } from '../../../services/api'
+import { useAppMessage } from '../../../hooks/useAppMessage'
 
 const { Title, Text, Paragraph } = Typography
 
@@ -15,6 +16,7 @@ export default function Practice() {
   const [answered, setAnswered] = useState<Record<string, boolean>>({})
   const [results, setResults] = useState<Record<string, boolean>>({})
   const navigate = useNavigate()
+  const message = useAppMessage()
 
   const load = () => {
     if (!id) return
@@ -67,12 +69,14 @@ export default function Practice() {
   const allAnswered = questions.every((question: Question) => answered[question.id])
 
   const handleNext = () => {
-    setSelected(null)
-    setCurrent(prev => Math.min(prev + 1, questions.length - 1))
+    const nextIndex = Math.min(current + 1, questions.length - 1)
+    setCurrent(nextIndex)
+    setSelected(questions[nextIndex]?.user_answer || null)
   }
   const handlePrev = () => {
-    setSelected(null)
-    setCurrent(prev => Math.max(prev - 1, 0))
+    const prevIndex = Math.max(current - 1, 0)
+    setCurrent(prevIndex)
+    setSelected(questions[prevIndex]?.user_answer || null)
   }
 
   return (

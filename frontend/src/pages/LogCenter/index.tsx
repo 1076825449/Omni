@@ -1,9 +1,10 @@
 // 日志中心
 import { useEffect, useState } from 'react'
-import { Card, Table, Tag, Space, Input, Select, DatePicker, Typography, Empty, Pagination, Button } from 'antd'
+import { Card, Table, Tag, Space, Input, Select, Typography, Empty, Pagination, Button } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import type { OperationLog } from '../../services/api'
-import { logsApi } from '../../services/api'
+import { useSearchParams } from 'react-router-dom'
+import type { Module, OperationLog } from '../../services/api'
+import { logsApi, modulesApi } from '../../services/api'
 
 const { Title, Text } = Typography
 
@@ -57,16 +58,19 @@ const columns: ColumnsType<OperationLog> = [
 
 export default function LogCenter() {
   const [logs, setLogs] = useState<OperationLog[]>([])
+  const [modules, setModules] = useState<Module[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
+  const [query, setQuery] = useState('')
   const [action, setAction] = useState<string | undefined>()
   const [module, setModule] = useState<string | undefined>()
   const [result, setResult] = useState<string | undefined>()
+  const [searchParams, setSearchParams] = useSearchParams()
 
-  const load = (p = 1, a?: string, m?: string, r?: string) => {
+  const load = (p = 1, q?: string, a?: string, m?: string, r?: string) => {
     setLoading(true)
-    logsApi.list({ action: a, module: m, result: r, limit: 10, offset: (p - 1) * 10 })
+    logsApi.list({ q, action: a, module: m, result: r, limit: 10, offset: (p - 1) * 10 })
       .then(({ logs: data, total: n }) => {
         setLogs(data)
         setTotal(n)
@@ -75,7 +79,20 @@ export default function LogCenter() {
       .catch(() => setLoading(false))
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    modulesApi.list().then(({ modules: data }) => {
+      setModules(data.filter(item => item.status === 'active'))
+    }).catch(() => {})
+    const q = searchParams.get('q') || ''
+    const actionValue = searchParams.get('action') || undefined
+    const moduleValue = searchParams.get('module') || undefined
+    const resultValue = searchParams.get('result') || undefined
+    setQuery(q)
+    setAction(actionValue)
+    setModule(moduleValue)
+    setResult(resultValue)
+    load(1, q || undefined, actionValue, moduleValue, resultValue)
+  }, [])
 
   return (
     <div className="omni-page">
@@ -86,11 +103,18 @@ export default function LogCenter() {
 
       <Card size="small" style={{ marginBottom: 16 }}>
         <Space wrap>
+          <Input
+            placeholder="搜索日志内容或对象"
+            style={{ width: 220 }}
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+          />
           <Select
             placeholder="操作类型"
             style={{ width: 120 }}
             allowClear
-            onChange={v => { setAction(v ?? undefined); load(1, v ?? action, module, result) }}
+            value={action}
+            onChange={v => setAction(v ?? undefined)}
           >
             <Select.Option value="create">创建</Select.Option>
             <Select.Option value="update">修改</Select.Option>
@@ -103,23 +127,33 @@ export default function LogCenter() {
             placeholder="模块"
             style={{ width: 180 }}
             allowClear
-            onChange={v => { setModule(v ?? undefined); load(1, action, v ?? module, result) }}
+            value={module}
+            onChange={v => setModule(v ?? undefined)}
           >
-            <Select.Option value="platform">平台公共</Select.Option>
-            <Select.Option value="analysis-workbench">分析工作模块</Select.Option>
-            <Select.Option value="record-operations">对象管理模块</Select.Option>
-            <Select.Option value="learning-lab">学习训练模块</Select.Option>
+            {modules.map(item => (
+              <Select.Option key={item.key} value={item.key}>{item.name}</Select.Option>
+            ))}
           </Select>
           <Select
             placeholder="结果"
             style={{ width: 100 }}
             allowClear
-            onChange={v => { setResult(v ?? undefined); load(1, action, module, v ?? result) }}
+            value={result}
+            onChange={v => setResult(v ?? undefined)}
           >
             <Select.Option value="success">成功</Select.Option>
             <Select.Option value="failed">失败</Select.Option>
           </Select>
-          <Button onClick={() => load(1, action, module, result)}>搜索</Button>
+          <Button onClick={() => {
+            const next = new URLSearchParams()
+            if (query) next.set('q', query)
+            if (action) next.set('action', action)
+            if (module) next.set('module', module)
+            if (result) next.set('result', result)
+            setSearchParams(next)
+            setPage(1)
+            load(1, query || undefined, action, module, result)
+          }}>搜索</Button>
         </Space>
       </Card>
 
@@ -142,7 +176,7 @@ export default function LogCenter() {
                   current={page}
                   total={total}
                   pageSize={10}
-                  onChange={p => { setPage(p); load(p, action, module, result) }}
+                  onChange={p => { setPage(p); load(p, query || undefined, action, module, result) }}
                   showSizeChanger={false}
                 />
               </div>

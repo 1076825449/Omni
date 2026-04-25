@@ -1,12 +1,13 @@
 // 对象管理模块 - 列表页
 import { useEffect, useState } from 'react'
 import {
-  Card, Table, Tag, Button, Space, Input, Select, Typography,
-  Empty, Pagination, Modal, message, Checkbox, Popconfirm, AutoComplete,
+  Alert, Card, Table, Tag, Button, Space, Input, Select, Typography,
+  Empty, Pagination, Modal, Checkbox, Popconfirm, AutoComplete,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { recordsApi, RecordItem } from '../../../services/api'
+import { useAppMessage } from '../../../hooks/useAppMessage'
 
 const { Text } = Typography
 
@@ -17,37 +18,58 @@ const statusMap: Record<string, { text: string; color: string }> = {
 }
 
 export default function RecordList() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [records, setRecords] = useState<RecordItem[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
+  const [query, setQuery] = useState('')
+  const [category, setCategory] = useState<string | undefined>()
+  const [status, setStatus] = useState<string | undefined>()
+  const [tag, setTag] = useState<string | undefined>()
   const [selected, setSelected] = useState<string[]>([])
   const [batchModalOpen, setBatchModalOpen] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [batchCategory, setBatchCategory] = useState('')
   const [batchAssignee, setBatchAssignee] = useState('')
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([])
-  const [newTags, setNewTags] = useState('')
+  const batch = searchParams.get('batch') || undefined
   const navigate = useNavigate()
+  const message = useAppMessage()
+
+  const categoryOptions = Array.from(new Set(records.map((record) => record.category).filter(Boolean))).map((value) => ({ value, label: value }))
 
   const load = (p = 1) => {
     setLoading(true)
-    recordsApi.list({ limit: 10, offset: (p - 1) * 10 })
+    recordsApi.list({
+      batch,
+      q: query || undefined,
+      category,
+      status,
+      tags: tag,
+      limit: 10,
+      offset: (p - 1) * 10,
+    })
       .then(({ records: data, total: n }) => {
         setRecords(data)
         setTotal(n)
         setLoading(false)
         setSelected([])
       })
-      .catch(() => { message.error('加载失败'); setLoading(false) })
+      .catch(() => { void message.error('加载失败'); setLoading(false) })
   }
 
   // 加载标签建议
   const loadTagSuggestions = (q: string) => {
-    recordsApi.list({ q, limit: 20 }).catch(() => {})
+    void recordsApi.tagSuggestions(q)
+      .then((data) => setTagSuggestions(data.tags))
+      .catch(() => setTagSuggestions([]))
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load(1)
+    setPage(1)
+  }, [batch, query, category, status, tag])
 
   const handleBatchUpdate = async () => {
     try {
@@ -55,27 +77,27 @@ export default function RecordList() {
         category: batchCategory || undefined,
         assignee: batchAssignee || undefined,
       })
-      message.success(res.message)
+      void message.success(res.message)
       setBatchModalOpen(false)
       load(page)
-    } catch { message.error('批量更新失败') }
+    } catch { void message.error('批量更新失败') }
   }
 
   const handleBatchDelete = async () => {
     try {
       const res = await recordsApi.batchDelete(selected)
-      message.success(res.message)
+      void message.success(res.message)
       setDeleteModalOpen(false)
       load(page)
-    } catch { message.error('批量删除失败') }
+    } catch { void message.error('批量删除失败') }
   }
 
   const handleDelete = async (id: string) => {
     try {
       await recordsApi.delete(id)
-      message.success('已归档')
+      void message.success('已归档')
       load(page)
-    } catch { message.error('操作失败') }
+    } catch { void message.error('操作失败') }
   }
 
   const columns: ColumnsType<RecordItem> = [
@@ -141,16 +163,55 @@ export default function RecordList() {
         </Space>
       }
     >
+      {batch && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="当前正在查看分析同步对象"
+          description={
+            <Space wrap>
+              <Text code>{batch}</Text>
+              <Button size="small" onClick={() => setSearchParams({})}>清除筛选</Button>
+            </Space>
+          }
+        />
+      )}
       <Space wrap style={{ marginBottom: 12 }}>
-        <Input.Search placeholder="搜索名称" style={{ width: 180 }} onSearch={q => { recordsApi.list({ q, limit: 50 }).then(d => { setRecords(d.records); setTotal(d.total) }) }} />
-        <Select placeholder="分类" style={{ width: 120 }} allowClear onChange={() => {}} />
-        <Select placeholder="状态" style={{ width: 100 }} allowClear onChange={() => {}} />
+        <Input.Search
+          placeholder="搜索名称/标签/说明"
+          style={{ width: 200 }}
+          allowClear
+          onSearch={(value) => setQuery(value.trim())}
+        />
+        <Select
+          placeholder="分类"
+          style={{ width: 140 }}
+          allowClear
+          options={categoryOptions}
+          value={category}
+          onChange={(value) => setCategory(value)}
+        />
+        <Select
+          placeholder="状态"
+          style={{ width: 120 }}
+          allowClear
+          value={status}
+          options={[
+            { value: 'active', label: '活跃' },
+            { value: 'archived', label: '已归档' },
+            { value: 'locked', label: '已锁定' },
+          ]}
+          onChange={(value) => setStatus(value)}
+        />
         <AutoComplete
           placeholder="按标签过滤"
           style={{ width: 160 }}
           options={tagSuggestions.map(t => ({ value: t }))}
           onSearch={loadTagSuggestions}
-          onSelect={v => {}}
+          onSelect={(value) => setTag(value)}
+          onChange={(value) => setTag(value || undefined)}
+          allowClear
         />
       </Space>
 
@@ -187,7 +248,7 @@ export default function RecordList() {
 
       {/* 批量更新弹窗 */}
       <Modal title={`批量更新 ${selected.length} 条对象`} open={batchModalOpen} onOk={handleBatchUpdate} onCancel={() => setBatchModalOpen(false)}>
-        <Space direction="vertical" style={{ width: '100%' }}>
+        <Space style={{ width: '100%' }} direction="vertical">
           <Text type="secondary">将更新 {selected.length} 条对象</Text>
           <Text>分类：<Input style={{ width: 200 }} onChange={e => setBatchCategory(e.target.value)} placeholder="留空则不修改" /></Text>
           <Text>负责人：<Input style={{ width: 200 }} onChange={e => setBatchAssignee(e.target.value)} placeholder="留空则不修改" /></Text>

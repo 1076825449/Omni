@@ -1,7 +1,7 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from app.core.database import get_db
 from app.models import User, Role
 from app.models.permission import ALL_PERMISSIONS, ROLE_PERMISSIONS
@@ -11,16 +11,14 @@ router = APIRouter(prefix="/api/platform/roles", tags=["平台公共"])
 
 
 class RoleSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     display_name: str
     description: str
     permissions: List[str]
     is_active: bool
-
-    class Config:
-        from_attributes = True
-
 
 class RoleListResponse(BaseModel):
     roles: List[RoleSchema]

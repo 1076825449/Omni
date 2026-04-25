@@ -1,64 +1,72 @@
-import { test, expect } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
-const BASE = process.env.E2E_BASE_URL || 'http://localhost:5173'
+test('login and open key platform pages', async ({ page }) => {
+  const suffix = Date.now().toString().slice(-6)
+  const scheduleName = `Smoke 调度任务 ${suffix}`
+  const analysisName = `Smoke 分析任务 ${suffix}`
 
-test.describe('Omni 平台冒烟测试', () => {
-  test('登录页可访问', async ({ page }) => {
-    await page.goto(`${BASE}/login`)
-    await expect(page.locator('body')).toBeVisible()
-    // 检查登录表单元素存在
-    const hasInput = await page.locator('input').count()
-    expect(hasInput).toBeGreaterThan(0)
+  await page.goto('/login')
+
+  await page.getByPlaceholder('请输入用户名').fill('admin')
+  await page.getByPlaceholder('请输入密码').fill('admin123')
+  await page.getByRole('button', { name: /登\s*录/ }).click()
+
+  await expect(page).toHaveURL(/\/$/)
+  await expect(page.getByText('欢迎回来')).toBeVisible()
+
+  await page.goto('/modules')
+  await expect(page.getByRole('heading', { name: '模块中心' })).toBeVisible()
+  await expect(page.getByText('分析工作模块')).toBeVisible()
+
+  await page.goto('/modules/schedule-workbench')
+  await expect(page.getByText('创建定时任务')).toBeVisible()
+  await page.getByPlaceholder('例如：每日分析同步').fill(scheduleName)
+  await page.getByPlaceholder('说明该任务的用途').fill('Playwright 自动创建的调度任务')
+  await page.getByPlaceholder('例如：0 9 * * *').fill('15 10 * * *')
+  await page.getByPlaceholder('例如：analysis / backup').fill('analysis')
+  await page.getByRole('button', { name: '创建任务' }).click()
+  await expect(page.getByText(scheduleName)).toBeVisible()
+
+  await page.goto('/modules/analysis-workbench/new')
+  await expect(page.getByText('新建分析任务')).toBeVisible()
+  await page.getByLabel('分析名称').fill(analysisName)
+  await page.getByLabel('描述').fill('Playwright 自动创建的分析任务')
+  await page.getByRole('button', { name: '创建任务' }).click()
+  await expect(page.getByText('当前任务 ID：')).toBeVisible()
+  await page.locator('input[type="file"]').setInputFiles({
+    name: `smoke-analysis-${suffix}.txt`,
+    mimeType: 'text/plain',
+    buffer: Buffer.from(`smoke analysis payload ${suffix}`, 'utf-8'),
   })
+  await expect(page.getByText(`smoke-analysis-${suffix}.txt`).first()).toBeVisible()
+  await page.getByRole('button', { name: '发起分析' }).click()
 
-  test('登录成功跳转首页', async ({ page }) => {
-    await page.goto(`${BASE}/login`)
-    // 填写登录表单
-    await page.locator('input').first().fill('admin')
-    await page.locator('input[type="password"]').fill('admin123')
-    await page.locator('button[type="submit"]').click()
-    // 等待跳转
-    await page.waitForURL(`${BASE}/` as string, { timeout: 5000 }).catch(() => {})
-    // 检查是否进入平台（URL 或页面内容变化）
-    expect(page.url()).not.toContain('/login')
-  })
+  await expect(page).toHaveURL(/\/modules\/analysis-workbench\/history$/)
+  await expect(page.getByRole('button', { name: analysisName }).first()).toBeVisible()
+  await page.getByRole('button', { name: analysisName }).first().click()
+  await expect(page.getByText('分析结果')).toBeVisible()
 
-  test('首页可访问且有平台标识', async ({ page }) => {
-    // 先登录
-    await page.goto(`${BASE}/login`)
-    await page.locator('input').first().fill('admin')
-    await page.locator('input[type="password"]').fill('admin123')
-    await page.locator('button[type="submit"]').click()
-    await page.waitForLoadState('networkidle')
-    // 检查平台标识
-    const body = await page.locator('body').innerText()
-    // 至少不应该还在登录页
-    expect(page.url()).not.toContain('/login')
-  })
+  await page.goto('/modules/dashboard-workbench')
+  await expect(page.getByText('平台联动')).toBeVisible()
+  await expect(page.getByText('🕐 最近活动')).toBeVisible()
 
-  test('模块中心可访问', async ({ page }) => {
-    // 登录
-    await page.goto(`${BASE}/login`)
-    await page.locator('input').first().fill('admin')
-    await page.locator('input[type="password"]').fill('admin123')
-    await page.locator('button[type="submit"]').click()
-    await page.waitForLoadState('networkidle')
-    // 导航到模块中心
-    await page.goto(`${BASE}/modules`)
-    await page.waitForLoadState('networkidle')
-    const body = await page.locator('body').innerText()
-    expect(body.length).toBeGreaterThan(0)
-  })
+  await page.goto('/modules/learning-lab/sets')
+  await expect(page.getByText('选择训练集')).toBeVisible()
+  await expect(page.getByRole('button', { name: '开始练习' }).first()).toBeVisible()
 
-  test('任务中心可访问', async ({ page }) => {
-    await page.goto(`${BASE}/login`)
-    await page.locator('input').first().fill('admin')
-    await page.locator('input[type="password"]').fill('admin123')
-    await page.locator('button[type="submit"]').click()
-    await page.waitForLoadState('networkidle')
-    await page.goto(`${BASE}/tasks`)
-    await page.waitForLoadState('networkidle')
-    const body = await page.locator('body').innerText()
-    expect(body.length).toBeGreaterThan(0)
-  })
+  await page.goto('/modules/record-operations')
+  await expect(page.getByText('快捷操作')).toBeVisible()
+  await expect(page.getByRole('button', { name: '查看列表' })).toBeVisible()
+
+  await page.goto('/modules/record-operations/list')
+  await expect(page.getByRole('tab', { name: '对象列表' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '新建对象' })).toBeVisible()
+
+  await page.goto('/modules/risk-ledger')
+  await expect(page.getByText('风险记录台账').first()).toBeVisible()
+  await expect(page.getByRole('tab', { name: '单户记录' })).toBeVisible()
+  await expect(page.getByRole('tab', { name: '批量记录' })).toBeVisible()
+
+  await page.goto('/settings')
+  await expect(page.getByRole('heading', { name: '系统设置' })).toBeVisible()
 })

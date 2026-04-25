@@ -10,14 +10,22 @@ export default function LearningLabWorkbench() {
   const [stats, setStats] = useState<LearningStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [hasInProgress, setHasInProgress] = useState(false)
+  const [continueSessionId, setContinueSessionId] = useState<string | null>(null)
   const navigate = useNavigate()
 
   useEffect(() => {
-    learningLabApi.getStats().then(d => {
-      setStats(d)
-      setHasInProgress(d.recent_sessions.some((s: any) => s.status === 'in_progress'))
-      setLoading(false)
-    }).catch(() => setLoading(false))
+    Promise.allSettled([learningLabApi.getStats(), learningLabApi.continueLast()])
+      .then(([statsResult, continueResult]) => {
+        if (statsResult.status === 'fulfilled') {
+          setStats(statsResult.value)
+          setHasInProgress(statsResult.value.recent_sessions.some((s: any) => s.status === 'in_progress'))
+        }
+        if (continueResult.status === 'fulfilled') {
+          setHasInProgress(true)
+          setContinueSessionId(continueResult.value.session_id)
+        }
+      })
+      .finally(() => setLoading(false))
   }, [])
 
   return (
@@ -30,10 +38,16 @@ export default function LearningLabWorkbench() {
           showIcon
           action={
             <Button size="small" onClick={async () => {
+              if (continueSessionId) {
+                navigate(`/modules/learning-lab/practice/${continueSessionId}`)
+                return
+              }
               try {
                 const session = await learningLabApi.continueLast()
                 navigate(`/modules/learning-lab/practice/${session.session_id}`)
-              } catch {}
+              } catch {
+                // ignore and stay on current page
+              }
             }}>
               继续练习
             </Button>
@@ -57,8 +71,13 @@ export default function LearningLabWorkbench() {
       <Row gutter={16}>
         <Col xs={24} sm={12}>
           <Card title="开始新练习" extra={<Link to="/modules/learning-lab/sets"><Button size="small">查看全部</Button></Link>}>
-            <Space direction="vertical" style={{ width: '100%' }}>
+            <Space style={{ width: '100%' }} direction="vertical">
               <Link to="/modules/learning-lab/sets"><Button type="primary" block>选择训练集</Button></Link>
+              {continueSessionId && (
+                <Button block onClick={() => navigate(`/modules/learning-lab/practice/${continueSessionId}`)}>
+                  回到未完成练习
+                </Button>
+              )}
               {stats?.recent_sessions?.[0] && (
                 <div>
                   <Text type="secondary">最近：{stats.recent_sessions[0].set_name}</Text>
@@ -71,7 +90,7 @@ export default function LearningLabWorkbench() {
         </Col>
         <Col xs={24} sm={12}>
           <Card title="快捷入口">
-            <Space direction="vertical" style={{ width: '100%' }}>
+            <Space style={{ width: '100%' }} direction="vertical">
               <Link to="/modules/learning-lab/favorites"><Button block>我的收藏</Button></Link>
               <Link to="/modules/learning-lab/stats"><Button block>学习统计</Button></Link>
             </Space>

@@ -1,6 +1,6 @@
 // 日志中心
 import { useEffect, useState } from 'react'
-import { Card, Table, Tag, Space, Input, Select, Typography, Empty, Pagination, Button } from 'antd'
+import { Card, Table, Tag, Space, Input, Select, Typography, Empty, Pagination, Button, Descriptions } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useSearchParams } from 'react-router-dom'
 import type { Module, OperationLog } from '../../services/api'
@@ -18,44 +18,6 @@ const actionMap: Record<string, { text: string; color: string }> = {
   logout: { text: '退出', color: 'default' },
 }
 
-const columns: ColumnsType<OperationLog> = [
-  {
-    title: '操作',
-    dataIndex: 'action',
-    key: 'action',
-    width: 100,
-    render: (a: string) => {
-      const m = actionMap[a] || { text: a, color: 'default' }
-      return <Tag color={m.color}>{m.text}</Tag>
-    },
-  },
-  {
-    title: '操作对象',
-    key: 'target',
-    render: (_, r) => `${r.target_type} #${r.target_id}`,
-  },
-  {
-    title: '模块',
-    dataIndex: 'module',
-    key: 'module',
-    width: 160,
-  },
-  {
-    title: '结果',
-    dataIndex: 'result',
-    key: 'result',
-    width: 90,
-    render: (r: string) => <Tag color={r === 'success' ? 'success' : 'error'}>{r === 'success' ? '成功' : '失败'}</Tag>,
-  },
-  {
-    title: '时间',
-    dataIndex: 'created_at',
-    key: 'created_at',
-    width: 180,
-    render: (t: string) => new Date(t).toLocaleString('zh-CN'),
-  },
-]
-
 export default function LogCenter() {
   const [logs, setLogs] = useState<OperationLog[]>([])
   const [modules, setModules] = useState<Module[]>([])
@@ -66,6 +28,7 @@ export default function LogCenter() {
   const [action, setAction] = useState<string | undefined>()
   const [module, setModule] = useState<string | undefined>()
   const [result, setResult] = useState<string | undefined>()
+  const [selectedLog, setSelectedLog] = useState<OperationLog | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
 
   const load = (p = 1, q?: string, a?: string, m?: string, r?: string) => {
@@ -93,6 +56,52 @@ export default function LogCenter() {
     setResult(resultValue)
     load(1, q || undefined, actionValue, moduleValue, resultValue)
   }, [])
+
+  const columns: ColumnsType<OperationLog> = [
+    {
+      title: '操作',
+      dataIndex: 'action',
+      key: 'action',
+      width: 100,
+      render: (a: string) => {
+        const m = actionMap[a] || { text: a, color: 'default' }
+        return <Tag color={m.color}>{m.text}</Tag>
+      },
+    },
+    {
+      title: '操作对象',
+      key: 'target',
+      render: (_, r) => `${r.target_type} #${r.target_id}`,
+    },
+    {
+      title: '模块',
+      dataIndex: 'module',
+      key: 'module',
+      width: 160,
+    },
+    {
+      title: '结果',
+      dataIndex: 'result',
+      key: 'result',
+      width: 90,
+      render: (r: string) => <Tag color={r === 'success' ? 'success' : 'error'}>{r === 'success' ? '成功' : '失败'}</Tag>,
+    },
+    {
+      title: '时间',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      width: 180,
+      render: (t: string) => new Date(t).toLocaleString('zh-CN'),
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 80,
+      render: (_: any, record: OperationLog) => (
+        <Button size="small" type="link" onClick={() => setSelectedLog(record)}>详情</Button>
+      ),
+    },
+  ]
 
   return (
     <div className="omni-page">
@@ -156,6 +165,30 @@ export default function LogCenter() {
           }}>搜索</Button>
         </Space>
       </Card>
+
+      {selectedLog && (
+        <Card
+          title="日志详情"
+          size="small"
+          style={{ marginBottom: 16 }}
+          extra={<Button size="small" onClick={() => setSelectedLog(null)}>关闭</Button>}
+        >
+          <Descriptions size="small" column={2}>
+            <Descriptions.Item label="操作类型">{selectedLog.action}</Descriptions.Item>
+            <Descriptions.Item label="操作结果">
+              <Tag color={selectedLog.result === 'success' ? 'success' : 'error'}>
+                {selectedLog.result === 'success' ? '成功' : '失败'}
+              </Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label="目标类型">{selectedLog.target_type}</Descriptions.Item>
+            <Descriptions.Item label="目标ID">{selectedLog.target_id}</Descriptions.Item>
+            <Descriptions.Item label="所属模块">{selectedLog.module}</Descriptions.Item>
+            <Descriptions.Item label="操作人ID">{selectedLog.operator_id}</Descriptions.Item>
+            <Descriptions.Item label="操作时间">{new Date(selectedLog.created_at).toLocaleString('zh-CN')}</Descriptions.Item>
+            <Descriptions.Item label="详细说明" span={2}>{selectedLog.detail || '—'}</Descriptions.Item>
+          </Descriptions>
+        </Card>
+      )}
 
       <Card>
         {logs.length === 0 && !loading ? (

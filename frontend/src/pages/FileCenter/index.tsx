@@ -52,9 +52,9 @@ const columns: ColumnsType<FileRecord> = [
     title: '操作',
     key: 'action',
     width: 120,
-    render: () => (
+    render: (_: any, record: FileRecord) => (
       <Space>
-        <Button size="small">下载</Button>
+        <Button size="small" onClick={() => window.open(filesApi.downloadUrl(record.file_id), '_blank')}>下载</Button>
         <Button size="small">详情</Button>
       </Space>
     ),

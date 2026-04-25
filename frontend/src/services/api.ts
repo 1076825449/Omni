@@ -128,6 +128,7 @@ export const filesApi = {
   },
   archive: (fileId: string) => request<{ success: boolean; message: string }>('/api/files/' + fileId + '/archive', { method: 'POST' }),
   preview: (fileId: string) => request<FilePreview>('/api/files/' + fileId + '/preview'),
+  downloadUrl: (fileId: string) => `${API_BASE}/api/files/${fileId}/download`,
 }
 
 export const logsApi = {
@@ -366,10 +367,11 @@ export interface PlatformRecentActivity {
 }
 
 export const notificationsApi = {
-  list: (params?: { q?: string; type?: string }) => {
+  list: (params?: { q?: string; type?: string; is_read?: boolean }) => {
     const sp = new URLSearchParams()
     if (params?.q) sp.set('q', params.q)
     if (params?.type) sp.set('type', params.type)
+    if (params?.is_read !== undefined) sp.set('is_read', String(params.is_read))
     const query = sp.toString()
     return request<{ notifications: NotificationRecord[]; total: number; unread_count: number }>('/api/notifications' + (query ? `?${query}` : ''))
   },

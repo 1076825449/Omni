@@ -20,12 +20,13 @@ export default function Notifications() {
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
   const [type, setType] = useState<string | undefined>()
+  const [isRead, setIsRead] = useState<boolean | undefined>()
   const message = useAppMessage()
   const navigate = useNavigate()
 
   const load = () => {
     setLoading(true)
-    notificationsApi.list({ q: query || undefined, type }).then(({ notifications: data, unread_count }) => {
+    notificationsApi.list({ q: query || undefined, type, is_read: isRead }).then(({ notifications: data, unread_count }) => {
       setNotifications(data)
       setUnreadCount(unread_count)
       setLoading(false)
@@ -91,6 +92,16 @@ export default function Notifications() {
             <Select.Option value="success">成功</Select.Option>
             <Select.Option value="warning">警告</Select.Option>
             <Select.Option value="error">错误</Select.Option>
+          </Select>
+          <Select
+            placeholder="已读状态"
+            style={{ width: 120 }}
+            allowClear
+            value={isRead}
+            onChange={value => setIsRead(value ?? undefined)}
+          >
+            <Select.Option value={false}>未读</Select.Option>
+            <Select.Option value={true}>已读</Select.Option>
           </Select>
           <Button onClick={load}>搜索</Button>
         </Space>

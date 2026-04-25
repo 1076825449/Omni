@@ -1,11 +1,24 @@
 from typing import Optional, List
 from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from pydantic import BaseModel, ConfigDict
 from app.core.database import get_db
 from app.models import User
 from app.models.record import FileRecord, OperationLog
+
+
+def log_action(db: Session, action: str, target_id: str, operator_id: int, detail: str = "", result: str = "success"):
+    db.add(OperationLog(
+        action=action,
+        target_type="FileRecord",
+        target_id=target_id,
+        module="platform",
+        operator_id=operator_id,
+        detail=detail,
+        result=result,
+    ))
 from app.routers.auth import get_current_user
 from pathlib import Path
 import json
@@ -118,6 +131,29 @@ def archive_file(
     return {"success": True, "message": "文件已归档"}
 
 
+@router.get("/{file_id}/download")
+def download_file(
+    file_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """下载指定文件。"""
+    f = db.query(FileRecord).filter(
+        FileRecord.file_id == file_id,
+        FileRecord.owner_id == current_user.id,
+    ).first()
+    if not f:
+        raise HTTPException(status_code=404, detail="文件不存在")
+    if not f.path:
+        raise HTTPException(status_code=400, detail="文件缺少存储路径")
+    path = Path(f.path)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="文件内容不存在")
+    log_action(db, "download", file_id, current_user.id, detail=f"下载文件: {f.original_name}")
+    db.commit()
+    return FileResponse(str(path), media_type=f.mime_type or "application/octet-stream", filename=f.original_name)
+
+
 @router.get("/{file_id}/preview", response_model=FilePreviewResponse)
 def preview_file(
     file_id: str,
@@ -148,7 +184,16 @@ def preview_file(
             original_name=file.original_name,
             mime_type=mime_type,
             preview_type="image",
-            preview_url=path.as_uri(),
+            content=f"文件名：{file.original_name}\n文件大小：{len(raw)} 字节\nMIME 类型：{mime_type or 'image'}\n\n⚠️ 作为佐证文件存储，不自动 OCR 识别内容。如需分析，请下载后处理。",
+        )
+
+    if suffix == ".pdf" or mime_type == "application/pdf":
+        return FilePreviewResponse(
+            file_id=file.file_id,
+            original_name=file.original_name,
+            mime_type=mime_type,
+            preview_type="unsupported",
+            content=f"文件名：{file.original_name}\n文件大小：{len(raw)} 字节\nMIME 类型：{mime_type or 'application/pdf'}\n\n⚠️ PDF 文件不提供内嵌预览。如需查看内容，请下载后处理。",
         )
 
     text_content = sample.decode("utf-8", errors="ignore")

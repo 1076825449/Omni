@@ -35,6 +35,7 @@ class NotificationListResponse(BaseModel):
 def list_notifications(
     q: Optional[str] = Query(None),
     type: Optional[str] = Query(None),
+    is_read: Optional[bool] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -49,8 +50,10 @@ def list_notifications(
         )
     if type:
         query = query.filter(Notification.type == type)
+    if is_read is not None:
+        query = query.filter(Notification.is_read == is_read)
     total = query.count()
-    unread = query.filter(Notification.is_read == False).count()
+    unread = db.query(Notification).filter(Notification.user_id == current_user.id, Notification.is_read == False).count()
     notifications = query.order_by(Notification.created_at.desc()).limit(50).all()
     return NotificationListResponse(
         notifications=[

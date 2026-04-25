@@ -14,7 +14,7 @@ try:
         {
             "key": "analysis-workbench",
             "name": "分析工作模块",
-            "description": "统一处理上传、校验、分析、结果、报告输出。适合作为平台里\"任务型模块\"的样板。",
+            "description": "统一处理上传、校验、分析、结果、报告输出。支持发票、申报、财报交叉识别与通知书/分析报告导出。",
             "type": "workflow",
             "priority": "high",
             "status": "active",
@@ -23,7 +23,7 @@ try:
         {
             "key": "record-operations",
             "name": "对象管理模块",
-            "description": "统一处理对象管理、分类、分配、批量调整和导出。适合作为平台里\"列表型模块\"的样板。",
+            "description": "统一处理对象管理、分类、分配、批量调整和导出。是平台统一对象落点，支持导入与标签管理。",
             "type": "list",
             "priority": "high",
             "status": "active",
@@ -50,11 +50,29 @@ try:
         {
             "key": "learning-lab",
             "name": "学习训练模块",
-            "description": "统一处理题库、训练、错题、收藏和统计。适合作为平台里\"沉浸式轻模块\"的样板。",
+            "description": "统一处理题库、训练、错题、收藏和统计。支持真实答题、得分统计和会话持续。",
             "type": "interactive",
             "priority": "medium",
             "status": "active",
             "icon": "🟢",
+        },
+        {
+            "key": "dashboard-workbench",
+            "name": "数据仪表盘",
+            "description": "平台数据总览仪表盘，展示任务、文件、模块统计和近期活动。",
+            "type": "dashboard",
+            "priority": "medium",
+            "status": "active",
+            "icon": "📊",
+        },
+        {
+            "key": "schedule-workbench",
+            "name": "定时调度",
+            "description": "定时任务调度，支持 cron 表达式、手动执行、执行历史与统一任务通知链路。",
+            "type": "workflow",
+            "priority": "medium",
+            "status": "active",
+            "icon": "⏰",
         },
     ]
 

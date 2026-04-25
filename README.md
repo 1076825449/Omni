@@ -26,11 +26,13 @@
 
 ## 已纳入的正式模块
 
-- `analysis-workbench`
-- `record-operations`
-- `learning-lab`
-- `dashboard-workbench`
-- `schedule-workbench`
+- `analysis-workbench`  分析工作模块（workflow）
+- `record-operations`   对象管理模块（list）
+- `info-query`          信息查询表（list）
+- `risk-ledger`         风险记录台账（list）
+- `learning-lab`        学习训练模块（interactive）
+- `dashboard-workbench` 数据仪表盘（dashboard）
+- `schedule-workbench`  定时调度（workflow）
 
 平台公共页包括：
 

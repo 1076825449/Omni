@@ -138,7 +138,7 @@
 - `learning-lab`
 - `dashboard-workbench`
 - `schedule-workbench`
-- `data-ops` 是否独立成模块，必须明确
+- `data-ops` 当前为平台内部数据操作能力，无独立前端入口和模块路由，不列为正式模块
 
 验收标准：
 

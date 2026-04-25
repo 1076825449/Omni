@@ -447,49 +447,65 @@ def run_task(
     task.result_summary = "分析执行中..."
     log_action(db, "create", task_id, current_user.id, detail="发起分析任务")
     db.commit()
-    analysis = analyze_files(task, files)
-    generated_records = analysis["generated_records"]
+    try:
+        analysis = analyze_files(task, files)
+        generated_records = analysis["generated_records"]
 
-    task.status = "succeeded"
-    task.result_summary = analysis["summary"]
-    task.completed_at = datetime.utcnow()
+        task.status = "succeeded"
+        task.result_summary = analysis["summary"]
+        task.completed_at = datetime.utcnow()
 
-    from app.models.notification import Notification
-    created_count = 0
-    for item in generated_records:
-        rec = Record(
-            record_id=f"rec-{secrets.token_hex(6)}",
-            name=item["name"],
-            category=item["category"],
-            assignee="",
-            status="pending_review",
-            tags=item["tags"],
-            detail=item["detail"],
-            import_batch=f"analysis-{task_id}",
-            owner_id=current_user.id,
+        from app.models.notification import Notification
+        created_count = 0
+        for item in generated_records:
+            rec = Record(
+                record_id=f"rec-{secrets.token_hex(6)}",
+                name=item["name"],
+                category=item["category"],
+                assignee="",
+                status="pending_review",
+                tags=item["tags"],
+                detail=item["detail"],
+                import_batch=f"analysis-{task_id}",
+                owner_id=current_user.id,
+            )
+            db.add(rec)
+            db.flush()
+            created_count += 1
+            db.add(CrossLinkLog(
+                source_module="analysis-workbench",
+                source_type="task",
+                source_id=task_id,
+                target_module="record-operations",
+                target_type="record",
+                target_id=rec.record_id,
+                operator_id=current_user.id,
+            ))
+
+        notif = Notification(
+            title="分析任务完成",
+            content=f'任务 "{task.name}" 已完成，处理 {len(files)} 个文件，识别 {analysis["risk_count"]} 项风险，生成 {created_count} 条对象结果。任务ID: {task.task_id}',
+            type="success",
+            user_id=current_user.id,
         )
-        db.add(rec)
-        db.flush()
-        created_count += 1
-        db.add(CrossLinkLog(
-            source_module="analysis-workbench",
-            source_type="task",
-            source_id=task_id,
-            target_module="record-operations",
-            target_type="record",
-            target_id=rec.record_id,
-            operator_id=current_user.id,
-        ))
-
-    notif = Notification(
-        title="分析任务完成",
-        content=f'任务 "{task.name}" 已完成，处理 {len(files)} 个文件，识别 {analysis["risk_count"]} 项风险，生成 {created_count} 条对象结果。任务ID: {task.task_id}',
-        type="success",
-        user_id=current_user.id,
-    )
-    db.add(notif)
-    log_action(db, "update", task_id, current_user.id, detail=f"分析执行完成，识别 {analysis['risk_count']} 项风险，生成 {created_count} 条对象结果")
-    db.commit()
+        db.add(notif)
+        log_action(db, "update", task_id, current_user.id, detail=f"分析执行完成，识别 {analysis['risk_count']} 项风险，生成 {created_count} 条对象结果")
+        db.commit()
+    except Exception as exc:
+        task.status = "failed"
+        task.result_summary = f"分析失败：{exc}"
+        task.completed_at = datetime.utcnow()
+        from app.models.notification import Notification
+        notif = Notification(
+            title="分析任务失败",
+            content=f'任务 "{task.name}" 执行失败：{exc}',
+            type="error",
+            user_id=current_user.id,
+        )
+        db.add(notif)
+        log_action(db, "update", task_id, current_user.id, detail=f"分析执行失败", result="failed")
+        db.commit()
+        raise HTTPException(status_code=500, detail=f"分析执行失败：{exc}") from exc
 
     try:
         from app.services.webhook import WebhookService

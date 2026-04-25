@@ -219,6 +219,9 @@ def test_task_detail_with_auth(auth_client):
     assert detail["log_count"] >= 2
     assert detail["related_record_count"] == 0
     assert detail["source_url"].endswith(task_id)
+    assert detail["type"] == "analysis"
+    assert detail["updated_at"] is not None
+    assert detail["completed_at"] is not None
 
 
 def test_files_list_with_auth(auth_client):

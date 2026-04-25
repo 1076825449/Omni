@@ -243,8 +243,19 @@ export default function TaskCenter() {
                 <Descriptions.Item label="文件数">{selectedTask.file_count}</Descriptions.Item>
                 <Descriptions.Item label="日志数">{selectedTask.log_count}</Descriptions.Item>
                 <Descriptions.Item label="关联对象">{selectedTask.related_record_count}</Descriptions.Item>
+                <Descriptions.Item label="任务类型">{selectedTask.type}</Descriptions.Item>
                 <Descriptions.Item label="创建时间">{new Date(selectedTask.created_at).toLocaleString('zh-CN')}</Descriptions.Item>
-                <Descriptions.Item label="结果摘要" span={2}>{selectedTask.result_summary || '—'}</Descriptions.Item>
+                <Descriptions.Item label="更新时间">{new Date(selectedTask.updated_at).toLocaleString('zh-CN')}</Descriptions.Item>
+                {selectedTask.completed_at && (
+                  <Descriptions.Item label="完成时间">{new Date(selectedTask.completed_at).toLocaleString('zh-CN')}</Descriptions.Item>
+                )}
+                {selectedTask.status === 'failed' ? (
+                  <Descriptions.Item label="失败原因" span={2}>
+                    <Text type="danger">{selectedTask.result_summary || '未知错误'}</Text>
+                  </Descriptions.Item>
+                ) : (
+                  <Descriptions.Item label="结果摘要" span={2}>{selectedTask.result_summary || '—'}</Descriptions.Item>
+                )}
               </Descriptions>
               <Space wrap>
                 {selectedTask.source_url && (

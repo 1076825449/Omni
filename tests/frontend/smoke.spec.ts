@@ -67,6 +67,11 @@ test('login and open key platform pages', async ({ page }) => {
   await expect(page.getByRole('tab', { name: '单户记录' })).toBeVisible()
   await expect(page.getByRole('tab', { name: '批量记录' })).toBeVisible()
 
+  await page.goto('/modules/info-query')
+  await expect(page.getByText('信息查询表').first()).toBeVisible()
+  await expect(page.getByText('纳税人总数')).toBeVisible()
+  await expect(page.getByRole('heading', { name: '信息查询' })).toBeVisible()
+
   await page.goto('/settings')
   await expect(page.getByRole('heading', { name: '系统设置' })).toBeVisible()
 })

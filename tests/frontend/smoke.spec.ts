@@ -12,34 +12,46 @@ test('login and open key platform pages', async ({ page }) => {
   await page.getByRole('button', { name: /登\s*录/ }).click()
 
   await expect(page).toHaveURL(/\/$/)
-  await expect(page.getByText('欢迎回来')).toBeVisible()
+  // Homepage shows welcome message with Omni platform name
+  await expect(page.getByText('Omni 统一工作平台').first()).toBeVisible()
+  // Homepage shows quick start section
+  await expect(page.getByText('快速开始').first()).toBeVisible()
+  // Homepage shows role info
+  await expect(page.getByText('当前账号').first()).toBeVisible()
 
   await page.goto('/modules')
   await expect(page.getByRole('heading', { name: '模块中心' })).toBeVisible()
-  await expect(page.getByText('分析工作模块')).toBeVisible()
+  // Module center shows user-friendly names (e.g. 涉税风险分析)
+  await expect(page.getByText('涉税风险分析')).toBeVisible()
 
   await page.goto('/modules/schedule-workbench')
-  await expect(page.getByText('创建定时任务')).toBeVisible()
-  await page.getByPlaceholder('例如：每日分析同步').fill(scheduleName)
+  await expect(page.getByText('创建定时任务').first()).toBeVisible()
+  // Cron template guidance text
+  await expect(page.getByText('看不懂 Cron 表达式').first()).toBeVisible()
+  await page.getByPlaceholder('例如：每日风险分析').fill(scheduleName)
   await page.getByPlaceholder('说明该任务的用途').fill('Playwright 自动创建的调度任务')
   await page.getByPlaceholder('例如：0 9 * * *').fill('15 10 * * *')
-  await page.getByPlaceholder('例如：analysis / backup').fill('analysis')
-  await page.getByRole('button', { name: '创建任务' }).click()
+  await page.getByPlaceholder('例如：analysis、backup、data-import').fill('analysis')
+  await page.getByRole('button', { name: '创建定时任务' }).click()
   await expect(page.getByText(scheduleName)).toBeVisible()
 
   await page.goto('/modules/analysis-workbench/new')
-  await expect(page.getByText('新建分析任务')).toBeVisible()
+  // New analysis page shows step indicator
+  await expect(page.getByText('第1步：填写任务信息')).toBeVisible()
+  // New analysis page shows upload guidance
+  await expect(page.getByText('上传资料说明')).toBeVisible()
   await page.getByLabel('分析名称').fill(analysisName)
   await page.getByLabel('描述').fill('Playwright 自动创建的分析任务')
   await page.getByRole('button', { name: '创建任务' }).click()
-  await expect(page.getByText('当前任务 ID：')).toBeVisible()
+  // After creating task, step 2 appears
+  await expect(page.getByText('第2步：上传分析资料')).toBeVisible()
   await page.locator('input[type="file"]').setInputFiles({
     name: `smoke-analysis-${suffix}.txt`,
     mimeType: 'text/plain',
     buffer: Buffer.from(`smoke analysis payload ${suffix}`, 'utf-8'),
   })
   await expect(page.getByText(`smoke-analysis-${suffix}.txt`).first()).toBeVisible()
-  await page.getByRole('button', { name: '发起分析' }).click()
+  await page.getByRole('button', { name: '发起分析（第4步）' }).click()
 
   await expect(page).toHaveURL(/\/modules\/analysis-workbench\/history$/)
   await expect(page.getByRole('button', { name: analysisName }).first()).toBeVisible()
@@ -47,8 +59,8 @@ test('login and open key platform pages', async ({ page }) => {
   await expect(page.getByText('分析结果')).toBeVisible()
 
   await page.goto('/modules/dashboard-workbench')
-  await expect(page.getByText('平台联动')).toBeVisible()
-  await expect(page.getByText('🕐 最近活动')).toBeVisible()
+  // Dashboard shows module cards
+  await expect(page.getByText('模块统计')).toBeVisible()
 
   await page.goto('/modules/learning-lab/sets')
   await expect(page.getByText('选择训练集')).toBeVisible()
@@ -69,9 +81,19 @@ test('login and open key platform pages', async ({ page }) => {
 
   await page.goto('/modules/info-query')
   await expect(page.getByText('信息查询表').first()).toBeVisible()
-  await expect(page.getByText('纳税人总数')).toBeVisible()
-  await expect(page.getByRole('heading', { name: '信息查询' })).toBeVisible()
+  // Wait for stats to load
+  await page.waitForTimeout(1000)
+  await expect(page.getByText('纳税人总数')).toBeVisible({ timeout: 5000 })
 
   await page.goto('/settings')
   await expect(page.getByRole('heading', { name: '系统设置' })).toBeVisible()
+
+  // Help pages
+  await page.goto('/help/getting-started')
+  await expect(page.getByText('3 分钟上手指南')).toBeVisible()
+  await expect(page.getByText('快速开始流程')).toBeVisible()
+
+  await page.goto('/help')
+  await expect(page.getByRole('heading', { name: '帮助中心' })).toBeVisible()
+  await expect(page.getByText('平台模块概览')).toBeVisible()
 })

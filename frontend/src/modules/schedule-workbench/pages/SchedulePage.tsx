@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Button, Card, Empty, Form, Input, List, Popconfirm, Space, Spin, Tag, Typography, Timeline } from 'antd'
+import { Button, Card, Empty, Form, Input, List, Popconfirm, Space, Spin, Tag, Typography, Timeline, Alert } from 'antd'
 import { scheduleApi, type ScheduleExecutionLog, type ScheduleTask } from '../../../services/api'
 import { useAppMessage } from '../../../hooks/useAppMessage'
 import { Link } from 'react-router-dom'
+import { useAuthStore } from '../../../stores/auth'
 
 const { Text } = Typography
 
@@ -20,6 +21,8 @@ export default function SchedulePage() {
   const [history, setHistory] = useState<ScheduleExecutionLog[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const message = useAppMessage()
+  const { user } = useAuthStore()
+  const isViewer = user?.role === 'viewer'
 
   const load = async () => {
     setLoading(true)
@@ -113,6 +116,14 @@ export default function SchedulePage() {
 
   return (
     <Space style={{ width: '100%' }} direction="vertical" size="large">
+      {isViewer && (
+        <Alert
+          type="warning"
+          showIcon
+          message="您当前是只读用户（访客账号）"
+          description="只读用户不能创建、编辑、删除或执行定时任务。您只能查看现有的定时任务和执行历史。"
+        />
+      )}
       <Card
         title={editingTaskId ? '编辑定时任务' : '创建定时任务'}
         size="small"

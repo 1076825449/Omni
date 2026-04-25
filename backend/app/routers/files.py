@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict
 from app.core.database import get_db
 from app.models import User
 from app.models.record import FileRecord, OperationLog
+from app.routers.auth import get_current_user, require_permission
 
 
 def log_action(db: Session, action: str, target_id: str, operator_id: int, detail: str = "", result: str = "success"):
@@ -108,12 +109,12 @@ def list_files(
 def archive_file(
     file_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("platform:file:operate")),
 ):
     """归档指定文件。归档后文件标记为 archived 状态。"""
     f = db.query(FileRecord).filter(
         FileRecord.file_id == file_id,
-        FileRecord.owner_id == current_user.id,
+        or_(FileRecord.owner_id == current_user.id, current_user.role == "admin"),
     ).first()
     if not f:
         raise HTTPException(status_code=404, detail="文件不存在")

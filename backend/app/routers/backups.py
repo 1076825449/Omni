@@ -8,7 +8,7 @@ from pathlib import Path
 from app.core.database import get_db
 from app.models import User
 from app.models.backup import Backup
-from app.routers.auth import get_current_user
+from app.routers.auth import get_current_user, require_permission
 
 router = APIRouter(prefix="/api/platform", tags=["平台公共"])
 
@@ -52,7 +52,7 @@ def create_backup(
     name: str = "手动备份",
     note: str = "",
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("platform:backup:create")),
 ):
     """发起备份（异步执行：复制 DB + uploads 目录）"""
     import threading
@@ -139,4 +139,69 @@ def download_backup(
         backup.file_path,
         filename=filename,
         media_type="application/zip",
+    )
+
+
+class RestoreResponse(BaseModel):
+    success: bool
+    message: str
+
+
+@router.post("/backups/{backup_id}/restore", response_model=RestoreResponse)
+def restore_backup(
+    backup_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("platform:backup:restore")),
+):
+    """从备份恢复（需要 admin 权限，且需停止服务后操作）"""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="仅管理员可执行恢复")
+    backup = db.query(Backup).filter(Backup.backup_id == backup_id).first()
+    if not backup:
+        raise HTTPException(status_code=404, detail="备份不存在")
+    if backup.status != "succeeded" or not backup.file_path:
+        raise HTTPException(status_code=400, detail="备份文件不可用")
+    backup_path = Path(backup.file_path)
+    if not backup_path.exists():
+        raise HTTPException(status_code=404, detail="备份文件已丢失")
+
+    import zipfile, tempfile
+    try:
+        with zipfile.ZipFile(backup_path, "r") as zf:
+            names = zf.namelist()
+            if "omni.db" not in names:
+                raise HTTPException(status_code=400, detail="备份文件格式无效：缺少 omni.db")
+            # 检查是否为有效的 SQLite 数据库
+            with zf.open("omni.db") as db_f:
+                header = db_f.read(16)
+                if header[:16] != b"SQLite format 3\x00":
+                    raise HTTPException(status_code=400, detail="备份数据库文件无效")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"备份文件损坏：{e}")
+
+    # 注意：在线恢复会影响运行中的连接，最安全的做法是：
+    # 1. 停止服务
+    # 2. 用 CLI 执行恢复：python3 cli.py db restore <backup_id>
+    # 这里只记录操作日志，实际文件替换由 CLI 完成
+    from app.models.record import OperationLog
+    log = OperationLog(
+        action="restore",
+        target_type="Backup",
+        target_id=backup_id,
+        module="platform",
+        operator_id=current_user.id,
+        detail=f"发起备份恢复：{backup.name} ({backup_id})，请确保已停止服务",
+        result="success",
+    )
+    db.add(log)
+    db.commit()
+    return RestoreResponse(
+        success=True,
+        message=(
+            f"备份 {backup_id} 验证通过。请停止服务后执行：\n"
+            f"python3 cli.py db restore {backup_id}\n"
+            f"然后重新启动服务。"
+        ),
     )

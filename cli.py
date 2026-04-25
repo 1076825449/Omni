@@ -160,6 +160,92 @@ def module_list():
         db.close()
 
 
+def db_restore(backup_id: str):
+    """从备份文件恢复数据库"""
+    import zipfile, shutil, datetime
+    from pathlib import Path
+
+    db = SessionLocal()
+    try:
+        backup = db.query(Backup).filter(Backup.backup_id == backup_id).first()
+        if not backup:
+            print(f"[db:restore] 备份 {backup_id} 不存在")
+            return
+        if backup.status != "succeeded" or not backup.file_path:
+            print(f"[db:restore] 备份 {backup_id} 未完成或文件不可用")
+            return
+        backup_path = Path(backup.file_path)
+        if not backup_path.exists():
+            print(f"[db:restore] 备份文件已丢失: {backup.file_path}")
+            return
+
+        # 验证 ZIP 内容
+        try:
+            with zipfile.ZipFile(backup_path, "r") as zf:
+                names = zf.namelist()
+                if "omni.db" not in names:
+                    print("[db:restore] 错误：备份文件格式无效，缺少 omni.db")
+                    return
+                with zf.open("omni.db") as db_f:
+                    header = db_f.read(16)
+                    if header[:16] != b"SQLite format 3\x00":
+                        print("[db:restore] 错误：备份数据库文件无效")
+                        return
+        except Exception as e:
+            print(f"[db:restore] 错误：备份文件损坏 ({e})")
+            return
+
+        DATA_DIR = Path(__file__).resolve().parent / "data"
+        DB_PATH = DATA_DIR / "omni.db"
+        UPLOAD_DIR = DATA_DIR / "uploads"
+
+        # 创建安全备份（恢复前）
+        safety_name = f"pre-restore-{datetime.now().strftime('%Y%m%d%H%M%S')}.db"
+        safety_path = DATA_DIR / safety_name
+        if DB_PATH.exists():
+            shutil.copy2(DB_PATH, safety_path)
+            print(f"[db:restore] 安全备份已保存: data/{safety_name}")
+
+        # 提取备份
+        with zipfile.ZipFile(backup_path, "r") as zf:
+            # 恢复 DB
+            with zf.open("omni.db") as src_db:
+                with open(DB_PATH, "wb") as dst_db:
+                    shutil.copyfileobj(src_db, dst_db)
+            print(f"[db:restore] 数据库已恢复: data/omni.db")
+
+            # 可选：恢复 uploads
+            if "uploads" in zf.namelist():
+                if UPLOAD_DIR.exists():
+                    shutil.rmtree(UPLOAD_DIR)
+                zf.extractall(DATA_DIR, [n for n in zf.namelist() if n.startswith("uploads/")])
+                print(f"[db:restore] 上传文件已恢复: data/uploads/")
+
+        # 记录操作日志
+        try:
+            from app.models.record import OperationLog
+            admin = db.query(User).filter(User.username == "admin").first()
+            if admin:
+                log = OperationLog(
+                    action="restore",
+                    target_type="Backup",
+                    target_id=backup_id,
+                    module="platform",
+                    operator_id=admin.id,
+                    detail=f"CLI恢复：{backup.name} ({backup_id})",
+                    result="success",
+                )
+                db.add(log)
+                db.commit()
+        except Exception:
+            pass
+
+        print(f"[db:restore] 恢复完成 ✓")
+        print(f"请重启后端服务: python3 cli.py server restart")
+    finally:
+        db.close()
+
+
 def main():
     parser = argparse.ArgumentParser(description="Omni 平台 CLI 工具")
     sub = parser.add_subparsers(dest="command")
@@ -169,6 +255,8 @@ def main():
     p_db_sub = p_db.add_subparsers(dest="sub")
     p_db_sub.add_parser("init", help="初始化表")
     p_db_sub.add_parser("status", help="查看状态")
+    restore_parser = p_db_sub.add_parser("restore", help="从备份恢复数据库")
+    restore_parser.add_argument("backup_id", help="备份ID (例如: backup-20250425120000-xxxx)")
 
     # user
     p_user = sub.add_parser("user", help="用户管理")
@@ -205,6 +293,8 @@ def main():
             db_init()
         elif args.sub == "status":
             db_status()
+        elif args.sub == "restore":
+            db_restore(args.backup_id)
         else:
             p_db.print_help()
     elif args.command == "user":

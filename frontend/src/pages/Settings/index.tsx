@@ -222,11 +222,12 @@ export default function Settings() {
 
       <Card size="small" type="inner" title="恢复说明" style={{ background: '#fffbe6' }}>
         <Paragraph style={{ fontSize: 13, margin: 0 }}>
-          <Text strong>恢复操作说明：</Text><br />
+          <Text strong>恢复操作说明（需管理员）：</Text><br />
           1. 下载需要恢复的备份 ZIP 文件<br />
-          2. 解压覆盖 <code>~/.omni/</code> 目录（需停止服务）<br />
-          3. 重启服务完成恢复<br />
-          <Text type="secondary">⚠️ 恢复会覆盖当前数据，请确认后再操作。</Text>
+          2. 停止后端服务<br />
+          3. 解压备份文件，用 <code>python3 cli.py db restore &lt;backup_id&gt;</code> 恢复数据库<br />
+          4. 重启后端服务<br />
+          <Text type="secondary">⚠️ 恢复会覆盖当前数据，请在恢复前确认备份完整性。</Text>
         </Paragraph>
       </Card>
     </Space>

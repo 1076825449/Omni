@@ -155,6 +155,16 @@ export default function SchedulePage() {
         </Space>
       </Card>
 
+      <Card title="常用 Cron 模板" size="small">
+        <Space wrap>
+          <Button size="small" onClick={() => form.setFieldsValue({ cron_expression: '0 9 * * *' })}>每天 9:00</Button>
+          <Button size="small" onClick={() => form.setFieldsValue({ cron_expression: '0 9 * * 1-5' })}>每周一到周五 9:00</Button>
+          <Button size="small" onClick={() => form.setFieldsValue({ cron_expression: '0 9 1 * *' })}>每月 1 日 9:00</Button>
+          <Button size="small" onClick={() => form.setFieldsValue({ cron_expression: '*/5 * * * *' })}>每 5 分钟</Button>
+          <Button size="small" onClick={() => form.setFieldsValue({ cron_expression: '0 * * * *' })}>每小时整点</Button>
+        </Space>
+      </Card>
+
       <Card title="任务列表" size="small">
         {loading ? (
           <div style={{ textAlign: 'center', padding: 32 }}>

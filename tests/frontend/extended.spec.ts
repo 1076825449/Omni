@@ -27,10 +27,10 @@ test.describe('Viewer Role Permissions', () => {
   test('viewer sees read-only platform (can view modules)', async ({ page }) => {
     await page.goto('/modules')
     await page.waitForTimeout(5000)
-    // If viewer session is valid, we should see the module center. If redirected to login, skip.
+    // If viewer session is valid, we should see the system function center. If redirected to login, skip.
     const onLoginPage = page.url().includes('/login')
     if (onLoginPage) { test.skip(); return }
-    await expect(page.getByRole('heading', { name: '模块中心' })).toBeVisible({ timeout: 8000 })
+    await expect(page.getByRole('heading', { name: '系统管理：全部功能' })).toBeVisible({ timeout: 8000 })
   })
 
   test('viewer cannot see create buttons in platform centers', async ({ page }) => {
@@ -83,7 +83,7 @@ test.describe('Extended Smoke - All 7 Modules Complete Flow', () => {
   test('analysis-workbench full flow: new -> upload -> run -> result -> history', async ({ page }) => {
     const analysisName = `Ext Smoke 分析 ${suffix}`
     await page.goto('/modules/analysis-workbench/new')
-    await expect(page.getByText('新建分析任务')).toBeVisible()
+    await expect(page.getByText('新建分析事项')).toBeVisible()
     await page.getByLabel('分析名称').fill(analysisName)
     await page.getByLabel('描述').fill('扩展冒烟测试')
     await page.getByRole('button', { name: '创建任务' }).click()

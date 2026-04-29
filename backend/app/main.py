@@ -1,5 +1,5 @@
 """
-Omni 统一平台 - 后端入口
+税务案头助手 - 后端入口
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,6 +13,7 @@ from app.routers.roles import router as roles_router
 from app.routers.notifications import router as notifications_router
 from app.routers.search import router as search_router
 from app.routers.stats import router as stats_router
+from app.routers.settings import router as platform_settings_router
 from app.routers.workbench import router as workbench_router
 from app.routers.cross_links import router as cross_links_router
 from app.routers.v1 import v1 as api_v1_router
@@ -68,11 +69,21 @@ def ensure_lightweight_migrations():
             for column, sql in migrations.items():
                 if column not in columns:
                     conn.execute(text(sql))
+            task_columns = {row[1] for row in conn.execute(text("PRAGMA table_info(tasks)")).fetchall()}
+            task_migrations = {
+                "taxpayer_id": "ALTER TABLE tasks ADD COLUMN taxpayer_id VARCHAR(64) DEFAULT ''",
+                "company_name": "ALTER TABLE tasks ADD COLUMN company_name VARCHAR(255) DEFAULT ''",
+            }
+            for column, sql in task_migrations.items():
+                if column not in task_columns:
+                    conn.execute(text(sql))
     elif engine.dialect.name == "postgresql":
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE risk_ledger_entries ADD COLUMN IF NOT EXISTS rectification_deadline TIMESTAMP"))
             conn.execute(text("ALTER TABLE risk_ledger_entries ADD COLUMN IF NOT EXISTS contact_person VARCHAR(100) DEFAULT ''"))
             conn.execute(text("ALTER TABLE risk_ledger_entries ADD COLUMN IF NOT EXISTS contact_phone VARCHAR(100) DEFAULT ''"))
+            conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS taxpayer_id VARCHAR(64) DEFAULT ''"))
+            conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS company_name VARCHAR(255) DEFAULT ''"))
 
 
 @asynccontextmanager
@@ -93,8 +104,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Omni 统一平台",
-    description="Omni 统一平台 API，提供任务管理、文件管理、模块接入、通知、搜索、统计等功能。",
+    title="税务案头助手",
+    description="税务案头助手系统管理接口，提供纳税人信息、案头分析、风险台账、文书报告和系统管理能力。",
     version="1.0.0",
     lifespan=lifespan,
     docs_url="/docs",
@@ -130,6 +141,7 @@ app.include_router(analysis_router)
 app.include_router(records_router)
 app.include_router(learning_lab_router)
 app.include_router(stats_router)
+app.include_router(platform_settings_router)
 app.include_router(workbench_router)
 app.include_router(cross_links_router)
 app.include_router(webhooks_router)
@@ -152,4 +164,4 @@ def health():
 
 @app.get("/")
 def root():
-    return {"message": "Omni Platform API"}
+    return {"message": "税务案头助手系统管理接口"}

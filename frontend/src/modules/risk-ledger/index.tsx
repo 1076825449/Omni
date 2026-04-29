@@ -125,6 +125,24 @@ export default function RiskLedgerModule() {
     return false
   }
 
+  const downloadFailures = () => {
+    const header = ['行号', '纳税人识别号', '失败原因', '建议处理方式']
+    const rowsText = failures.map((item) => [
+      item.row || '',
+      item.taxpayer_id || '',
+      item.reason || JSON.stringify(item),
+      item.reason?.includes('未找到') ? '补充纳税人名称后创建临时档案，或先导入完整信息查询表' : '按失败原因修正后重新导入',
+    ])
+    const csv = [header, ...rowsText].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = '风险台账导入失败清单.csv'
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
   const columns: ColumnsType<RiskDossier> = [
     {
       title: '纳税人',
@@ -236,7 +254,23 @@ export default function RiskLedgerModule() {
             showIcon
             style={{ marginBottom: 16 }}
             message={`有 ${failures.length} 条记录未成功`}
-            description={<List size="small" dataSource={failures.slice(0, 8)} renderItem={(item) => <List.Item>{JSON.stringify(item)}</List.Item>} />}
+            description={
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Table
+                  size="small"
+                  rowKey={(item, index) => `${item.taxpayer_id || 'row'}-${index}`}
+                  pagination={false}
+                  dataSource={failures.slice(0, 8)}
+                  columns={[
+                    { title: '行号', dataIndex: 'row', width: 80, render: v => v || '—' },
+                    { title: '纳税人识别号', dataIndex: 'taxpayer_id', width: 180, render: v => v || '—' },
+                    { title: '失败原因', dataIndex: 'reason', render: v => v || '请检查表头和必填字段' },
+                    { title: '建议处理方式', render: (_, item) => item.reason?.includes('未找到') ? '补充纳税人名称后创建临时档案，或先导入完整信息查询表' : '按失败原因修正后重新导入' },
+                  ]}
+                />
+                <Button size="small" onClick={downloadFailures}>下载失败清单</Button>
+              </Space>
+            }
           />
         )}
 

@@ -1,7 +1,7 @@
 // 系统设置 - 含备份中心 + 角色管理
 import { Card, Tabs, Typography, Form, Input, Button, Space, List, Tag, Checkbox, Spin, Descriptions, Divider, Result } from 'antd'
 import { useState, useEffect } from 'react'
-import { backupApi, BackupRecord, rolesApi, RoleRecord } from '../../services/api'
+import { backupApi, BackupRecord, platformSettingsApi, rolesApi, RoleRecord } from '../../services/api'
 import { useAuthStore } from '../../stores/auth'
 import { useAppMessage } from '../../hooks/useAppMessage'
 
@@ -90,6 +90,7 @@ function PermissionGroupEditor({ permissions, value, onChange }: { permissions: 
 export default function Settings() {
   const [form] = Form.useForm()
   const [backupForm] = Form.useForm()
+  const [documentForm] = Form.useForm()
   const message = useAppMessage()
   const [backups, setBackups] = useState<BackupRecord[]>([])
   const [loading, setLoading] = useState(true)
@@ -103,6 +104,7 @@ export default function Settings() {
   const [editingRole, setEditingRole] = useState<string | null>(null)
   const [editPerms, setEditPerms] = useState<string[]>([])
   const [roleLoading, setRoleLoading] = useState(false)
+  const [documentSaving, setDocumentSaving] = useState(false)
 
   const loadBackups = () => {
     setLoading(true)
@@ -124,6 +126,11 @@ export default function Settings() {
 
   useEffect(() => { loadBackups() }, [])
   useEffect(() => { loadRoles() }, [isAdmin])
+  useEffect(() => {
+    platformSettingsApi.getDocumentDefaults().then((data) => {
+      documentForm.setFieldsValue(data)
+    }).catch(() => {})
+  }, [])
 
   const handleCreateBackup = async (values: { name: string; note?: string }) => {
     setCreating(true)
@@ -156,6 +163,18 @@ export default function Settings() {
       loadRoles()
     } catch {
       message.error('更新失败')
+    }
+  }
+
+  const handleSaveDocumentDefaults = async (values: any) => {
+    setDocumentSaving(true)
+    try {
+      await platformSettingsApi.updateDocumentDefaults(values)
+      message.success('文书默认信息已保存')
+    } catch {
+      message.error('保存文书默认信息失败')
+    } finally {
+      setDocumentSaving(false)
     }
   }
 
@@ -276,6 +295,32 @@ export default function Settings() {
 
   const tabItems = [
     { key: 'account', label: '账号信息', children: accountTab },
+    {
+      key: 'documents',
+      label: '文书默认信息',
+      children: (
+        <Card size="small" title="通知书和核实报告默认信息">
+          <Paragraph type="secondary" style={{ fontSize: 13 }}>
+            这里填写后，案头分析报告导出页会自动带出；正式生成前仍可临时修改。
+          </Paragraph>
+          <Form form={documentForm} layout="vertical" onFinish={handleSaveDocumentDefaults} style={{ maxWidth: 640 }}>
+            <Form.Item label="税务机关名称" name="agency_name">
+              <Input placeholder="例如：国家税务总局XX市XX区税务局" />
+            </Form.Item>
+            <Form.Item label="联系人" name="contact_person">
+              <Input placeholder="经办税务人员姓名" />
+            </Form.Item>
+            <Form.Item label="联系电话" name="contact_phone">
+              <Input placeholder="联系电话" />
+            </Form.Item>
+            <Form.Item label="默认整改期限" name="rectification_deadline">
+              <Input placeholder="例如：收到通知后 5 个工作日内" />
+            </Form.Item>
+            <Button type="primary" htmlType="submit" loading={documentSaving}>保存文书默认信息</Button>
+          </Form>
+        </Card>
+      ),
+    },
     ...(isAdmin ? [{ key: 'roles', label: '角色管理', children: roleTab }] : []),
     { key: 'backup', label: '备份中心', children: backupTab },
     {

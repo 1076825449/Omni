@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Alert, Button, Card, Descriptions, Empty, Input, List, Space, Tag, Timeline, Typography } from 'antd'
+import { Alert, Button, Card, Descriptions, Empty, Input, List, Row, Col, Space, Statistic, Tag, Timeline, Typography } from 'antd'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import dayjs from 'dayjs'
 import { taxOfficerWorkbenchApi, TaxpayerWorkbenchData } from '../../services/api'
@@ -12,6 +12,7 @@ export default function TaxpayerWorkbench() {
   const [params, setParams] = useSearchParams()
   const [taxpayerId, setTaxpayerId] = useState(params.get('taxpayer_id') || '')
   const [data, setData] = useState<TaxpayerWorkbenchData | null>(null)
+  const [candidates, setCandidates] = useState<TaxpayerWorkbenchData['taxpayer'][]>([])
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
   const message = useAppMessage()
@@ -22,8 +23,23 @@ export default function TaxpayerWorkbench() {
     try {
       const result = await taxOfficerWorkbenchApi.taxpayer(value.trim())
       setData(result)
+      setCandidates([])
       setParams({ taxpayer_id: value.trim() })
     } catch {
+      const search = await taxOfficerWorkbenchApi.searchTaxpayers(value.trim()).catch(() => ({ items: [] }))
+      if (search.items.length === 1) {
+        setTaxpayerId(search.items[0].taxpayer_id)
+        const result = await taxOfficerWorkbenchApi.taxpayer(search.items[0].taxpayer_id)
+        setData(result)
+        setCandidates([])
+        setParams({ taxpayer_id: search.items[0].taxpayer_id })
+        return
+      }
+      if (search.items.length > 1) {
+        setCandidates(search.items as any)
+        setData(null)
+        return
+      }
       void message.error('没有找到该户信息，请先导入纳税人信息或在风险台账中建立临时档案')
       setData(null)
     } finally {
@@ -48,7 +64,7 @@ export default function TaxpayerWorkbench() {
       <Card style={{ marginBottom: 16 }}>
         <Space.Compact style={{ width: '100%' }}>
           <Input.Search
-            placeholder="输入纳税人识别号"
+            placeholder="输入纳税人识别号或纳税人名称"
             value={taxpayerId}
             loading={loading}
             allowClear
@@ -60,18 +76,39 @@ export default function TaxpayerWorkbench() {
       </Card>
 
       {!data ? (
-        <Empty description="请先查询一户纳税人" />
+        candidates.length > 0 ? (
+          <Card title="请选择要查看的纳税人">
+            <List
+              dataSource={candidates}
+              renderItem={(item) => (
+                <List.Item actions={[<Button size="small" type="primary" onClick={() => load(item.taxpayer_id)}>查看该户</Button>]}>
+                  <List.Item.Meta
+                    title={item.company_name}
+                    description={`${item.taxpayer_id}；登记状态：${item.registration_status || '—'}；管理员：${item.tax_officer || '—'}；地址：${item.address || '—'}`}
+                  />
+                </List.Item>
+              )}
+            />
+          </Card>
+        ) : <Empty description="请先查询一户纳税人" />
       ) : (
         <Space direction="vertical" style={{ width: '100%' }} size={16}>
           <Card
             title="纳税人基本信息"
             extra={
               <Space>
-                <Button onClick={() => navigate('/modules/analysis-workbench/new')}>发起案头分析</Button>
+                <Button onClick={() => navigate(`/modules/analysis-workbench/new?taxpayer_id=${encodeURIComponent(data.taxpayer.taxpayer_id)}&company_name=${encodeURIComponent(data.taxpayer.company_name || '')}`)}>发起案头分析</Button>
                 <Button type="primary" onClick={() => navigate(`/modules/risk-ledger?taxpayer_id=${data.taxpayer.taxpayer_id}`)}>新增风险记录</Button>
+                <Button onClick={() => navigate('/my-risk-list')}>查看风险清单</Button>
               </Space>
             }
           >
+            <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+              <Col xs={12} md={6}><Card size="small"><Statistic title="风险记录" value={data.entries.length} suffix="条" /></Card></Col>
+              <Col xs={12} md={6}><Card size="small"><Statistic title="待核实" value={data.entries.filter(item => item.entry_status === '待核实').length} /></Card></Col>
+              <Col xs={12} md={6}><Card size="small"><Statistic title="整改中" value={data.entries.filter(item => item.entry_status === '整改中').length} valueStyle={{ color: '#1677ff' }} /></Card></Col>
+              <Col xs={12} md={6}><Card size="small"><Statistic title="最近分析" value={data.recent_analysis_tasks.length} suffix="次" /></Card></Col>
+            </Row>
             <Descriptions size="small" column={2} bordered>
               <Descriptions.Item label="纳税人名称">{data.taxpayer.company_name || '未导入基础信息'}</Descriptions.Item>
               <Descriptions.Item label="纳税人识别号">{data.taxpayer.taxpayer_id}</Descriptions.Item>

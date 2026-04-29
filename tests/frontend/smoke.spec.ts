@@ -20,7 +20,7 @@ test('login and open key platform pages', async ({ page }) => {
   await expect(page.getByText('当前账号').first()).toBeVisible()
 
   await page.goto('/modules')
-  await expect(page.getByRole('heading', { name: '模块中心' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '系统管理：全部功能' })).toBeVisible()
   // Module center shows user-friendly names (e.g. 涉税风险分析)
   await expect(page.getByText('涉税风险分析')).toBeVisible()
 

@@ -1,15 +1,23 @@
 // 分析工作模块 - 报告导出页
 import { Card, Button, Space, Typography, Result, Form, Input, Row, Col } from 'antd'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { analysisApi, DocumentConfig } from '../../../services/api'
+import { analysisApi, DocumentConfig, platformSettingsApi } from '../../../services/api'
 
 const { Text } = Typography
 
 export default function Reports() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [form] = Form.useForm()
   const [docConfig, setDocConfig] = useState<DocumentConfig>({})
+
+  useEffect(() => {
+    platformSettingsApi.getDocumentDefaults().then((defaults) => {
+      form.setFieldsValue(defaults)
+      setDocConfig(defaults)
+    }).catch(() => {})
+  }, [])
   const reportLinks = id ? [
     { key: 'analysis-docx', label: '下载核实报告 DOCX', href: analysisApi.reportUrl(id, 'docx', 'analysis', docConfig), primary: true },
     { key: 'notice-docx', label: '下载通知书 DOCX', href: analysisApi.reportUrl(id, 'docx', 'notice', docConfig), primary: true },
@@ -39,6 +47,7 @@ export default function Reports() {
       <Card title="文书信息确认" style={{ marginBottom: 16 }}>
         <Form
           layout="vertical"
+          form={form}
           onValuesChange={(_, values) => setDocConfig(values)}
         >
           <Row gutter={16}>

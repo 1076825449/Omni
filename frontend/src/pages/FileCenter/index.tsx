@@ -16,7 +16,7 @@ const columns: ColumnsType<FileRecord> = [
     key: 'name',
   },
   {
-    title: '所属模块',
+    title: '所属功能',
     dataIndex: 'module',
     key: 'module',
     width: 160,
@@ -134,7 +134,7 @@ export default function FileCenter() {
           <Button size="small" onClick={() => void handlePreview(record.file_id)}>
             预览
           </Button>
-          <Button size="small" onClick={() => navigate(`/modules/${record.module}`)}>来源模块</Button>
+          <Button size="small" onClick={() => navigate(`/modules/${record.module}`)}>来源功能</Button>
           <Button size="small" disabled={record.status !== 'active'} onClick={() => void handleArchive(record.file_id)}>
             归档
           </Button>
@@ -146,8 +146,8 @@ export default function FileCenter() {
   return (
     <div className="omni-page">
       <div className="omni-page-header">
-        <Title level={4} style={{ margin: 0 }}>文件中心</Title>
-        <Text type="secondary">全平台文件统一管理</Text>
+        <Title level={4} style={{ margin: 0 }}>系统管理：资料留存</Title>
+        <Text type="secondary">查看已上传的分析资料、导入文件和文书相关留存。</Text>
       </div>
 
       <Card size="small" style={{ marginBottom: 16 }}>
@@ -159,7 +159,7 @@ export default function FileCenter() {
             onChange={e => setQuery(e.target.value)}
           />
           <Select
-            placeholder="所属模块"
+            placeholder="所属功能"
             style={{ width: 180 }}
             allowClear
             value={module}
@@ -199,10 +199,10 @@ export default function FileCenter() {
               <Space direction="vertical" size={4}>
                 <Text type="secondary">还没有文件记录</Text>
                 <Text type="secondary" style={{ fontSize: 12 }}>
-                  当你在各模块上传文件（分析资料、导入数据等），文件会自动汇总到这里。
+                  当你上传分析资料、导入数据等，资料会自动汇总到这里。
                 </Text>
                 <Text type="secondary" style={{ fontSize: 12 }}>
-                  可以进入「模块中心」，选择分析或对象管理模块开始使用。
+                  可以从首页进入「案头分析」或「纳税人信息」开始使用。
                 </Text>
               </Space>
             }

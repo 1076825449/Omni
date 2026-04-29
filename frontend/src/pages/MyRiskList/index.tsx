@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Key } from 'react'
-import { Button, Card, Input, Modal, Select, Space, Statistic, Table, Tag, Typography, Row, Col } from 'antd'
+import { Button, Card, DatePicker, Form, Input, Modal, Select, Space, Statistic, Table, Tag, Typography, Row, Col } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
@@ -19,6 +19,8 @@ export default function MyRiskList() {
   const [overdue, setOverdue] = useState<boolean | undefined>()
   const [temporary, setTemporary] = useState<boolean | undefined>()
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([])
+  const [rectifyOpen, setRectifyOpen] = useState(false)
+  const [rectifyForm] = Form.useForm()
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
   const message = useAppMessage()
@@ -45,6 +47,10 @@ export default function MyRiskList() {
       void message.warning('请先勾选需要处理的纳税人')
       return
     }
+    if (status === '整改中') {
+      setRectifyOpen(true)
+      return
+    }
     Modal.confirm({
       title: `确认批量标记为“${status}”？`,
       content: `将为已勾选的 ${selectedRowKeys.length} 户企业追加一条处理记录，原历史记录不会被覆盖。`,
@@ -61,6 +67,22 @@ export default function MyRiskList() {
         load()
       },
     })
+  }
+
+  const submitRectifying = async (values: any) => {
+    const result = await riskLedgerApi.batchStatus({
+      taxpayer_ids: selectedRowKeys.map(String),
+      entry_status: '整改中',
+      content: '管户风险清单批量标记为：整改中',
+      rectification_deadline: values.rectification_deadline.format('YYYY-MM-DD HH:mm:ss'),
+      contact_person: values.contact_person,
+      contact_phone: values.contact_phone,
+    })
+    setSelectedRowKeys([])
+    setRectifyOpen(false)
+    rectifyForm.resetFields()
+    void message.success(result.message)
+    load()
   }
 
   const handleExport = () => {
@@ -152,6 +174,26 @@ export default function MyRiskList() {
           pagination={{ total, pageSize: 50, hideOnSinglePage: true }}
         />
       </Card>
+      <Modal
+        title="填写整改跟踪信息"
+        open={rectifyOpen}
+        onCancel={() => setRectifyOpen(false)}
+        onOk={() => rectifyForm.submit()}
+        okText="确认标记整改中"
+        cancelText="取消"
+      >
+        <Form form={rectifyForm} layout="vertical" onFinish={submitRectifying}>
+          <Form.Item label="整改期限" name="rectification_deadline" rules={[{ required: true, message: '请填写整改期限' }]}>
+            <DatePicker showTime style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item label="联系人" name="contact_person" rules={[{ required: true, message: '请填写联系人' }]}>
+            <Input placeholder="负责跟踪的税务人员" />
+          </Form.Item>
+          <Form.Item label="联系电话" name="contact_phone">
+            <Input placeholder="联系电话" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   )
 }

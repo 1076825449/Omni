@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Optional, Union
 
 from app.models.record import FileRecord, Task
-from app.services.xlsx_reader import read_xlsx_rows
+from app.services.xlsx_reader import read_xls_rows, read_xlsx_rows
 
 
 HEADER_ALIASES = {
@@ -220,6 +220,8 @@ def load_file_rows(file_record: FileRecord) -> tuple[list[dict[str, Any]], str]:
 
     if suffix == ".xlsx":
         return [normalize_row(item) for item in read_xlsx_rows(str(path))], "xlsx"
+    if suffix == ".xls":
+        return [normalize_row(item) for item in read_xls_rows(str(path))], "xls"
 
     return [{"text": raw[:5000].decode("utf-8", errors="ignore")}], "text"
 
@@ -833,6 +835,11 @@ def analyze_files(task: Task, files: list[FileRecord]) -> dict[str, Any]:
                 else:
                     analysis.data_warnings.append(f"{file_record.original_name} 已读取但未归类，建议按申报/发票/财务模板上传。")
                 break
+
+    if not analysis.company_name and getattr(task, "company_name", ""):
+        analysis.company_name = safe_text(getattr(task, "company_name", ""))
+    if not analysis.taxpayer_id and getattr(task, "taxpayer_id", ""):
+        analysis.taxpayer_id = safe_text(getattr(task, "taxpayer_id", ""))
 
     risks = detect_risks(analysis)
     risk_counter = Counter(item["risk_type"] for item in risks)

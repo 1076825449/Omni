@@ -15,6 +15,7 @@ from app.models.risk_ledger import RiskLedgerEntry
 from app.models.taxpayer import TaxpayerInfo
 from app.modules.risk_ledger_router import EntryCreateRequest, create_entry
 from app.routers.auth import get_current_user
+from app.routers.settings import get_document_settings
 from app.services.file_service import save_upload
 from app.services.document_templates import render_notice_docx, render_officer_report_docx
 from app.services.tax_analysis import analyze_files, profile_file, render_notice_text, render_officer_report_text
@@ -26,6 +27,8 @@ router = APIRouter(prefix="/api/modules/analysis-workbench", tags=["分析工作
 class TaskCreateRequest(BaseModel):
     name: str
     description: str = ""
+    taxpayer_id: str = ""
+    company_name: str = ""
 
 
 class TaskItem(BaseModel):
@@ -273,6 +276,8 @@ def create_task(
         module="analysis-workbench",
         creator_id=current_user.id,
         result_summary="任务已创建，等待处理",
+        taxpayer_id=body.taxpayer_id.strip(),
+        company_name=body.company_name.strip(),
     )
     db.add(task)
     log_action(db, "create", task_id, current_user.id, detail=f"创建分析任务: {body.name}")
@@ -382,14 +387,17 @@ def export_report(
     analysis = analyze_files(task, files) if files else analyze_files(task, [])
     filename_safe_task_id = task.task_id.replace("/", "-")
 
-    document_config = {
+    document_config = get_document_settings(db, current_user.id)
+    for key, value in {
         "agency_name": agency_name,
         "document_number": document_number,
         "contact_person": contact_person,
         "contact_phone": contact_phone,
         "rectification_deadline": rectification_deadline,
         "document_date": document_date,
-    }
+    }.items():
+        if str(value or "").strip():
+            document_config[key] = value
 
     if doc_type == "notice":
         payload = apply_document_config(analysis["notice"], document_config)
@@ -409,12 +417,12 @@ def export_report(
     elif format == "txt":
         header = [
             f"任务名称: {report.name}",
-            f"任务ID: {report.task_id}",
+            f"分析编号: {report.task_id}",
             f"状态: {report.status}",
             f"创建时间: {report.created_at}",
             f"完成时间: {report.completed_at or '—'}",
             f"文件数: {report.file_count}",
-            f"相关对象数: {report.related_record_count}",
+            f"形成风险事项数: {report.related_record_count}",
             f"风险数: {report.risk_count}",
             "",
             "任务摘要:",
@@ -525,8 +533,8 @@ def run_task(
             ))
 
         notif = Notification(
-            title="分析任务完成",
-            content=f'任务 "{task.name}" 已完成，处理 {len(files)} 个文件，识别 {analysis["risk_count"]} 项风险，生成 {created_count} 条对象结果。任务ID: {task.task_id}',
+            title="案头分析完成",
+            content=f'案头分析 "{task.name}" 已完成，处理 {len(files)} 个文件，识别 {analysis["risk_count"]} 项风险，形成 {created_count} 条风险事项。分析编号: {task.task_id}',
             type="success",
             user_id=current_user.id,
         )

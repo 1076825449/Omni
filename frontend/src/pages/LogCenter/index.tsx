@@ -69,12 +69,12 @@ export default function LogCenter() {
       },
     },
     {
-      title: '操作对象',
+      title: '操作事项',
       key: 'target',
       render: (_, r) => `${r.target_type} #${r.target_id}`,
     },
     {
-      title: '模块',
+      title: '所属功能',
       dataIndex: 'module',
       key: 'module',
       width: 160,
@@ -106,14 +106,14 @@ export default function LogCenter() {
   return (
     <div className="omni-page">
       <div className="omni-page-header">
-        <Title level={4} style={{ margin: 0 }}>日志中心</Title>
-        <Text type="secondary">全平台操作行为审计追踪</Text>
+        <Title level={4} style={{ margin: 0 }}>系统管理：操作记录</Title>
+        <Text type="secondary">查看系统内创建、修改、导入、导出等操作留痕。</Text>
       </div>
 
       <Card size="small" style={{ marginBottom: 16 }}>
         <Space wrap>
           <Input
-            placeholder="搜索日志内容或对象"
+            placeholder="搜索操作内容"
             style={{ width: 220 }}
             value={query}
             onChange={e => setQuery(e.target.value)}
@@ -133,7 +133,7 @@ export default function LogCenter() {
             <Select.Option value="login">登录</Select.Option>
           </Select>
           <Select
-            placeholder="模块"
+            placeholder="所属功能"
             style={{ width: 180 }}
             allowClear
             value={module}
@@ -168,7 +168,7 @@ export default function LogCenter() {
 
       {selectedLog && (
         <Card
-          title="日志详情"
+          title="操作记录详情"
           size="small"
           style={{ marginBottom: 16 }}
           extra={<Button size="small" onClick={() => setSelectedLog(null)}>关闭</Button>}
@@ -184,8 +184,8 @@ export default function LogCenter() {
                 {selectedLog.result === 'success' ? '成功' : '失败'}
               </Tag>
             </Descriptions.Item>
-            <Descriptions.Item label="操作对象">{(selectedLog as any).target_name || `${selectedLog.target_type} #${selectedLog.target_id}`}</Descriptions.Item>
-            <Descriptions.Item label="所属模块">{selectedLog.module || '—'}</Descriptions.Item>
+            <Descriptions.Item label="操作事项">{(selectedLog as any).target_name || `${selectedLog.target_type} #${selectedLog.target_id}`}</Descriptions.Item>
+            <Descriptions.Item label="所属功能">{selectedLog.module || '—'}</Descriptions.Item>
             <Descriptions.Item label="操作时间">{new Date(selectedLog.created_at).toLocaleString('zh-CN')}</Descriptions.Item>
             <Descriptions.Item label="详细说明" span={2}>{selectedLog.detail || '—'}</Descriptions.Item>
           </Descriptions>
@@ -197,12 +197,12 @@ export default function LogCenter() {
           <Empty
             description={
               <Space direction="vertical" size={4}>
-                <Text type="secondary">还没有操作日志</Text>
+                <Text type="secondary">还没有操作记录</Text>
                 <Text type="secondary" style={{ fontSize: 12 }}>
-                  当你或团队成员在平台执行创建、修改、删除、导入等操作时，会自动记录在这里。
+                  当你或团队成员执行创建、修改、删除、导入等操作时，会自动记录在这里。
                 </Text>
                 <Text type="secondary" style={{ fontSize: 12 }}>
-                  可以尝试调整筛选条件查看更多日志。
+                  可以尝试调整筛选条件查看更多操作记录。
                 </Text>
               </Space>
             }

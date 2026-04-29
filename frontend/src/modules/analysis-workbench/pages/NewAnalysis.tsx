@@ -2,7 +2,7 @@
 import { Card, Form, Input, Button, Upload, Typography, Space, List, Row, Col, Alert, Tag, Select, InputNumber, Steps } from 'antd'
 import { UploadOutlined, FileOutlined } from '@ant-design/icons'
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { analysisApi, UploadProfile } from '../../../services/api'
 import { useAppMessage } from '../../../hooks/useAppMessage'
 import { useAuthStore } from '../../../stores/auth'
@@ -44,6 +44,7 @@ export default function NewAnalysis() {
   const [fileList, setFileList] = useState<UploadedFile[]>([])
   const [uploading, setUploading] = useState(false)
   const [taskId, setTaskId] = useState<string | null>(null)
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const message = useAppMessage()
   const { user } = useAuthStore()
@@ -52,11 +53,6 @@ export default function NewAnalysis() {
   const handleUpload = async (file: File) => {
     if (isViewer) {
       message.warning('只读用户不能上传文件')
-      return false
-    }
-    const filename = file.name.toLowerCase()
-    if (filename.endsWith('.xls')) {
-      message.error('当前优先支持 CSV、XLSX、JSON、TXT；旧版 XLS 请先另存为 XLSX 或 CSV 后上传')
       return false
     }
     if (!taskId) {
@@ -82,7 +78,11 @@ export default function NewAnalysis() {
       return
     }
     try {
-      const res = await analysisApi.createTask(values.name, values.description)
+      const taxpayer = {
+        taxpayer_id: searchParams.get('taxpayer_id') || '',
+        company_name: searchParams.get('company_name') || '',
+      }
+      const res = await analysisApi.createTask(values.name, values.description, taxpayer)
       if (res.success) {
         setTaskId(res.task_id)
         message.success('任务已创建，可以上传文件了')
@@ -123,6 +123,10 @@ export default function NewAnalysis() {
     }
   }
 
+  const taxpayerContext = {
+    taxpayer_id: searchParams.get('taxpayer_id') || '',
+    company_name: searchParams.get('company_name') || '',
+  }
   const currentStep = taskId ? (fileList.length > 0 ? 2 : 1) : 0
 
   const stepItems = [
@@ -135,8 +139,17 @@ export default function NewAnalysis() {
 
   return (
     <div>
-      <Card title="发起税务风险分析" style={{ marginBottom: 16 }}>
+      <Card title={taxpayerContext.taxpayer_id ? '为该户开展案头分析' : '发起税务风险分析'} style={{ marginBottom: 16 }}>
         <Steps current={currentStep} size="small" items={stepItems.map(s => ({ title: s.title }))} />
+        {taxpayerContext.taxpayer_id && (
+          <Alert
+            type="info"
+            showIcon
+            message="已从一户式工作台带入纳税人信息"
+            description={`纳税人：${taxpayerContext.company_name || '未填写名称'}；识别号：${taxpayerContext.taxpayer_id}`}
+            style={{ marginTop: 12 }}
+          />
+        )}
         {isViewer && (
           <Alert
             type="warning"
@@ -179,8 +192,17 @@ export default function NewAnalysis() {
         />
       </Card>
 
-      <Card title="新建分析任务" style={{ marginBottom: 16 }}>
-        <Form form={form} layout="vertical" onFinish={handleCreate} style={{ maxWidth: 600 }}>
+      <Card title={taxpayerContext.taxpayer_id ? '确认本户分析事项' : '新建分析事项'} style={{ marginBottom: 16 }}>
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleCreate}
+          style={{ maxWidth: 600 }}
+          initialValues={{
+            name: taxpayerContext.company_name ? `${taxpayerContext.company_name}案头分析` : undefined,
+            description: taxpayerContext.taxpayer_id ? `针对纳税人识别号 ${taxpayerContext.taxpayer_id} 开展案头分析` : undefined,
+          }}
+        >
           <Form.Item label="分析名称" name="name" rules={[{ required: true, message: '请输入分析名称' }]}>
             <Input placeholder="如：2026年3月某企业税务专项案头分析" />
           </Form.Item>
@@ -209,7 +231,7 @@ export default function NewAnalysis() {
               文件名建议直接包含资料类型，例如：「2026年3月销项发票.xlsx」「增值税申报_2026-03.csv」「财务报表_2026Q1.xlsx」。
             </Paragraph>
             <Upload.Dragger
-              accept=".csv,.xlsx,.json,.txt,.png,.jpg,.jpeg,.webp,.pdf"
+              accept=".csv,.xls,.xlsx,.json,.txt,.png,.jpg,.jpeg,.webp,.pdf"
               customRequest={({ file }) => handleUpload(file as File)}
               fileList={fileList.map((item) => ({ uid: item.name, name: item.name, status: item.status }))}
               onRemove={() => false}
@@ -217,7 +239,7 @@ export default function NewAnalysis() {
             >
               <p><UploadOutlined /></p>
               <p>点击或拖拽上传文件</p>
-              <Text type="secondary" style={{ fontSize: 12 }}>支持 CSV、XLSX、JSON、TXT、图片和 PDF</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>支持 CSV、XLS、XLSX、JSON、TXT、图片和 PDF</Text>
             </Upload.Dragger>
           </Space>
         </Card>
@@ -236,7 +258,7 @@ export default function NewAnalysis() {
             form={manualForm}
             layout="vertical"
             onFinish={handleManualSubmit}
-            initialValues={{ data_kind: 'vat_return' }}
+            initialValues={{ data_kind: 'vat_return', company_name: taxpayerContext.company_name, taxpayer_id: taxpayerContext.taxpayer_id }}
           >
             <Row gutter={12}>
               <Col xs={24} md={8}>

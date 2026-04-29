@@ -576,6 +576,10 @@ def test_risk_ledger_single_batch_import_filters_detail_and_backup(auth_client):
     assert taxpayer_workbench["dossier"]["latest_entry_status"] == "已整改"
     assert len(taxpayer_workbench["entries"]) == 3
 
+    search_resp = auth_client.get("/api/workbench/taxpayers/search?q=台账企业A")
+    assert search_resp.status_code == 200
+    assert search_resp.json()["items"][0]["taxpayer_id"] == "91310000RISK0001"
+
     my_risk_list_resp = auth_client.get("/api/workbench/my-risk-list?entry_status=整改中")
     assert my_risk_list_resp.status_code == 200
     my_risk_list = my_risk_list_resp.json()
@@ -595,6 +599,17 @@ def test_risk_ledger_single_batch_import_filters_detail_and_backup(auth_client):
     )
     assert status_resp.status_code == 200
     assert status_resp.json()["created"] == 2
+
+    missing_deadline_resp = auth_client.post(
+        "/api/modules/risk-ledger/entries/batch-status",
+        json={
+            "taxpayer_ids": ["91310000RISK0001"],
+            "entry_status": "整改中",
+            "content": "缺少整改期限",
+            "contact_person": "张台账",
+        },
+    )
+    assert missing_deadline_resp.status_code == 400
 
     overdue_resp = auth_client.post(
         "/api/modules/risk-ledger/entries/batch-status",
@@ -926,9 +941,21 @@ def test_record_tag_update_with_auth(auth_client):
 
 
 def test_analysis_task_run_and_report_export_with_auth(auth_client):
+    defaults_resp = auth_client.put(
+        "/api/platform/settings/document-defaults",
+        json={
+            "agency_name": "国家税务总局默认税务局",
+            "contact_person": "默认联系人",
+            "contact_phone": "默认电话",
+            "rectification_deadline": "默认整改期限",
+        },
+    )
+    assert defaults_resp.status_code == 200
+    assert auth_client.get("/api/platform/settings/document-defaults").json()["agency_name"] == "国家税务总局默认税务局"
+
     create_resp = auth_client.post(
         "/api/modules/analysis-workbench/tasks",
-        json={"name": "测试分析", "description": "生成报告"},
+        json={"name": "测试分析", "description": "生成报告", "taxpayer_id": "91310000123456789X", "company_name": "测试企业"},
     )
     assert create_resp.status_code == 200
     task_id = create_resp.json()["task_id"]
@@ -1048,6 +1075,11 @@ def test_analysis_task_run_and_report_export_with_auth(auth_client):
     assert "测试税通〔2026〕001号" in notice_resp.text
     assert "2026年5月10日前" in notice_resp.text
     assert "李税官" in notice_resp.text
+
+    default_notice_resp = auth_client.get(f"/api/modules/analysis-workbench/tasks/{task_id}/report?format=txt&doc_type=notice")
+    assert default_notice_resp.status_code == 200
+    assert "国家税务总局默认税务局" in default_notice_resp.text
+    assert "默认联系人" in default_notice_resp.text
 
     report_docx_resp = auth_client.get(f"/api/modules/analysis-workbench/tasks/{task_id}/report?format=docx&doc_type=analysis&{doc_config_query}")
     assert report_docx_resp.status_code == 200
@@ -1189,8 +1221,8 @@ def test_analysis_run_creates_files_logs_notifications_links_and_search_entries(
     assert notifications_resp.status_code == 200
     notifications_payload = notifications_resp.json()
     assert notifications_payload["total"] >= 1
-    assert any(item["title"] == "分析任务完成" for item in notifications_payload["notifications"])
-    assert any((item.get("target_url") or "").endswith(task_id) for item in notifications_payload["notifications"] if item["title"] == "分析任务完成")
+    assert any(item["title"] == "案头分析完成" for item in notifications_payload["notifications"])
+    assert any((item.get("target_url") or "").endswith(task_id) for item in notifications_payload["notifications"] if item["title"] == "案头分析完成")
 
     links_resp = auth_client.get("/api/cross-links")
     assert links_resp.status_code == 200

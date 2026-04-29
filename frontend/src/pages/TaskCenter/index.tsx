@@ -153,20 +153,20 @@ export default function TaskCenter() {
   return (
     <div className="omni-page">
       <div className="omni-page-header">
-        <Title level={4} style={{ margin: 0 }}>任务中心</Title>
-        <Text type="secondary">全平台任务统一记录与状态追踪</Text>
+        <Title level={4} style={{ margin: 0 }}>系统管理：运行记录</Title>
+        <Text type="secondary">查看案头分析、导入导出等后台运行情况，普通业务处理建议从首页开始。</Text>
       </div>
 
       <Card size="small" style={{ marginBottom: 16 }}>
         <Space wrap>
           <Input
-            placeholder="搜索任务名称"
+            placeholder="搜索事项名称"
             style={{ width: 200 }}
             value={query}
             onChange={e => setQuery(e.target.value)}
           />
           <Select
-            placeholder="任务类型"
+            placeholder="事项类型"
             style={{ width: 140 }}
             allowClear
             value={type}
@@ -178,7 +178,7 @@ export default function TaskCenter() {
             <Select.Option value="practice">练习</Select.Option>
           </Select>
           <Select
-            placeholder="所属模块"
+            placeholder="所属功能"
             style={{ width: 180 }}
             allowClear
             value={module}
@@ -217,7 +217,7 @@ export default function TaskCenter() {
 
       {(detailLoading || selectedTask) && (
         <Card
-          title="任务详情"
+          title="运行详情"
           size="small"
           style={{ marginBottom: 16 }}
           extra={selectedTask ? <Button size="small" onClick={() => {
@@ -232,17 +232,17 @@ export default function TaskCenter() {
           ) : (
             <Space direction="vertical" style={{ width: '100%' }}>
               <Descriptions size="small" column={2}>
-                <Descriptions.Item label="任务名称">{selectedTask.name}</Descriptions.Item>
+                <Descriptions.Item label="事项名称">{selectedTask.name}</Descriptions.Item>
                 <Descriptions.Item label="当前状态">
                   <Tag color={(statusMap[selectedTask.status] || { color: 'default' }).color}>
                     {(statusMap[selectedTask.status] || { text: selectedTask.status }).text}
                   </Tag>
                 </Descriptions.Item>
-                <Descriptions.Item label="所属模块">{selectedTask.module}</Descriptions.Item>
-                <Descriptions.Item label="任务类型">{typeMap[selectedTask.type] || selectedTask.type}</Descriptions.Item>
+                <Descriptions.Item label="所属功能">{selectedTask.module}</Descriptions.Item>
+                <Descriptions.Item label="事项类型">{typeMap[selectedTask.type] || selectedTask.type}</Descriptions.Item>
                 <Descriptions.Item label="关联文件">{selectedTask.file_count > 0 ? `${selectedTask.file_count} 个文件` : '无'}</Descriptions.Item>
                 <Descriptions.Item label="关联日志">{selectedTask.log_count > 0 ? `${selectedTask.log_count} 条日志` : '无'}</Descriptions.Item>
-                <Descriptions.Item label="关联对象">{selectedTask.related_record_count > 0 ? `${selectedTask.related_record_count} 个对象` : '无'}</Descriptions.Item>
+                <Descriptions.Item label="形成风险事项">{selectedTask.related_record_count > 0 ? `${selectedTask.related_record_count} 条` : '无'}</Descriptions.Item>
                 <Descriptions.Item label="创建时间">{new Date(selectedTask.created_at).toLocaleString('zh-CN')}</Descriptions.Item>
                 {selectedTask.completed_at && (
                   <Descriptions.Item label="完成时间">{new Date(selectedTask.completed_at).toLocaleString('zh-CN')}</Descriptions.Item>

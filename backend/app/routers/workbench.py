@@ -42,6 +42,10 @@ class TodoResponse(BaseModel):
     summary: dict
 
 
+class TaxpayerSearchResponse(BaseModel):
+    items: list[dict]
+
+
 def dossier_payload(dossier: RiskDossier, db: Session) -> dict:
     entries = db.query(RiskLedgerEntry).filter(
         RiskLedgerEntry.dossier_id == dossier.id,
@@ -195,6 +199,37 @@ def taxpayer_workbench(
         latest_risk=latest_risk,
         material_gap_list=material_gaps,
     )
+
+
+@router.get("/taxpayers/search", response_model=TaxpayerSearchResponse)
+def search_taxpayers(
+    q: str = Query(..., min_length=1),
+    limit: int = Query(10, le=20),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    like = f"%{q.strip()}%"
+    taxpayers = db.query(TaxpayerInfo).filter(
+        TaxpayerInfo.owner_id == current_user.id,
+        or_(
+            TaxpayerInfo.taxpayer_id.like(like),
+            TaxpayerInfo.company_name.like(like),
+            TaxpayerInfo.address.like(like),
+        ),
+    ).order_by(TaxpayerInfo.updated_at.desc()).limit(limit).all()
+    return TaxpayerSearchResponse(items=[
+        {
+            "taxpayer_id": item.taxpayer_id,
+            "company_name": item.company_name,
+            "registration_status": item.registration_status,
+            "tax_officer": item.tax_officer,
+            "address": item.address,
+            "industry": item.industry,
+            "tax_bureau": item.tax_bureau,
+            "manager_department": item.manager_department,
+        }
+        for item in taxpayers
+    ])
 
 
 @router.get("/my-risk-list", response_model=RiskListResponse)

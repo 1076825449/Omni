@@ -456,6 +456,8 @@ def add_batch_status_entries(
     current_user: User = Depends(get_current_user),
 ):
     status = validate_entry_status(body.entry_status)
+    if status == "整改中" and (not body.rectification_deadline or not body.contact_person.strip()):
+        raise HTTPException(status_code=400, detail="标记为整改中时必须填写整改期限和联系人")
     recorded_at = parse_datetime(body.recorded_at or datetime.utcnow())
     content = body.content.strip() or f"批量更新处理状态为：{status}"
     created = 0

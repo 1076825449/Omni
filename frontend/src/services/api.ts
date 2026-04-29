@@ -51,6 +51,8 @@ export interface Task {
   module: string
   creator_id: number
   result_summary: string
+  taxpayer_id?: string
+  company_name?: string
   created_at: string
   updated_at: string
   completed_at: string | null
@@ -293,10 +295,10 @@ function documentConfigParams(config?: DocumentConfig) {
 }
 
 export const analysisApi = {
-  createTask: (name: string, description: string) =>
+  createTask: (name: string, description: string, taxpayer?: { taxpayer_id?: string; company_name?: string }) =>
     request<TaskCreatedResponse>('/api/modules/analysis-workbench/tasks', {
       method: 'POST',
-      body: JSON.stringify({ name, description }),
+      body: JSON.stringify({ name, description, ...(taxpayer || {}) }),
     }),
   listTasks: () =>
     request<{ tasks: AnalysisTask[]; total: number }>('/api/modules/analysis-workbench/tasks'),
@@ -358,6 +360,22 @@ export const rolesApi = {
   getPermissions: () => request<{ permissions: string[]; defaults: Record<string, string[]> }>('/api/platform/roles/permissions'),
   update: (name: string, data: { display_name: string; description: string; permissions: string[] }) =>
     request<{ success: boolean }>('/api/platform/roles/' + name, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+}
+
+export interface DocumentDefaults {
+  agency_name: string
+  contact_person: string
+  contact_phone: string
+  rectification_deadline: string
+}
+
+export const platformSettingsApi = {
+  getDocumentDefaults: () => request<DocumentDefaults>('/api/platform/settings/document-defaults'),
+  updateDocumentDefaults: (data: DocumentDefaults) =>
+    request<DocumentDefaults>('/api/platform/settings/document-defaults', {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
@@ -620,7 +638,7 @@ export const riskLedgerApi = {
   }) => request<RiskLedgerEntry>('/api/modules/risk-ledger/entries', { method: 'POST', body: JSON.stringify(data) }),
   batchText: (data: { taxpayer_ids: string[]; recorded_at: string; content: string; entry_status: string; rectification_deadline?: string; contact_person?: string; contact_phone?: string; note?: string }) =>
     request<RiskLedgerBatchResult>('/api/modules/risk-ledger/entries/batch-text', { method: 'POST', body: JSON.stringify(data) }),
-  batchStatus: (data: { taxpayer_ids: string[]; entry_status: string; recorded_at?: string; content?: string; note?: string }) =>
+  batchStatus: (data: { taxpayer_ids: string[]; entry_status: string; recorded_at?: string; rectification_deadline?: string; contact_person?: string; contact_phone?: string; content?: string; note?: string }) =>
     request<RiskLedgerBatchResult>('/api/modules/risk-ledger/entries/batch-status', { method: 'POST', body: JSON.stringify(data) }),
   importFile: (file: File) => {
     const form = new FormData()
@@ -665,6 +683,7 @@ export interface WorkbenchTodoData {
 
 export const taxOfficerWorkbenchApi = {
   taxpayer: (taxpayerId: string) => request<TaxpayerWorkbenchData>('/api/workbench/taxpayer/' + encodeURIComponent(taxpayerId)),
+  searchTaxpayers: (q: string) => request<{ items: TaxpayerProfile[] }>('/api/workbench/taxpayers/search?q=' + encodeURIComponent(q)),
   todos: (params?: { limit?: number; due_days?: number }) => {
     const sp = new URLSearchParams()
     if (params?.limit) sp.set('limit', String(params.limit))

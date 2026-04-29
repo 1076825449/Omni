@@ -4,8 +4,9 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '../../../stores/auth'
 import { useNotificationStore } from '../../../stores/notification'
-import type { Module, PlatformStatsOverview, Task } from '../../../services/api'
-import { modulesApi, platformStatsApi, tasksApi, taxOfficerWorkbenchApi } from '../../../services/api'
+import type { Module, PlatformStatsOverview, Task, WorkbenchTodoData } from '../../../services/api'
+import { modulesApi, platformStatsApi, riskLedgerApi, tasksApi, taxOfficerWorkbenchApi } from '../../../services/api'
+import { useAppMessage } from '../../../hooks/useAppMessage'
 
 const { Title, Text, Paragraph } = Typography
 
@@ -17,7 +18,7 @@ const roleLabels: Record<string, string> = {
 
 const roleDescriptions: Record<string, string> = {
   admin: '可管理用户、角色、模块注册、备份恢复和系统设置',
-  user: '可使用业务模块（分析、对象管理、信息查询、风险台账、学习训练、定时任务），不能管理系统配置',
+  user: '可使用业务功能（查户、案头分析、信息查询、风险台账、文书报告），不能管理系统配置',
   viewer: '只可查看，不能新增、编辑、删除、导入或执行任何操作',
 }
 
@@ -34,9 +35,11 @@ export default function Home() {
   const [recentTasks, setRecentTasks] = useState<Task[]>([])
   const [stats, setStats] = useState<PlatformStatsOverview | null>(null)
   const [riskSummary, setRiskSummary] = useState<Record<string, number>>({})
+  const [todos, setTodos] = useState<WorkbenchTodoData>({ items: [], summary: {} })
   const [taxpayerId, setTaxpayerId] = useState('')
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
+  const message = useAppMessage()
   const { user } = useAuthStore()
   const notificationStore = useNotificationStore()
 
@@ -46,14 +49,39 @@ export default function Home() {
       tasksApi.list({ limit: 5, offset: 0 }),
       platformStatsApi.overview(),
       taxOfficerWorkbenchApi.myRiskList({ limit: 1 }),
-    ]).then(([moduleData, taskData, statsData, riskData]) => {
+      taxOfficerWorkbenchApi.todos({ limit: 8 }),
+    ]).then(([moduleData, taskData, statsData, riskData, todoData]) => {
       setModules(moduleData.modules.filter((m: Module) => m.status === 'active'))
       setRecentTasks(taskData.tasks)
       setStats(statsData)
       setRiskSummary(riskData.summary)
+      setTodos(todoData)
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [])
+
+  const refreshTodos = async () => {
+    const [riskData, todoData] = await Promise.all([
+      taxOfficerWorkbenchApi.myRiskList({ limit: 1 }),
+      taxOfficerWorkbenchApi.todos({ limit: 8 }),
+    ])
+    setRiskSummary(riskData.summary)
+    setTodos(todoData)
+  }
+
+  const handleMark = async (taxpayer_id: string, entry_status: '已排除' | '已整改') => {
+    try {
+      await riskLedgerApi.batchStatus({
+        taxpayer_ids: [taxpayer_id],
+        entry_status,
+        content: `首页待办处理：标记为${entry_status}`,
+      })
+      message.success('处理状态已记录')
+      await refreshTodos()
+    } catch {
+      message.error('处理状态记录失败')
+    }
+  }
 
   const quickActions = [
     { path: '/taxpayer-workbench', key: 'taxpayer-workbench', label: '查一户企业', desc: '进入一户式工作台', primary: true },
@@ -152,14 +180,14 @@ export default function Home() {
         <Col xs={24} sm={12} lg={6}>
           <Card size="small">
             <Statistic
-              title="已整改"
-              value={riskSummary.rectified_count ?? 0}
+              title="逾期未整改"
+              value={todos.summary.overdue_count ?? 0}
               loading={loading}
               suffix="户"
-              valueStyle={{ color: '#52c41a' }}
+              valueStyle={{ color: '#cf1322' }}
             />
             <Text type="secondary" style={{ fontSize: 11 }}>
-              已完成整改记录
+              需优先催办
             </Text>
           </Card>
         </Col>
@@ -177,6 +205,61 @@ export default function Home() {
           </Card>
         </Col>
       </Row>
+
+      <Card
+        title="今日应处理"
+        size="small"
+        style={{ marginBottom: 16 }}
+        extra={<Link to="/my-risk-list"><Text type="secondary" style={{ fontSize: 12 }}>查看全部风险清单 →</Text></Link>}
+      >
+        {loading ? (
+          <Skeleton active paragraph={{ rows: 3 }} />
+        ) : todos.items.length === 0 ? (
+          <Empty description="当前没有临近到期、逾期或今日新增待核实事项" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        ) : (
+          <List
+            size="small"
+            dataSource={todos.items}
+            renderItem={(item) => (
+              <List.Item>
+                <Space direction="vertical" size={6} style={{ width: '100%' }}>
+                  <Space style={{ width: '100%', justifyContent: 'space-between' }} wrap>
+                    <Space wrap>
+                      <Tag color={item.todo_type === 'overdue' ? 'red' : item.todo_type === 'due_soon' ? 'orange' : 'blue'}>
+                        {item.todo_label}
+                      </Tag>
+                      <Text strong>{item.company_name || item.taxpayer_id}</Text>
+                      <Text type="secondary">{item.taxpayer_id}</Text>
+                      <Text type="secondary">状态：{item.latest_entry_status}</Text>
+                      {item.latest_rectification_deadline && (
+                        <Text type="secondary">整改期限：{new Date(item.latest_rectification_deadline).toLocaleDateString('zh-CN')}</Text>
+                      )}
+                      {item.latest_contact_person && (
+                        <Text type="secondary">联系人：{item.latest_contact_person}</Text>
+                      )}
+                    </Space>
+                    <Space wrap>
+                      <Button size="small" onClick={() => navigate(`/taxpayer-workbench?taxpayer_id=${encodeURIComponent(item.taxpayer_id)}`)}>
+                        查看一户式
+                      </Button>
+                      <Button size="small" onClick={() => navigate(`/modules/risk-ledger?taxpayer_id=${encodeURIComponent(item.taxpayer_id)}`)}>
+                        记录整改情况
+                      </Button>
+                      <Button size="small" onClick={() => handleMark(item.taxpayer_id, '已排除')}>
+                        标记已排除
+                      </Button>
+                      <Button size="small" type="primary" onClick={() => handleMark(item.taxpayer_id, '已整改')}>
+                        标记已整改
+                      </Button>
+                    </Space>
+                  </Space>
+                  <Text type="secondary" style={{ fontSize: 12 }}>{item.latest_content || '暂无风险内容'}</Text>
+                </Space>
+              </List.Item>
+            )}
+          />
+        )}
+      </Card>
 
       {/* 模块快捷入口 + 最近任务 */}
       <Row gutter={[16, 16]}>

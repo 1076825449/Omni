@@ -85,6 +85,15 @@ class UploadProfileResponse(BaseModel):
     warnings: List[str] = []
 
 
+def apply_document_config(payload: dict[str, Any], config: dict[str, str]) -> dict[str, Any]:
+    configured = dict(payload)
+    for key, value in config.items():
+        text = str(value or "").strip()
+        if text:
+            configured[key] = text
+    return configured
+
+
 class UploadResponse(BaseModel):
     success: bool
     message: str
@@ -355,6 +364,12 @@ def export_report(
     task_id: str,
     format: str = Query("json"),
     doc_type: str = Query("analysis"),
+    agency_name: str = Query(""),
+    document_number: str = Query(""),
+    contact_person: str = Query(""),
+    contact_phone: str = Query(""),
+    rectification_deadline: str = Query(""),
+    document_date: str = Query(""),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -367,12 +382,21 @@ def export_report(
     analysis = analyze_files(task, files) if files else analyze_files(task, [])
     filename_safe_task_id = task.task_id.replace("/", "-")
 
+    document_config = {
+        "agency_name": agency_name,
+        "document_number": document_number,
+        "contact_person": contact_person,
+        "contact_phone": contact_phone,
+        "rectification_deadline": rectification_deadline,
+        "document_date": document_date,
+    }
+
     if doc_type == "notice":
-        payload = analysis["notice"]
+        payload = apply_document_config(analysis["notice"], document_config)
         txt_content = render_notice_text(payload)
         suffix = "notice"
     elif doc_type == "analysis":
-        payload = analysis["analysis_report"]
+        payload = apply_document_config(analysis["analysis_report"], document_config)
         txt_content = render_officer_report_text(payload)
         suffix = "analysis"
     else:

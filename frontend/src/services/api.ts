@@ -224,6 +224,18 @@ export interface AnalysisRisk {
   verification_focus: string
   required_materials: string[]
   judgment_rule: string
+  rule_name: string
+  trigger_reason: string
+  threshold_text: string
+  calculation_text: string
+  source_data_refs: Array<{
+    dataset_kind: string
+    dataset_label: string
+    period: string
+    field_name: string
+    field_label: string
+    value: number | string
+  }>
   review_record_id?: string | null
   review_status?: string
 }
@@ -261,6 +273,23 @@ export const backupApi = {
     request<{ success: boolean; message: string; backup_id: string }>('/api/platform/backup?name=' + encodeURIComponent(name) + (note ? '&note=' + encodeURIComponent(note) : ''), { method: 'POST' }),
   list: () => request<{ backups: BackupRecord[]; total: number }>('/api/platform/backups'),
   downloadUrl: (backupId: string) => API_BASE + '/api/platform/backups/' + backupId + '/download',
+}
+
+export interface DocumentConfig {
+  agency_name?: string
+  document_number?: string
+  contact_person?: string
+  contact_phone?: string
+  rectification_deadline?: string
+  document_date?: string
+}
+
+function documentConfigParams(config?: DocumentConfig) {
+  const sp = new URLSearchParams()
+  Object.entries(config || {}).forEach(([key, value]) => {
+    if (value) sp.set(key, value)
+  })
+  return sp
 }
 
 export const analysisApi = {
@@ -301,10 +330,18 @@ export const analysisApi = {
       '/api/modules/analysis-workbench/tasks/' + taskId + '/risks/' + recordId + '/review',
       { method: 'POST', body: JSON.stringify({ status, note }) },
     ),
-  reportUrl: (taskId: string, format: 'json' | 'txt' | 'docx', docType: 'analysis' | 'notice' = 'analysis') =>
-    `${API_BASE}/api/modules/analysis-workbench/tasks/${taskId}/report?format=${format}&doc_type=${docType}`,
-  reportText: (taskId: string, docType: 'analysis' | 'notice' = 'analysis') =>
-    requestText(`/api/modules/analysis-workbench/tasks/${taskId}/report?format=txt&doc_type=${docType}`),
+  reportUrl: (taskId: string, format: 'json' | 'txt' | 'docx', docType: 'analysis' | 'notice' = 'analysis', config?: DocumentConfig) => {
+    const sp = documentConfigParams(config)
+    sp.set('format', format)
+    sp.set('doc_type', docType)
+    return `${API_BASE}/api/modules/analysis-workbench/tasks/${taskId}/report?${sp}`
+  },
+  reportText: (taskId: string, docType: 'analysis' | 'notice' = 'analysis', config?: DocumentConfig) => {
+    const sp = documentConfigParams(config)
+    sp.set('format', 'txt')
+    sp.set('doc_type', docType)
+    return requestText(`/api/modules/analysis-workbench/tasks/${taskId}/report?${sp}`)
+  },
 }
 
 export interface RoleRecord {
@@ -621,8 +658,19 @@ export interface MyRiskListData {
   summary: Record<string, number>
 }
 
+export interface WorkbenchTodoData {
+  items: Array<RiskDossier & { todo_type: string; todo_label: string }>
+  summary: Record<string, number>
+}
+
 export const taxOfficerWorkbenchApi = {
   taxpayer: (taxpayerId: string) => request<TaxpayerWorkbenchData>('/api/workbench/taxpayer/' + encodeURIComponent(taxpayerId)),
+  todos: (params?: { limit?: number; due_days?: number }) => {
+    const sp = new URLSearchParams()
+    if (params?.limit) sp.set('limit', String(params.limit))
+    if (params?.due_days) sp.set('due_days', String(params.due_days))
+    return request<WorkbenchTodoData>('/api/workbench/todos?' + sp)
+  },
   myRiskList: (params?: { q?: string; tax_officer?: string; registration_status?: string; entry_status?: string; overdue?: boolean; temporary?: boolean; limit?: number; offset?: number }) => {
     const sp = new URLSearchParams()
     if (params?.q) sp.set('q', params.q)

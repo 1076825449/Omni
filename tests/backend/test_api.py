@@ -7,6 +7,7 @@ import time
 import pytest
 import tempfile
 import zipfile
+from datetime import datetime, timedelta
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -587,13 +588,32 @@ def test_risk_ledger_single_batch_import_filters_detail_and_backup(auth_client):
             "taxpayer_ids": ["91310000RISK0001", "91310000RISK0002"],
             "entry_status": "整改中",
             "content": "管户风险清单批量标记为整改中",
-            "rectification_deadline": "2026-04-20T18:00:00",
+            "rectification_deadline": (datetime.utcnow() + timedelta(days=3)).isoformat(),
             "contact_person": "张台账",
             "contact_phone": "123456",
         },
     )
     assert status_resp.status_code == 200
     assert status_resp.json()["created"] == 2
+
+    overdue_resp = auth_client.post(
+        "/api/modules/risk-ledger/entries/batch-status",
+        json={
+            "taxpayer_ids": ["TEMP-RISK-001"],
+            "entry_status": "整改中",
+            "content": "逾期未整改测试",
+            "rectification_deadline": (datetime.utcnow() - timedelta(days=1)).isoformat(),
+            "contact_person": "临时管理员",
+        },
+    )
+    assert overdue_resp.status_code == 200
+
+    todos_resp = auth_client.get("/api/workbench/todos?limit=10")
+    assert todos_resp.status_code == 200
+    todos = todos_resp.json()
+    assert todos["summary"]["due_soon_count"] >= 2
+    assert todos["summary"]["overdue_count"] >= 1
+    assert any(item["todo_label"] == "逾期未整改" for item in todos["items"])
 
     export_resp = auth_client.get("/api/workbench/my-risk-list/export?entry_status=整改中")
     assert export_resp.status_code == 200
@@ -971,6 +991,13 @@ def test_analysis_task_run_and_report_export_with_auth(auth_client):
     risk_types = {item["risk_type"] for item in detail["risks"]}
     assert "有进无销" in risk_types
     assert "白条入账" in risk_types
+    purchase_risk = next(item for item in detail["risks"] if item["risk_type"] == "有进无销")
+    expense_risk = next(item for item in detail["risks"] if item["risk_type"] == "白条入账")
+    assert "采购" in purchase_risk["trigger_reason"]
+    assert "÷" in purchase_risk["calculation_text"]
+    assert purchase_risk["source_data_refs"][0]["dataset_label"] == "进项发票"
+    assert "白条" in expense_risk["trigger_reason"]
+    assert expense_risk["source_data_refs"][0]["dataset_label"] == "费用明细"
     reviewable = next(item for item in detail["risks"] if item["review_record_id"])
     assert reviewable["review_status"] == "pending_review"
     review_resp = auth_client.post(
@@ -998,31 +1025,49 @@ def test_analysis_task_run_and_report_export_with_auth(auth_client):
     assert report["task_id"] == task_id
     assert report["risk_count"] >= 3
     assert len(report["risks"]) >= 3
+    assert "trigger_reason" in report["risks"][0]
+    assert "source_data_refs" in report["risks"][0]
 
     txt_resp = auth_client.get(f"/api/modules/analysis-workbench/tasks/{task_id}/report?format=txt")
     assert txt_resp.status_code == 200
     assert "任务名称: 测试分析" in txt_resp.text
     assert "企业涉税风险分析报告" in txt_resp.text
 
-    notice_resp = auth_client.get(f"/api/modules/analysis-workbench/tasks/{task_id}/report?format=txt&doc_type=notice")
+    doc_config_query = (
+        "agency_name=国家税务总局测试税务局"
+        "&document_number=测试税通〔2026〕001号"
+        "&contact_person=李税官"
+        "&contact_phone=12345"
+        "&rectification_deadline=2026年5月10日前"
+        "&document_date=2026-04-29"
+    )
+    notice_resp = auth_client.get(f"/api/modules/analysis-workbench/tasks/{task_id}/report?format=txt&doc_type=notice&{doc_config_query}")
     assert notice_resp.status_code == 200
     assert "税务事项通知书" in notice_resp.text
-    assert "整改期限" in notice_resp.text
+    assert "国家税务总局测试税务局" in notice_resp.text
+    assert "测试税通〔2026〕001号" in notice_resp.text
+    assert "2026年5月10日前" in notice_resp.text
+    assert "李税官" in notice_resp.text
 
-    report_docx_resp = auth_client.get(f"/api/modules/analysis-workbench/tasks/{task_id}/report?format=docx&doc_type=analysis")
+    report_docx_resp = auth_client.get(f"/api/modules/analysis-workbench/tasks/{task_id}/report?format=docx&doc_type=analysis&{doc_config_query}")
     assert report_docx_resp.status_code == 200
     assert report_docx_resp.headers["content-type"].startswith("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
     with zipfile.ZipFile(io.BytesIO(report_docx_resp.content)) as docx_zip:
         document_xml = docx_zip.read("word/document.xml").decode("utf-8")
     assert "税务疑点核实报告" in document_xml
     assert "应要求企业提供资料" in document_xml
+    assert "规则名称" in document_xml
+    assert "测试税通" in document_xml
 
-    notice_docx_resp = auth_client.get(f"/api/modules/analysis-workbench/tasks/{task_id}/report?format=docx&doc_type=notice")
+    notice_docx_resp = auth_client.get(f"/api/modules/analysis-workbench/tasks/{task_id}/report?format=docx&doc_type=notice&{doc_config_query}")
     assert notice_docx_resp.status_code == 200
     with zipfile.ZipFile(io.BytesIO(notice_docx_resp.content)) as docx_zip:
         notice_xml = docx_zip.read("word/document.xml").decode("utf-8")
     assert "税务事项通知书" in notice_xml
     assert "整改要求" in notice_xml
+    assert "国家税务总局测试税务局" in notice_xml
+    assert "李税官" in notice_xml
+    assert "12345" in notice_xml
 
 
 def test_analysis_task_rerun_clones_files_with_auth(auth_client):

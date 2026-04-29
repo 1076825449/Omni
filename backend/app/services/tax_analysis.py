@@ -6,7 +6,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from app.models.record import FileRecord, Task
 from app.services.xlsx_reader import read_xlsx_rows
@@ -292,6 +292,49 @@ def build_evidence(lines: list[str]) -> list[str]:
     return [line for line in lines if line]
 
 
+DATASET_LABELS = {
+    "sales_invoice": "销项发票",
+    "purchase_invoice": "进项发票",
+    "vat_return": "增值税申报表",
+    "cit_return": "企业所得税申报表",
+    "pit_return": "个人所得税申报表",
+    "financial_statement": "财务报表",
+    "expense_detail": "费用明细",
+    "invoice_pool": "发票进销数据",
+}
+
+
+def money_text(value: float) -> str:
+    return f"{value:.2f} 元"
+
+
+def ratio_text(numerator: float, denominator: float) -> str:
+    if abs(denominator) < 0.000001:
+        return "无法计算（分母为 0）"
+    return f"{numerator / denominator:.2f} 倍"
+
+
+def source_ref(dataset_kind: str, period: str, field_name: str, field_label: str, value: Union[float, int, str]) -> dict[str, Any]:
+    return {
+        "dataset_kind": dataset_kind,
+        "dataset_label": DATASET_LABELS.get(dataset_kind, dataset_kind),
+        "period": period,
+        "field_name": field_name,
+        "field_label": field_label,
+        "value": round(value, 2) if isinstance(value, (int, float)) else value,
+    }
+
+
+def format_source_refs(refs: list[dict[str, Any]]) -> str:
+    parts = []
+    for ref in refs:
+        value = ref.get("value", "")
+        if isinstance(value, (int, float)):
+            value = money_text(float(value)) if "金额" in ref.get("field_label", "") or "收入" in ref.get("field_label", "") or "成本" in ref.get("field_label", "") or "库存" in ref.get("field_label", "") else str(value)
+        parts.append(f"{ref.get('dataset_label', '资料')}[{ref.get('period', '期间待核实')}] {ref.get('field_label', ref.get('field_name', '字段'))}={value}")
+    return "；".join(parts) or "暂无明确数据引用"
+
+
 def make_risk(
     risk_type: str,
     period: str,
@@ -299,6 +342,11 @@ def make_risk(
     evidence: list[str],
     confidence: float,
     metrics: dict[str, float],
+    rule_name: str,
+    trigger_reason: str,
+    threshold_text: str,
+    calculation_text: str,
+    source_data_refs: list[dict[str, Any]],
 ) -> dict[str, Any]:
     library = RISK_LIBRARY[risk_type]
     return {
@@ -314,6 +362,11 @@ def make_risk(
         "verification_focus": library["verification"],
         "required_materials": library["materials"],
         "judgment_rule": library["judgment"],
+        "rule_name": rule_name,
+        "trigger_reason": trigger_reason,
+        "threshold_text": threshold_text,
+        "calculation_text": calculation_text,
+        "source_data_refs": source_data_refs,
     }
 
 
@@ -356,6 +409,15 @@ def detect_risks(analysis: NormalizedTaxAnalysis) -> list[dict[str, Any]]:
                 ]),
                 0.86,
                 {"purchase_amount": purchase, "sales_amount": sales, "inventory_delta": inventory_delta},
+                "进项采购与销售收入比对",
+                f"{month_label(period)} 采购或进项金额明显高于销售或申报收入，采购规模为销售规模的 {ratio_text(purchase, max(sales, 1.0))}。",
+                "采购或进项金额不低于 5,000 元，且采购/进项金额大于销售或收入金额的 1.8 倍。",
+                f"{money_text(purchase)} ÷ {money_text(max(sales, 1.0))} = {ratio_text(purchase, max(sales, 1.0))}；库存变动 {money_text(inventory_delta)}。",
+                [
+                    source_ref("purchase_invoice", period, "amount", "采购或进项金额", purchase),
+                    source_ref("sales_invoice", period, "amount", "销售或收入金额", sales),
+                    source_ref("financial_statement", period, "inventory_delta", "库存变动", inventory_delta),
+                ],
             ))
 
         stock_support = max(purchase + max(inventory_begin - inventory_end, 0.0), cost, 1.0)
@@ -371,6 +433,15 @@ def detect_risks(analysis: NormalizedTaxAnalysis) -> list[dict[str, Any]]:
                 ]),
                 0.84,
                 {"sales_amount": sales, "purchase_amount": purchase, "cost_amount": cost},
+                "销售收入与进货成本支撑比对",
+                f"{month_label(period)} 销售或收入金额明显高于采购、库存消耗和成本支撑，销售规模为支撑金额的 {ratio_text(sales, stock_support)}。",
+                "销售或收入金额不低于 5,000 元，且销售金额大于进货、库存消耗或成本支撑金额的 1.8 倍。",
+                f"{money_text(sales)} ÷ {money_text(stock_support)} = {ratio_text(sales, stock_support)}。",
+                [
+                    source_ref("sales_invoice", period, "amount", "销售或收入金额", sales),
+                    source_ref("purchase_invoice", period, "amount", "采购金额", purchase),
+                    source_ref("financial_statement", period, "cost", "成本金额", cost),
+                ],
             ))
 
         mismatch_base = max(sales, purchase, cost, 1.0)
@@ -387,6 +458,16 @@ def detect_risks(analysis: NormalizedTaxAnalysis) -> list[dict[str, Any]]:
                 ]),
                 0.8,
                 {"purchase_amount": purchase, "sales_amount": sales, "inventory_begin": inventory_begin, "inventory_end": inventory_end},
+                "采购销售库存勾稽比对",
+                f"{month_label(period)} 采购加期初库存与销售加期末库存之间差额较大，占比较高。",
+                "勾稽差额 ÷ 采购、销售、成本中的最大金额不低于 45%，且采购或销售金额不低于 5,000 元。",
+                f"|({money_text(purchase)} + {money_text(inventory_begin)}) - ({money_text(sales)} + {money_text(inventory_end)})| = {money_text(mismatch_gap)}；占比 {mismatch_gap / mismatch_base:.2%}。",
+                [
+                    source_ref("purchase_invoice", period, "amount", "采购金额", purchase),
+                    source_ref("sales_invoice", period, "amount", "销售金额", sales),
+                    source_ref("financial_statement", period, "inventory_begin", "期初库存", inventory_begin),
+                    source_ref("financial_statement", period, "inventory_end", "期末库存", inventory_end),
+                ],
             ))
 
         declared_revenue = max(
@@ -406,6 +487,14 @@ def detect_risks(analysis: NormalizedTaxAnalysis) -> list[dict[str, Any]]:
                 ]),
                 0.88,
                 {"observable_revenue": observable_revenue, "declared_revenue": declared_revenue},
+                "账载开票收入与申报收入比对",
+                f"{month_label(period)} 财务报表或销项发票反映的收入高于增值税/企业所得税申报收入。",
+                "财务或开票可观察收入不低于 5,000 元，且超过申报收入的 1.2 倍。",
+                f"{money_text(observable_revenue)} ÷ {money_text(declared_revenue)} = {ratio_text(observable_revenue, declared_revenue)}。",
+                [
+                    source_ref("sales_invoice", period, "amount", "财务/开票收入", observable_revenue),
+                    source_ref("vat_return", period, "sales_declared", "申报收入", declared_revenue),
+                ],
             ))
 
         support_cost = max(purchase + max(inventory_begin - inventory_end, 0.0), 1.0)
@@ -420,6 +509,14 @@ def detect_risks(analysis: NormalizedTaxAnalysis) -> list[dict[str, Any]]:
                 ]),
                 0.82,
                 {"cost_amount": cost, "support_cost": support_cost},
+                "成本费用与采购库存支撑比对",
+                f"{month_label(period)} 成本金额显著高于采购和库存消耗能够支撑的金额。",
+                "成本金额不低于 5,000 元，且大于采购与库存消耗支撑金额的 1.35 倍。",
+                f"{money_text(cost)} ÷ {money_text(support_cost)} = {ratio_text(cost, support_cost)}。",
+                [
+                    source_ref("financial_statement", period, "cost", "成本金额", cost),
+                    source_ref("purchase_invoice", period, "amount", "采购与库存消耗支撑", support_cost),
+                ],
             ))
 
         pit = analysis.pit_returns.get(period, {})
@@ -438,6 +535,15 @@ def detect_risks(analysis: NormalizedTaxAnalysis) -> list[dict[str, Any]]:
                 ]),
                 0.72,
                 {"salary_amount": salary_amount, "employee_count": employee_count, "pit_tax_amount": pit_tax_amount},
+                "个人所得税申报人数税额比对",
+                f"{month_label(period)} 工资薪金或劳务报酬金额较大，但申报人数或税额为零或明显偏低。",
+                "工资薪金或劳务报酬金额不低于 10,000 元，且申报人数小于等于 0 或个人所得税税额小于等于 0。",
+                f"工资薪金/劳务报酬 {money_text(salary_amount)}；申报人数 {employee_count:.0f} 人；个税税额 {money_text(pit_tax_amount)}。",
+                [
+                    source_ref("pit_return", period, "salary_amount", "工资薪金/劳务报酬金额", salary_amount),
+                    source_ref("pit_return", period, "employee_count", "申报人数", employee_count),
+                    source_ref("pit_return", period, "pit_tax_amount", "个人所得税税额", pit_tax_amount),
+                ],
             ))
 
     flagged_expenses = [
@@ -456,6 +562,14 @@ def detect_risks(analysis: NormalizedTaxAnalysis) -> list[dict[str, Any]]:
             ]),
             0.78,
             {"flagged_expense_amount": amount, "flagged_rows": float(len(flagged_expenses))},
+            "费用凭证合规性识别",
+            "费用明细中出现“白条、收据、无票、情况说明”等凭证类型或文字描述。",
+            "费用凭证文本命中无票或白条类关键词。",
+            f"命中疑似无票/白条凭证 {len(flagged_expenses)} 笔，金额合计 {money_text(amount)}。",
+            [
+                source_ref("expense_detail", summarize_periods(analysis)[0], "voucher_type", "疑似无票凭证笔数", len(flagged_expenses)),
+                source_ref("expense_detail", summarize_periods(analysis)[0], "expense_amount", "相关金额合计", amount),
+            ],
         ))
 
     if analysis.sales_invoices or analysis.purchase_invoices:
@@ -477,6 +591,15 @@ def detect_risks(analysis: NormalizedTaxAnalysis) -> list[dict[str, Any]]:
                 ]),
                 0.74,
                 {"counterparty_share_pct": counterparty_share * 100, "day_share_pct": day_share * 100, "item_diversity": float(item_diversity)},
+                "发票集中度与品名结构识别",
+                "发票交易对象、开票日期或品名结构呈现异常集中，可能存在变名开票或异常开票链条。",
+                "发票数量不少于 5 张，且交易对象占比不低于 75%、开票日期占比不低于 60%，或品名数量小于等于 1 个。",
+                f"最集中交易对象占比 {counterparty_share:.0%}；最集中开票日期占比 {day_share:.0%}；品名数量 {item_diversity} 个。",
+                [
+                    source_ref("invoice_pool", summarize_periods(analysis)[0], "counterparty_share", "最集中交易对象占比", f"{counterparty_share:.0%}"),
+                    source_ref("invoice_pool", summarize_periods(analysis)[0], "day_share", "最集中开票日期占比", f"{day_share:.0%}"),
+                    source_ref("invoice_pool", summarize_periods(analysis)[0], "item_diversity", "品名数量", item_diversity),
+                ],
             ))
 
     unique_risks: list[dict[str, Any]] = []
@@ -512,6 +635,11 @@ def build_notice_payload(task: Task, analysis: NormalizedTaxAnalysis, risks: lis
                 "basis_data": risk["notice_basis_data"],
                 "evidence": risk["evidence"],
                 "rectify_advice": risk["rectify_advice"],
+                "rule_name": risk["rule_name"],
+                "trigger_reason": risk["trigger_reason"],
+                "threshold_text": risk["threshold_text"],
+                "calculation_text": risk["calculation_text"],
+                "source_data_refs": risk["source_data_refs"],
             }
             for risk in risks
         ],
@@ -552,6 +680,11 @@ def build_officer_report_payload(task: Task, analysis: NormalizedTaxAnalysis, ri
                 "judgment_rule": risk["judgment_rule"],
                 "metrics": risk["metrics"],
                 "confidence": risk["confidence"],
+                "rule_name": risk["rule_name"],
+                "trigger_reason": risk["trigger_reason"],
+                "threshold_text": risk["threshold_text"],
+                "calculation_text": risk["calculation_text"],
+                "source_data_refs": risk["source_data_refs"],
             }
             for risk in risks
         ],
@@ -561,12 +694,15 @@ def build_officer_report_payload(task: Task, analysis: NormalizedTaxAnalysis, ri
 def render_notice_text(payload: dict[str, Any]) -> str:
     lines = [
         payload["title"],
+        f"税务机关: {payload.get('agency_name', '主管税务机关')}",
+        f"文号: {payload.get('document_number', '系统自动生成')}",
         f"企业名称: {payload['enterprise_name']}",
         f"纳税人识别号: {payload['taxpayer_id']}",
         f"分析任务: {payload['task_name']} ({payload['task_id']})",
         f"整改期限: {payload['rectification_deadline']}",
         f"联系人: {payload['contact_person']}",
         f"联系电话: {payload['contact_phone']}",
+        f"文书日期: {payload.get('document_date', '') or payload['generated_at'][:10]}",
         "",
         "请贵单位针对以下事项进行核实整改并反馈情况：",
     ]
@@ -577,6 +713,11 @@ def render_notice_text(payload: dict[str, Any]) -> str:
             f"{index}. 风险类型: {issue['risk_type']}",
             f"   涉及期间: {issue['period']}",
             f"   发现问题: {issue['issue']}",
+            f"   规则名称: {issue.get('rule_name', '规则待补充')}",
+            f"   触发原因: {issue.get('trigger_reason', issue['issue'])}",
+            f"   涉及数据: {format_source_refs(issue.get('source_data_refs', []))}",
+            f"   计算过程: {issue.get('calculation_text', '未生成计算说明')}",
+            f"   判断阈值: {issue.get('threshold_text', '按申报、发票、财务资料一致性综合判断')}",
             f"   依据数据: {issue['basis_data']}",
             f"   证据要点: {'; '.join(issue['evidence']) or '—'}",
             f"   整改要求: {issue['rectify_advice']}",
@@ -587,9 +728,12 @@ def render_notice_text(payload: dict[str, Any]) -> str:
 def render_officer_report_text(payload: dict[str, Any]) -> str:
     lines = [
         payload["title"],
+        f"税务机关: {payload.get('agency_name', '未填写')}",
+        f"报告编号: {payload.get('document_number', payload['task_id'])}",
         f"企业名称: {payload['enterprise_name']}",
         f"纳税人识别号: {payload['taxpayer_id']}",
         f"分析任务: {payload['task_name']} ({payload['task_id']})",
+        f"文书日期: {payload.get('document_date', '') or payload['generated_at'][:10]}",
         f"生成时间: {payload['generated_at']}",
         f"识别风险数: {payload['risk_count']}",
         "",
@@ -611,6 +755,11 @@ def render_officer_report_text(payload: dict[str, Any]) -> str:
         lines.extend([
             f"{index}. {risk['risk_type']} / {risk['severity']} / {risk['period']}",
             f"   问题描述: {risk['issue']}",
+            f"   规则名称: {risk.get('rule_name', '规则待补充')}",
+            f"   触发原因: {risk.get('trigger_reason', risk['issue'])}",
+            f"   涉及数据: {format_source_refs(risk.get('source_data_refs', []))}",
+            f"   计算过程: {risk.get('calculation_text', '未生成计算说明')}",
+            f"   判断阈值: {risk.get('threshold_text', '按申报、发票、财务资料一致性综合判断')}",
             f"   证据: {'; '.join(risk['evidence']) or '—'}",
             f"   核查方向: {risk['verification_focus']}",
             f"   需调取资料: {'; '.join(risk['required_materials'])}",
@@ -705,7 +854,7 @@ def analyze_files(task: Task, files: list[FileRecord]) -> dict[str, Any]:
             "name": f"[{task.name}] {risk['risk_type']}",
             "category": "tax-risk",
             "tags": f"analysis,tax-risk,{risk['risk_type']},{risk['severity']}",
-            "detail": f"{risk['period']}：{risk['issue']} 证据：{'；'.join(risk['evidence'])}",
+            "detail": f"{risk['period']}：{risk['issue']} 触发原因：{risk.get('trigger_reason', '')} 证据：{'；'.join(risk['evidence'])}",
         }
         for risk in risks
     ]

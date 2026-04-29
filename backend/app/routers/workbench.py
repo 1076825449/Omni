@@ -37,6 +37,11 @@ class RiskListResponse(BaseModel):
     summary: dict
 
 
+class TodoResponse(BaseModel):
+    items: list[dict]
+    summary: dict
+
+
 def dossier_payload(dossier: RiskDossier, db: Session) -> dict:
     entries = db.query(RiskLedgerEntry).filter(
         RiskLedgerEntry.dossier_id == dossier.id,
@@ -45,14 +50,11 @@ def dossier_payload(dossier: RiskDossier, db: Session) -> dict:
     latest = entries[0] if entries else None
     latest_deadline = latest.rectification_deadline if latest else None
     latest_recorded_at = latest.recorded_at if latest else None
-    fallback_cutoff = datetime.utcnow() - timedelta(days=30)
     is_overdue = bool(
         latest
         and latest.entry_status == "整改中"
-        and (
-            (latest_deadline is not None and latest_deadline < datetime.utcnow())
-            or (latest_deadline is None and latest_recorded_at is not None and latest_recorded_at < fallback_cutoff)
-        )
+        and latest_deadline is not None
+        and latest_deadline < datetime.utcnow()
     )
     return {
         "taxpayer_id": dossier.taxpayer_id,
@@ -226,6 +228,65 @@ def my_risk_list(
             "temporary_count": sum(1 for item in all_items if item["is_temporary"]),
         },
     )
+
+
+@router.get("/todos", response_model=TodoResponse)
+def workbench_todos(
+    limit: int = Query(10, le=20),
+    due_days: int = Query(7, ge=1, le=30),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    now = datetime.utcnow()
+    today_start = datetime(now.year, now.month, now.day)
+    due_cutoff = now + timedelta(days=due_days)
+    dossiers = db.query(RiskDossier).filter(RiskDossier.owner_id == current_user.id).all()
+    items: list[dict] = []
+    summary = {
+        "pending_today_count": 0,
+        "due_soon_count": 0,
+        "overdue_count": 0,
+        "recent_risk_count": 0,
+    }
+
+    for dossier in dossiers:
+        item = dossier_payload(dossier, db)
+        latest_at = datetime.fromisoformat(item["latest_recorded_at"]) if item["latest_recorded_at"] else None
+        deadline = datetime.fromisoformat(item["latest_rectification_deadline"]) if item["latest_rectification_deadline"] else None
+        todo_type = ""
+        todo_label = ""
+        priority = 99
+
+        if item["latest_entry_status"] == "整改中" and deadline and deadline < now:
+            todo_type = "overdue"
+            todo_label = "逾期未整改"
+            priority = 1
+            summary["overdue_count"] += 1
+        elif item["latest_entry_status"] == "整改中" and deadline and now <= deadline <= due_cutoff:
+            todo_type = "due_soon"
+            todo_label = "即将到期整改"
+            priority = 2
+            summary["due_soon_count"] += 1
+        elif item["latest_entry_status"] == "待核实" and latest_at and latest_at >= today_start:
+            todo_type = "pending_today"
+            todo_label = "今日待核实风险"
+            priority = 3
+            summary["pending_today_count"] += 1
+        elif latest_at and latest_at >= now - timedelta(days=7):
+            todo_type = "recent_risk"
+            todo_label = "最近新增疑点"
+            priority = 4
+            summary["recent_risk_count"] += 1
+
+        if todo_type:
+            item["todo_type"] = todo_type
+            item["todo_label"] = todo_label
+            item["_priority"] = priority
+            items.append(item)
+
+    items.sort(key=lambda item: (item["_priority"], item.get("latest_rectification_deadline") or "", item.get("latest_recorded_at") or ""), reverse=False)
+    cleaned = [{key: value for key, value in item.items() if key != "_priority"} for item in items[:limit]]
+    return TodoResponse(items=cleaned, summary=summary)
 
 
 @router.get("/my-risk-list/export")

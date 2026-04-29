@@ -14,6 +14,7 @@ test('login and open key platform pages', async ({ page }) => {
   await expect(page).toHaveURL(/\/$/)
   await expect(page.getByText('税源管理员今日工作台').first()).toBeVisible()
   await expect(page.getByText('常用工作').first()).toBeVisible()
+  await expect(page.getByText('今日应处理').first()).toBeVisible()
   await expect(page.getByPlaceholder('输入纳税人识别号，直接查一户')).toBeVisible()
   // Homepage shows role info
   await expect(page.getByText('当前账号').first()).toBeVisible()
@@ -45,17 +46,23 @@ test('login and open key platform pages', async ({ page }) => {
   // After creating task, step 2 appears
   await expect(page.getByText('第2步：上传分析资料')).toBeVisible()
   await page.locator('input[type="file"]').setInputFiles({
-    name: `smoke-analysis-${suffix}.txt`,
-    mimeType: 'text/plain',
-    buffer: Buffer.from(`smoke analysis payload ${suffix}`, 'utf-8'),
+    name: `purchase_invoices-${suffix}.csv`,
+    mimeType: 'text/csv',
+    buffer: Buffer.from(`期间,企业名称,纳税人识别号,金额,供应商名称,商品名称\n2026-03,冒烟企业,91310000SMOKE${suffix},120000,供应商A,材料\n`, 'utf-8'),
   })
-  await expect(page.getByText(`smoke-analysis-${suffix}.txt`).first()).toBeVisible()
+  await expect(page.getByText(`purchase_invoices-${suffix}.csv`).first()).toBeVisible()
   await page.getByRole('button', { name: '发起分析（第4步）' }).click()
 
   await expect(page).toHaveURL(/\/modules\/analysis-workbench\/history$/)
   await expect(page.getByRole('button', { name: analysisName }).first()).toBeVisible()
   await page.getByRole('button', { name: analysisName }).first().click()
   await expect(page.getByText('分析结果')).toBeVisible()
+  await expect(page.getByText('规则命中明细').first()).toBeVisible()
+  const resultTaskId = page.url().split('/').pop()
+  await page.goto(`/modules/analysis-workbench/reports/${resultTaskId}`)
+  await expect(page.getByText('文书信息确认')).toBeVisible()
+  await page.getByLabel('税务机关名称').fill('国家税务总局冒烟税务局')
+  await page.getByLabel('文号').fill('冒烟税通〔2026〕001号')
 
   await page.goto('/modules/dashboard-workbench')
   // Dashboard shows module cards
@@ -84,7 +91,7 @@ test('login and open key platform pages', async ({ page }) => {
 
   await page.goto('/my-risk-list')
   await expect(page.getByText('我的管户风险清单')).toBeVisible()
-  await expect(page.getByText('风险清单', { exact: true })).toBeVisible()
+  await expect(page.getByRole('main').getByText('风险清单', { exact: true })).toBeVisible()
 
   await page.goto('/modules/info-query')
   await expect(page.getByText('信息查询表').first()).toBeVisible()
@@ -102,5 +109,5 @@ test('login and open key platform pages', async ({ page }) => {
 
   await page.goto('/help')
   await expect(page.getByRole('heading', { name: '帮助中心' })).toBeVisible()
-  await expect(page.getByText('平台模块概览')).toBeVisible()
+  await expect(page.getByText('税务工作路径').first()).toBeVisible()
 })

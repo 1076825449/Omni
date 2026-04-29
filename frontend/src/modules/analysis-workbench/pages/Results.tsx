@@ -27,7 +27,7 @@ const reviewStatusMap: Record<string, { label: string; color: string }> = {
   false_positive: { label: '误报', color: 'default' },
   rectified: { label: '已整改', color: 'green' },
   transferred: { label: '已移交', color: 'purple' },
-  not_synced: { label: '未同步对象', color: 'default' },
+  not_synced: { label: '未形成风险事项', color: 'default' },
 }
 
 export default function Results() {
@@ -132,7 +132,7 @@ export default function Results() {
             <Descriptions.Item label="纳税人识别号">{task.taxpayer_id || '未识别'}</Descriptions.Item>
             <Descriptions.Item label="文件数">{task.file_count}</Descriptions.Item>
             <Descriptions.Item label="日志数">{task.log_count}</Descriptions.Item>
-            <Descriptions.Item label="关联对象">{task.related_record_count}</Descriptions.Item>
+            <Descriptions.Item label="形成风险事项">{task.related_record_count}</Descriptions.Item>
             <Descriptions.Item label="识别风险">{task.risk_count}</Descriptions.Item>
             <Descriptions.Item label="分析期间">{task.periods.length ? task.periods.join(' / ') : '未识别'}</Descriptions.Item>
             {task.taxpayer_id && (
@@ -288,6 +288,36 @@ export default function Results() {
                       ) : null}
                     >
                       <Paragraph>{risk.issue}</Paragraph>
+                      <Alert
+                        type="info"
+                        showIcon
+                        style={{ marginBottom: 12 }}
+                        message="规则命中明细"
+                        description={
+                          <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                            <Text>风险类型：{risk.risk_type}</Text>
+                            <Text>规则名称：{risk.rule_name || '规则待补充'}</Text>
+                            <Text>为什么发现：{risk.trigger_reason || risk.issue}</Text>
+                            <Text>计算过程：{risk.calculation_text || '未生成计算说明'}</Text>
+                            <Text>判断阈值：{risk.threshold_text || risk.judgment_rule}</Text>
+                            <Text>建议核实资料：{risk.required_materials.join('、') || '—'}</Text>
+                            <div>
+                              <Text>涉及数据：</Text>
+                              <List
+                                size="small"
+                                dataSource={risk.source_data_refs || []}
+                                locale={{ emptyText: '暂无明确数据引用' }}
+                                renderItem={(ref) => (
+                                  <List.Item>
+                                    {ref.dataset_label || ref.dataset_kind}（{ref.period || '期间待核实'}）：
+                                    {ref.field_label || ref.field_name} = {String(ref.value)}
+                                  </List.Item>
+                                )}
+                              />
+                            </div>
+                          </Space>
+                        }
+                      />
                       <Text strong>为什么发现这个问题</Text>
                       <List
                         size="small"

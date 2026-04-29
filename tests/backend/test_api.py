@@ -474,6 +474,9 @@ def test_risk_ledger_single_batch_import_filters_detail_and_backup(auth_client):
             "recorded_at": "2026-04-01T09:00:00",
             "content": "触发有进无销风险",
             "entry_status": "待核实",
+            "rectification_deadline": "2026-04-10T18:00:00",
+            "contact_person": "张台账",
+            "contact_phone": "123456",
         },
     )
     assert single_resp.status_code == 200
@@ -510,9 +513,9 @@ def test_risk_ledger_single_batch_import_filters_detail_and_backup(auth_client):
     assert batch["failures"][0]["taxpayer_id"] == "NO-NAME-RISK"
 
     import_csv = (
-        "纳税人识别号,纳税人名称,记录时间,记录内容,事项状态,备注\n"
-        "91310000RISK0001,台账企业A,2026-04-04,问题已整改,已整改,复核通过\n"
-        "TEMP-RISK-CSV,表格临时企业,2026-04-05,表格导入风险,待核实,待联系\n"
+        "纳税人识别号,纳税人名称,记录时间,记录内容,事项状态,整改期限,联系人,联系电话,备注\n"
+        "91310000RISK0001,台账企业A,2026-04-04,问题已整改,已整改,2026-04-12,张台账,123456,复核通过\n"
+        "TEMP-RISK-CSV,表格临时企业,2026-04-05,表格导入风险,待核实,,,,待联系\n"
     )
     import_resp = auth_client.post(
         "/api/modules/risk-ledger/entries/import",
@@ -543,6 +546,8 @@ def test_risk_ledger_single_batch_import_filters_detail_and_backup(auth_client):
     assert dossier["registration_status"] == "正常"
     assert dossier["tax_officer"] == "张台账"
     assert dossier["latest_entry_status"] == "已整改"
+    assert dossier["latest_rectification_deadline"].startswith("2026-04-12")
+    assert dossier["latest_contact_person"] == "张台账"
     assert dossier["entry_count"] == 3
 
     filtered_resp = auth_client.get("/api/modules/risk-ledger/dossiers?entry_status=整改中")
@@ -553,6 +558,7 @@ def test_risk_ledger_single_batch_import_filters_detail_and_backup(auth_client):
     assert detail_resp.status_code == 200
     detail = detail_resp.json()
     assert detail["dossier"]["address"] == "一号路1号"
+    assert detail["entries"][0]["contact_phone"] == "123456"
     assert [entry["content"] for entry in detail["entries"]][:2] == ["问题已整改", "批量触发申报异常"]
 
     stats_resp = auth_client.get("/api/modules/risk-ledger/stats")
@@ -561,6 +567,41 @@ def test_risk_ledger_single_batch_import_filters_detail_and_backup(auth_client):
     assert stats["dossier_total"] >= 4
     assert stats["entry_total"] >= 6
     assert stats["temporary_count"] >= 2
+
+    taxpayer_workbench_resp = auth_client.get("/api/workbench/taxpayer/91310000RISK0001")
+    assert taxpayer_workbench_resp.status_code == 200
+    taxpayer_workbench = taxpayer_workbench_resp.json()
+    assert taxpayer_workbench["taxpayer"]["company_name"] == "台账企业A"
+    assert taxpayer_workbench["dossier"]["latest_entry_status"] == "已整改"
+    assert len(taxpayer_workbench["entries"]) == 3
+
+    my_risk_list_resp = auth_client.get("/api/workbench/my-risk-list?entry_status=整改中")
+    assert my_risk_list_resp.status_code == 200
+    my_risk_list = my_risk_list_resp.json()
+    assert any(item["taxpayer_id"] == "TEMP-RISK-001" for item in my_risk_list["items"])
+    assert my_risk_list["summary"]["rectifying_count"] >= 1
+
+    status_resp = auth_client.post(
+        "/api/modules/risk-ledger/entries/batch-status",
+        json={
+            "taxpayer_ids": ["91310000RISK0001", "91310000RISK0002"],
+            "entry_status": "整改中",
+            "content": "管户风险清单批量标记为整改中",
+            "rectification_deadline": "2026-04-20T18:00:00",
+            "contact_person": "张台账",
+            "contact_phone": "123456",
+        },
+    )
+    assert status_resp.status_code == 200
+    assert status_resp.json()["created"] == 2
+
+    export_resp = auth_client.get("/api/workbench/my-risk-list/export?entry_status=整改中")
+    assert export_resp.status_code == 200
+    assert "text/csv" in export_resp.headers["content-type"]
+    assert "纳税人识别号" in export_resp.text
+    assert "91310000RISK0001" in export_resp.text
+    assert "整改期限" in export_resp.text
+    assert "张台账" in export_resp.text
 
     backup_resp = auth_client.get("/api/platform/backup/export")
     assert backup_resp.status_code == 200
@@ -941,6 +982,15 @@ def test_analysis_task_run_and_report_export_with_auth(auth_client):
     updated_review = next(item for item in detail_after_review["risks"] if item["review_record_id"] == reviewable["review_record_id"])
     assert updated_review["review_status"] == "confirmed"
 
+    ledger_resp = auth_client.post(f"/api/modules/analysis-workbench/risks/{reviewable['review_record_id']}/ledger")
+    assert ledger_resp.status_code == 200
+    assert ledger_resp.json()["success"] is True
+    taxpayer_workbench_resp = auth_client.get("/api/workbench/taxpayer/91310000123456789X")
+    assert taxpayer_workbench_resp.status_code == 200
+    taxpayer_workbench = taxpayer_workbench_resp.json()
+    assert taxpayer_workbench["latest_risk"]["entry_status"] == "待核实"
+    assert taxpayer_workbench["recent_analysis_tasks"][0]["task_id"] == task_id
+
     report_resp = auth_client.get(f"/api/modules/analysis-workbench/tasks/{task_id}/report?format=json")
     assert report_resp.status_code == 200
     assert report_resp.headers["content-type"].startswith("application/json")
@@ -958,6 +1008,21 @@ def test_analysis_task_run_and_report_export_with_auth(auth_client):
     assert notice_resp.status_code == 200
     assert "税务事项通知书" in notice_resp.text
     assert "整改期限" in notice_resp.text
+
+    report_docx_resp = auth_client.get(f"/api/modules/analysis-workbench/tasks/{task_id}/report?format=docx&doc_type=analysis")
+    assert report_docx_resp.status_code == 200
+    assert report_docx_resp.headers["content-type"].startswith("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    with zipfile.ZipFile(io.BytesIO(report_docx_resp.content)) as docx_zip:
+        document_xml = docx_zip.read("word/document.xml").decode("utf-8")
+    assert "税务疑点核实报告" in document_xml
+    assert "应要求企业提供资料" in document_xml
+
+    notice_docx_resp = auth_client.get(f"/api/modules/analysis-workbench/tasks/{task_id}/report?format=docx&doc_type=notice")
+    assert notice_docx_resp.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(notice_docx_resp.content)) as docx_zip:
+        notice_xml = docx_zip.read("word/document.xml").decode("utf-8")
+    assert "税务事项通知书" in notice_xml
+    assert "整改要求" in notice_xml
 
 
 def test_analysis_task_rerun_clones_files_with_auth(auth_client):

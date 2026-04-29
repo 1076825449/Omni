@@ -4,6 +4,7 @@ Omni 统一平台 - 后端入口
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+from sqlalchemy import text
 
 from app.core.database import engine, Base, SessionLocal
 from app.routers import auth, modules, tasks, files, logs
@@ -12,6 +13,7 @@ from app.routers.roles import router as roles_router
 from app.routers.notifications import router as notifications_router
 from app.routers.search import router as search_router
 from app.routers.stats import router as stats_router
+from app.routers.workbench import router as workbench_router
 from app.routers.cross_links import router as cross_links_router
 from app.routers.v1 import v1 as api_v1_router
 from app.modules.analysis_router import router as analysis_router
@@ -54,9 +56,29 @@ def seed_roles():
         db.close()
 
 
+def ensure_lightweight_migrations():
+    if engine.dialect.name == "sqlite":
+        with engine.begin() as conn:
+            columns = {row[1] for row in conn.execute(text("PRAGMA table_info(risk_ledger_entries)")).fetchall()}
+            migrations = {
+                "rectification_deadline": "ALTER TABLE risk_ledger_entries ADD COLUMN rectification_deadline DATETIME",
+                "contact_person": "ALTER TABLE risk_ledger_entries ADD COLUMN contact_person VARCHAR(100) DEFAULT ''",
+                "contact_phone": "ALTER TABLE risk_ledger_entries ADD COLUMN contact_phone VARCHAR(100) DEFAULT ''",
+            }
+            for column, sql in migrations.items():
+                if column not in columns:
+                    conn.execute(text(sql))
+    elif engine.dialect.name == "postgresql":
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE risk_ledger_entries ADD COLUMN IF NOT EXISTS rectification_deadline TIMESTAMP"))
+            conn.execute(text("ALTER TABLE risk_ledger_entries ADD COLUMN IF NOT EXISTS contact_person VARCHAR(100) DEFAULT ''"))
+            conn.execute(text("ALTER TABLE risk_ledger_entries ADD COLUMN IF NOT EXISTS contact_phone VARCHAR(100) DEFAULT ''"))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    ensure_lightweight_migrations()
     seed_roles()
     # 加载插件
     from app.plugins import get_plugin_manager
@@ -108,6 +130,7 @@ app.include_router(analysis_router)
 app.include_router(records_router)
 app.include_router(learning_lab_router)
 app.include_router(stats_router)
+app.include_router(workbench_router)
 app.include_router(cross_links_router)
 app.include_router(webhooks_router)
 app.include_router(dashboard_router)

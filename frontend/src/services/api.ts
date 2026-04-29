@@ -301,7 +301,7 @@ export const analysisApi = {
       '/api/modules/analysis-workbench/tasks/' + taskId + '/risks/' + recordId + '/review',
       { method: 'POST', body: JSON.stringify({ status, note }) },
     ),
-  reportUrl: (taskId: string, format: 'json' | 'txt', docType: 'analysis' | 'notice' = 'analysis') =>
+  reportUrl: (taskId: string, format: 'json' | 'txt' | 'docx', docType: 'analysis' | 'notice' = 'analysis') =>
     `${API_BASE}/api/modules/analysis-workbench/tasks/${taskId}/report?format=${format}&doc_type=${docType}`,
   reportText: (taskId: string, docType: 'analysis' | 'notice' = 'analysis') =>
     requestText(`/api/modules/analysis-workbench/tasks/${taskId}/report?format=txt&doc_type=${docType}`),
@@ -508,9 +508,13 @@ export interface RiskDossier {
   created_at: string
   updated_at: string
   latest_recorded_at: string | null
+  latest_rectification_deadline?: string | null
   latest_content: string
   latest_entry_status: string
+  latest_contact_person?: string
+  latest_contact_phone?: string
   entry_count: number
+  is_overdue?: boolean
 }
 
 export interface RiskLedgerEntry {
@@ -521,6 +525,9 @@ export interface RiskLedgerEntry {
   recorded_at: string
   content: string
   entry_status: string
+  rectification_deadline?: string | null
+  contact_person?: string
+  contact_phone?: string
   note: string
   owner_id: number
   created_by: number
@@ -565,14 +572,19 @@ export const riskLedgerApi = {
     recorded_at: string
     content: string
     entry_status: string
+    rectification_deadline?: string
+    contact_person?: string
+    contact_phone?: string
     company_name?: string
     registration_status?: string
     tax_officer?: string
     address?: string
     note?: string
   }) => request<RiskLedgerEntry>('/api/modules/risk-ledger/entries', { method: 'POST', body: JSON.stringify(data) }),
-  batchText: (data: { taxpayer_ids: string[]; recorded_at: string; content: string; entry_status: string; note?: string }) =>
+  batchText: (data: { taxpayer_ids: string[]; recorded_at: string; content: string; entry_status: string; rectification_deadline?: string; contact_person?: string; contact_phone?: string; note?: string }) =>
     request<RiskLedgerBatchResult>('/api/modules/risk-ledger/entries/batch-text', { method: 'POST', body: JSON.stringify(data) }),
+  batchStatus: (data: { taxpayer_ids: string[]; entry_status: string; recorded_at?: string; content?: string; note?: string }) =>
+    request<RiskLedgerBatchResult>('/api/modules/risk-ledger/entries/batch-status', { method: 'POST', body: JSON.stringify(data) }),
   importFile: (file: File) => {
     const form = new FormData()
     form.append('file', file)
@@ -583,6 +595,58 @@ export const riskLedgerApi = {
     }).then(r => r.json() as Promise<RiskLedgerBatchResult>)
   },
   stats: () => request<RiskLedgerStats>('/api/modules/risk-ledger/stats'),
+}
+
+export interface TaxpayerWorkbenchData {
+  taxpayer: {
+    taxpayer_id: string
+    company_name: string
+    registration_status: string
+    tax_officer: string
+    address: string
+    industry: string
+    tax_bureau: string
+    manager_department: string
+  }
+  dossier: RiskDossier | null
+  entries: RiskLedgerEntry[]
+  recent_analysis_tasks: Array<{ task_id: string; name: string; status: string; risk_count: number; summary: string; created_at: string | null; completed_at: string | null }>
+  latest_risk: RiskLedgerEntry | null
+  material_gap_list: string[]
+}
+
+export interface MyRiskListData {
+  items: RiskDossier[]
+  total: number
+  summary: Record<string, number>
+}
+
+export const taxOfficerWorkbenchApi = {
+  taxpayer: (taxpayerId: string) => request<TaxpayerWorkbenchData>('/api/workbench/taxpayer/' + encodeURIComponent(taxpayerId)),
+  myRiskList: (params?: { q?: string; tax_officer?: string; registration_status?: string; entry_status?: string; overdue?: boolean; temporary?: boolean; limit?: number; offset?: number }) => {
+    const sp = new URLSearchParams()
+    if (params?.q) sp.set('q', params.q)
+    if (params?.tax_officer) sp.set('tax_officer', params.tax_officer)
+    if (params?.registration_status) sp.set('registration_status', params.registration_status)
+    if (params?.entry_status) sp.set('entry_status', params.entry_status)
+    if (params?.overdue !== undefined) sp.set('overdue', String(params.overdue))
+    if (params?.temporary !== undefined) sp.set('temporary', String(params.temporary))
+    if (params?.limit) sp.set('limit', String(params.limit))
+    if (params?.offset) sp.set('offset', String(params.offset))
+    return request<MyRiskListData>('/api/workbench/my-risk-list?' + sp)
+  },
+  myRiskListExportUrl: (params?: { q?: string; tax_officer?: string; registration_status?: string; entry_status?: string; overdue?: boolean; temporary?: boolean }) => {
+    const sp = new URLSearchParams()
+    if (params?.q) sp.set('q', params.q)
+    if (params?.tax_officer) sp.set('tax_officer', params.tax_officer)
+    if (params?.registration_status) sp.set('registration_status', params.registration_status)
+    if (params?.entry_status) sp.set('entry_status', params.entry_status)
+    if (params?.overdue !== undefined) sp.set('overdue', String(params.overdue))
+    if (params?.temporary !== undefined) sp.set('temporary', String(params.temporary))
+    return API_BASE + '/api/workbench/my-risk-list/export?' + sp
+  },
+  syncRiskToLedger: (riskId: string) =>
+    request<{ success: boolean; message: string; entry_id: string }>('/api/modules/analysis-workbench/risks/' + riskId + '/ledger', { method: 'POST' }),
 }
 
 export interface TrainingSet {

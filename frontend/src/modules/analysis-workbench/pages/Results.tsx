@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { Card, Tag, Button, Space, Typography, Skeleton, Result, Descriptions, List, Alert, Divider, Modal, Segmented, Select } from 'antd'
 import { useParams, useNavigate } from 'react-router-dom'
-import { analysisApi, AnalysisTaskDetail } from '../../../services/api'
+import { analysisApi, AnalysisTaskDetail, taxOfficerWorkbenchApi } from '../../../services/api'
 import { useAppMessage } from '../../../hooks/useAppMessage'
 
 const { Title, Text, Paragraph } = Typography
@@ -104,6 +104,19 @@ export default function Results() {
     }
   }
 
+  const handleLedgerSync = async (recordId: string | null | undefined) => {
+    if (!recordId) {
+      message.error('该风险尚未形成可记录事项')
+      return
+    }
+    try {
+      const result = await taxOfficerWorkbenchApi.syncRiskToLedger(recordId)
+      message.success(result.message)
+    } catch {
+      message.error('记入风险台账失败')
+    }
+  }
+
   return (
     <div>
       <Card title="分析结果" style={{ marginBottom: 16 }}>
@@ -114,7 +127,7 @@ export default function Results() {
           </Space>
 
           <Descriptions size="small" column={2}>
-            <Descriptions.Item label="任务ID">{task.task_id}</Descriptions.Item>
+            <Descriptions.Item label="分析编号">{task.task_id}</Descriptions.Item>
             <Descriptions.Item label="企业名称">{task.company_name || '未识别'}</Descriptions.Item>
             <Descriptions.Item label="纳税人识别号">{task.taxpayer_id || '未识别'}</Descriptions.Item>
             <Descriptions.Item label="文件数">{task.file_count}</Descriptions.Item>
@@ -122,6 +135,13 @@ export default function Results() {
             <Descriptions.Item label="关联对象">{task.related_record_count}</Descriptions.Item>
             <Descriptions.Item label="识别风险">{task.risk_count}</Descriptions.Item>
             <Descriptions.Item label="分析期间">{task.periods.length ? task.periods.join(' / ') : '未识别'}</Descriptions.Item>
+            {task.taxpayer_id && (
+              <Descriptions.Item label="一户式工作台">
+                <Button type="link" style={{ padding: 0 }} onClick={() => navigate(`/taxpayer-workbench?taxpayer_id=${task.taxpayer_id}`)}>
+                  查看该户全部风险和整改记录
+                </Button>
+              </Descriptions.Item>
+            )}
             <Descriptions.Item label="创建时间">{new Date(task.created_at).toLocaleString('zh-CN')}</Descriptions.Item>
             {task.completed_at && (
               <Descriptions.Item label="完成时间">{new Date(task.completed_at).toLocaleString('zh-CN')}</Descriptions.Item>
@@ -149,13 +169,13 @@ export default function Results() {
                   type="primary"
                   onClick={() => navigate(`/modules/analysis-workbench/reports/${task?.task_id}`)}
                 >
-                  导出报告
+                  导出分析报告
                 </Button>
                 <Button onClick={() => handlePreviewDoc('analysis')}>
                   预览分析报告
                 </Button>
                 <Button onClick={() => handlePreviewDoc('notice')}>
-                  预览通知书
+                  预览税务事项通知书
                 </Button>
                 <Button onClick={handleRerun}>
                   以当前文件重跑
@@ -207,15 +227,15 @@ export default function Results() {
           )}
           <Descriptions size="small" column={2}>
             <Descriptions.Item label="已处理文件">{task.file_count}</Descriptions.Item>
-            <Descriptions.Item label="生成对象">{task.related_record_count}</Descriptions.Item>
+            <Descriptions.Item label="形成风险事项">{task.related_record_count}</Descriptions.Item>
             <Descriptions.Item label="结果页">
               <Button type="link" style={{ padding: 0 }} onClick={() => navigate('/tasks')}>
-                查看平台任务中心
+                查看工作任务
               </Button>
             </Descriptions.Item>
             <Descriptions.Item label="操作日志">
               <Button type="link" style={{ padding: 0 }} onClick={() => navigate('/logs')}>
-                查看平台日志中心
+                查看操作记录
               </Button>
             </Descriptions.Item>
           </Descriptions>
@@ -268,7 +288,7 @@ export default function Results() {
                       ) : null}
                     >
                       <Paragraph>{risk.issue}</Paragraph>
-                      <Text strong>证据要点</Text>
+                      <Text strong>为什么发现这个问题</Text>
                       <List
                         size="small"
                         dataSource={risk.evidence}
@@ -283,6 +303,17 @@ export default function Results() {
                       <Paragraph>{risk.required_materials.join('、') || '—'}</Paragraph>
                       <Text strong>判断标准</Text>
                       <Paragraph>{risk.judgment_rule}</Paragraph>
+                      <Space wrap>
+                        <Button type="primary" size="small" onClick={() => handleLedgerSync(risk.review_record_id)}>
+                          记入风险台账
+                        </Button>
+                        <Button size="small" onClick={() => handlePreviewDoc('notice')}>
+                          生成税务事项通知书
+                        </Button>
+                        <Button size="small" onClick={() => handleReviewChange(risk.review_record_id, 'false_positive')}>
+                          标记无需处理
+                        </Button>
+                      </Space>
                     </Card>
                   </List.Item>
                 )
@@ -319,18 +350,18 @@ export default function Results() {
 
       {task.status === 'succeeded' && task.related_record_count > 0 && (
         <Card
-          title="相关对象（联动至对象管理）"
+          title="已形成的风险事项"
           style={{ marginTop: 16 }}
           extra={
-            <Button size="small" onClick={() => navigate(`/modules/record-operations?batch=analysis-${task.task_id}`)}>
+            <Button size="small" onClick={() => navigate('/my-risk-list')}>
               查看全部 {task.related_record_count} 条
             </Button>
           }
         >
-          <Text>分析完成自动同步了 <strong>{task.related_record_count}</strong> 条结果对象至对象管理模块。</Text>
+          <Text>分析完成后已形成 <strong>{task.related_record_count}</strong> 条风险事项，可继续记入风险台账并跟踪整改。</Text>
           <br />
-          <Button type="link" onClick={() => navigate(`/modules/record-operations?batch=analysis-${task.task_id}`)}>
-            → 跳转至对象管理查看
+          <Button type="link" onClick={() => navigate('/my-risk-list')}>
+            → 查看管户风险清单
           </Button>
         </Card>
       )}

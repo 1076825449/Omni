@@ -6,6 +6,7 @@ import {
 import type { ColumnsType } from 'antd/es/table'
 import { UploadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
+import { useSearchParams } from 'react-router-dom'
 import PlatformLayout from '../../components/Layout'
 import ModuleLayout from '../../components/Layout/ModuleLayout'
 import { RiskDossier, riskLedgerApi } from '../../services/api'
@@ -23,6 +24,8 @@ const statusColor: Record<string, string> = {
 export default function RiskLedgerModule() {
   const [form] = Form.useForm()
   const [batchForm] = Form.useForm()
+  const [searchParams] = useSearchParams()
+  const [activeTab, setActiveTab] = useState('single')
   const [rows, setRows] = useState<RiskDossier[]>([])
   const [total, setTotal] = useState(0)
   const [stats, setStats] = useState<any>(null)
@@ -52,6 +55,15 @@ export default function RiskLedgerModule() {
 
   useEffect(() => { load('') }, [entryStatus])
 
+  useEffect(() => {
+    const taxpayerId = searchParams.get('taxpayer_id')
+    if (!taxpayerId) return
+    setActiveTab('single')
+    form.setFieldsValue({ taxpayer_id: taxpayerId, recorded_at: dayjs(), entry_status: '待核实' })
+    setQuery(taxpayerId)
+    load(taxpayerId)
+  }, [searchParams])
+
   const showDetail = async (taxpayerId: string) => {
     try {
       setDetail(await riskLedgerApi.get(taxpayerId))
@@ -66,6 +78,7 @@ export default function RiskLedgerModule() {
       await riskLedgerApi.createEntry({
         ...values,
         recorded_at: values.recorded_at.format('YYYY-MM-DD HH:mm:ss'),
+        rectification_deadline: values.rectification_deadline?.format('YYYY-MM-DD HH:mm:ss'),
       })
       void message.success('记录已保存')
       form.resetFields()
@@ -84,8 +97,11 @@ export default function RiskLedgerModule() {
       const result = await riskLedgerApi.batchText({
         taxpayer_ids: taxpayerIds,
         recorded_at: values.recorded_at.format('YYYY-MM-DD HH:mm:ss'),
+        rectification_deadline: values.rectification_deadline?.format('YYYY-MM-DD HH:mm:ss'),
         content: values.content,
         entry_status: values.entry_status,
+        contact_person: values.contact_person,
+        contact_phone: values.contact_phone,
         note: values.note,
       })
       setFailures(result.failures)
@@ -127,6 +143,7 @@ export default function RiskLedgerModule() {
       render: v => v ? <Tag color={statusColor[v]}>{v}</Tag> : <Text type="secondary">—</Text>,
     },
     { title: '记录时间', dataIndex: 'latest_recorded_at', key: 'latest_recorded_at', width: 160, render: v => v ? dayjs(v).format('YYYY-MM-DD HH:mm') : <Text type="secondary">—</Text> },
+    { title: '整改期限', dataIndex: 'latest_rectification_deadline', key: 'latest_rectification_deadline', width: 120, render: (v, record) => v ? <Tag color={record.is_overdue ? 'red' : 'blue'}>{dayjs(v).format('YYYY-MM-DD')}</Tag> : <Text type="secondary">—</Text> },
     { title: '记录内容', dataIndex: 'latest_content', key: 'latest_content', ellipsis: true, render: v => v || <Text type="secondary">—</Text> },
     { title: '次数', dataIndex: 'entry_count', key: 'entry_count', width: 70 },
   ]
@@ -148,6 +165,8 @@ export default function RiskLedgerModule() {
         </Row>
 
         <Tabs
+          activeKey={activeTab}
+          onChange={setActiveTab}
           items={[
             {
               key: 'single',
@@ -160,6 +179,9 @@ export default function RiskLedgerModule() {
                       <Col xs={24} md={8}><Form.Item label="纳税人名称（未命中时必填）" name="company_name"><Input /></Form.Item></Col>
                       <Col xs={24} md={8}><Form.Item label="记录时间" name="recorded_at" rules={[{ required: true }]}><DatePicker showTime style={{ width: '100%' }} /></Form.Item></Col>
                       <Col xs={24} md={8}><Form.Item label="事项状态" name="entry_status" rules={[{ required: true }]}><Select options={statuses.map(s => ({ value: s, label: s }))} /></Form.Item></Col>
+                      <Col xs={24} md={8}><Form.Item label="整改期限" name="rectification_deadline"><DatePicker showTime style={{ width: '100%' }} /></Form.Item></Col>
+                      <Col xs={24} md={8}><Form.Item label="联系人" name="contact_person"><Input /></Form.Item></Col>
+                      <Col xs={24} md={8}><Form.Item label="联系电话" name="contact_phone"><Input /></Form.Item></Col>
                       <Col xs={24} md={8}><Form.Item label="登记状态" name="registration_status"><Input /></Form.Item></Col>
                       <Col xs={24} md={8}><Form.Item label="管理员" name="tax_officer"><Input /></Form.Item></Col>
                       <Col span={24}><Form.Item label="地址" name="address"><Input /></Form.Item></Col>
@@ -182,6 +204,9 @@ export default function RiskLedgerModule() {
                         <Form.Item label="纳税人识别号（换行、逗号或空格分隔）" name="taxpayer_ids" rules={[{ required: true }]}><Input.TextArea rows={5} /></Form.Item>
                         <Form.Item label="记录时间" name="recorded_at" rules={[{ required: true }]}><DatePicker showTime style={{ width: '100%' }} /></Form.Item>
                         <Form.Item label="事项状态" name="entry_status" rules={[{ required: true }]}><Select options={statuses.map(s => ({ value: s, label: s }))} /></Form.Item>
+                        <Form.Item label="整改期限" name="rectification_deadline"><DatePicker showTime style={{ width: '100%' }} /></Form.Item>
+                        <Form.Item label="联系人" name="contact_person"><Input /></Form.Item>
+                        <Form.Item label="联系电话" name="contact_phone"><Input /></Form.Item>
                         <Form.Item label="统一记录内容" name="content" rules={[{ required: true }]}><Input.TextArea rows={3} /></Form.Item>
                         <Form.Item label="备注" name="note"><Input.TextArea rows={2} /></Form.Item>
                         <Button type="primary" htmlType="submit">批量保存</Button>
@@ -191,7 +216,7 @@ export default function RiskLedgerModule() {
                   <Col xs={24} lg={12}>
                     <Card title="上传表格逐行记录">
                       <Paragraph type="secondary">
-                        支持 CSV、XLS、XLSX。必填表头：纳税人识别号、记录时间、记录内容；可选：纳税人名称、状态、管理员、地址、事项状态、备注。
+                        支持 CSV、XLS、XLSX。必填表头：纳税人识别号、记录时间、记录内容；可选：纳税人名称、状态、管理员、地址、事项状态、整改期限、联系人、联系电话、备注。
                       </Paragraph>
                       <Upload.Dragger accept=".csv,.xls,.xlsx" customRequest={({ file }) => handleUpload(file as File)}>
                         <p><UploadOutlined style={{ fontSize: 28 }} /></p>
@@ -247,6 +272,8 @@ export default function RiskLedgerModule() {
                     <Space direction="vertical" size={2}>
                       <Space><Text strong>{dayjs(entry.recorded_at).format('YYYY-MM-DD HH:mm')}</Text><Tag color={statusColor[entry.entry_status]}>{entry.entry_status}</Tag></Space>
                       <Text>{entry.content}</Text>
+                      {entry.rectification_deadline && <Text type={dayjs(entry.rectification_deadline).isBefore(dayjs()) && entry.entry_status === '整改中' ? 'danger' : 'secondary'}>整改期限：{dayjs(entry.rectification_deadline).format('YYYY-MM-DD HH:mm')}</Text>}
+                      {(entry.contact_person || entry.contact_phone) && <Text type="secondary">联系人：{entry.contact_person || '—'} {entry.contact_phone || ''}</Text>}
                       {entry.note && <Text type="secondary">备注：{entry.note}</Text>}
                     </Space>
                   ),

@@ -12,10 +12,9 @@ test('login and open key platform pages', async ({ page }) => {
   await page.getByRole('button', { name: /登\s*录/ }).click()
 
   await expect(page).toHaveURL(/\/$/)
-  // Homepage shows welcome message with Omni platform name
-  await expect(page.getByText('Omni 统一工作平台').first()).toBeVisible()
-  // Homepage shows quick start section
-  await expect(page.getByText('快速开始').first()).toBeVisible()
+  await expect(page.getByText('税源管理员今日工作台').first()).toBeVisible()
+  await expect(page.getByText('常用工作').first()).toBeVisible()
+  await expect(page.getByPlaceholder('输入纳税人识别号，直接查一户')).toBeVisible()
   // Homepage shows role info
   await expect(page.getByText('当前账号').first()).toBeVisible()
 
@@ -78,6 +77,14 @@ test('login and open key platform pages', async ({ page }) => {
   await expect(page.getByText('风险记录台账').first()).toBeVisible()
   await expect(page.getByRole('tab', { name: '单户记录' })).toBeVisible()
   await expect(page.getByRole('tab', { name: '批量记录' })).toBeVisible()
+
+  await page.goto('/taxpayer-workbench')
+  await expect(page.getByText('一户式纳税人工作台')).toBeVisible()
+  await expect(page.getByPlaceholder('输入纳税人识别号')).toBeVisible()
+
+  await page.goto('/my-risk-list')
+  await expect(page.getByText('我的管户风险清单')).toBeVisible()
+  await expect(page.getByText('风险清单', { exact: true })).toBeVisible()
 
   await page.goto('/modules/info-query')
   await expect(page.getByText('信息查询表').first()).toBeVisible()

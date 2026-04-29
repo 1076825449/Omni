@@ -87,7 +87,7 @@ test.describe('Extended Smoke - All 7 Modules Complete Flow', () => {
     await page.getByLabel('分析名称').fill(analysisName)
     await page.getByLabel('描述').fill('扩展冒烟测试')
     await page.getByRole('button', { name: '创建任务' }).click()
-    await expect(page.getByText('当前任务 ID：')).toBeVisible()
+    await expect(page.getByText('上传分析资料（第2步）')).toBeVisible()
 
     // 上传文件
     await page.locator('input[type="file"]').setInputFiles({
@@ -98,7 +98,7 @@ test.describe('Extended Smoke - All 7 Modules Complete Flow', () => {
     await expect(page.getByText(`ext-analysis-${suffix}.txt`).first()).toBeVisible()
 
     // 发起分析
-    await page.getByRole('button', { name: '发起分析' }).click()
+    await page.getByRole('button', { name: '发起分析（第4步）' }).click()
     await page.waitForURL(/\/history$/, { timeout: 5000 })
     await expect(page.getByRole('button', { name: analysisName }).first()).toBeVisible()
 
@@ -110,11 +110,11 @@ test.describe('Extended Smoke - All 7 Modules Complete Flow', () => {
   test('schedule-workbench: create task -> verify in list', async ({ page }) => {
     const scheduleName = `Ext Smoke 调度 ${suffix}`
     await page.goto('/modules/schedule-workbench')
-    await page.getByPlaceholder('例如：每日分析同步').fill(scheduleName)
-    await page.getByPlaceholder('说明该任务的用途').fill('扩展冒烟测试')
+    await page.getByPlaceholder('例如：每日风险分析').fill(scheduleName)
+    await page.getByPlaceholder('说明该任务的用途，例如：每天自动分析前一天的申报数据').fill('扩展冒烟测试')
     await page.getByPlaceholder('例如：0 9 * * *').fill('30 10 * * *')
-    await page.getByPlaceholder('例如：analysis / backup').fill('analysis')
-    await page.getByRole('button', { name: '创建任务' }).click()
+    await page.getByPlaceholder('例如：analysis、backup、data-import').fill('analysis')
+    await page.getByRole('button', { name: '创建定时任务' }).click()
     await expect(page.getByText(scheduleName)).toBeVisible()
   })
 

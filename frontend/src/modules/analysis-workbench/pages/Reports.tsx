@@ -9,6 +9,8 @@ export default function Reports() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const reportLinks = id ? [
+    { key: 'analysis-docx', label: '下载核实报告 DOCX', href: analysisApi.reportUrl(id, 'docx', 'analysis'), primary: true },
+    { key: 'notice-docx', label: '下载通知书 DOCX', href: analysisApi.reportUrl(id, 'docx', 'notice'), primary: true },
     { key: 'analysis-json', label: '分析报告 JSON', href: analysisApi.reportUrl(id, 'json', 'analysis') },
     { key: 'analysis-txt', label: '分析报告 TXT', href: analysisApi.reportUrl(id, 'txt', 'analysis') },
     { key: 'notice-json', label: '通知书 JSON', href: analysisApi.reportUrl(id, 'json', 'notice') },
@@ -23,12 +25,12 @@ export default function Reports() {
           <Text type="secondary">导出税务事项通知书与税务分析报告</Text>
           <Space>
             {reportLinks.map((item, index) => (
-              <Button key={item.key} type={index === 0 ? 'primary' : 'default'} href={item.href}>
+              <Button key={item.key} type={item.primary || index === 0 ? 'primary' : 'default'} href={item.href}>
                 {item.label}
               </Button>
             ))}
           </Space>
-          <Text type="secondary" style={{ fontSize: 12 }}>分析报告面向税务人员，通知书面向企业；两类文书均支持结构化 JSON 与可读 TXT。</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>分析报告面向税务人员，通知书面向企业；正式流转优先下载 DOCX，JSON/TXT 用于数据核对和快速预览。</Text>
         </Space>
       </Card>
 

@@ -23,3 +23,8 @@ class UserInfo(BaseModel):
 class LogoutResponse(BaseModel):
     success: bool
     message: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str

@@ -1,7 +1,7 @@
 // 系统设置 - 含备份中心 + 角色管理
 import { Alert, Card, Tabs, Typography, Form, Input, Button, Space, List, Tag, Checkbox, Spin, Descriptions, Divider, Result } from 'antd'
 import { useState, useEffect } from 'react'
-import { backupApi, BackupRecord, platformSettingsApi, rolesApi, RoleRecord } from '../../services/api'
+import { authApi, backupApi, BackupRecord, platformSettingsApi, rolesApi, RoleRecord } from '../../services/api'
 import { useAuthStore } from '../../stores/auth'
 import { useAppMessage } from '../../hooks/useAppMessage'
 
@@ -105,6 +105,7 @@ export default function Settings() {
   const [editPerms, setEditPerms] = useState<string[]>([])
   const [roleLoading, setRoleLoading] = useState(false)
   const [documentSaving, setDocumentSaving] = useState(false)
+  const [passwordSaving, setPasswordSaving] = useState(false)
 
   const loadBackups = () => {
     setLoading(true)
@@ -175,6 +176,23 @@ export default function Settings() {
       message.error('保存文书默认信息失败')
     } finally {
       setDocumentSaving(false)
+    }
+  }
+
+  const handleChangePassword = async (values: any) => {
+    if (values.new_password !== values.confirm_password) {
+      message.error('两次输入的新密码不一致')
+      return
+    }
+    setPasswordSaving(true)
+    try {
+      await authApi.changePassword(values.current_password, values.new_password)
+      message.success('密码已修改，请重新登录')
+      await useAuthStore.getState().logout()
+    } catch {
+      message.error('密码修改失败，请确认当前密码正确且新密码至少 8 位')
+    } finally {
+      setPasswordSaving(false)
     }
   }
 
@@ -331,16 +349,23 @@ export default function Settings() {
       children: (
         <Space direction="vertical" size="middle" style={{ maxWidth: 480 }}>
           <Alert
-            type="warning"
+            type="info"
             showIcon
-            message="密码修改暂未开放"
-            description="当前版本已加强密码存储和登录审计。个人改密入口需要后端改密接口接入后再开放，避免误以为已修改成功。"
+            message="修改密码后需要重新登录"
+            description="系统会校验当前密码，修改成功后自动使现有登录状态失效，并写入操作记录。"
           />
           <Card size="small" title="修改密码">
-            <Form layout="vertical">
-              <Form.Item label="当前密码"><Input.Password disabled /></Form.Item>
-              <Form.Item label="新密码"><Input.Password disabled /></Form.Item>
-              <Form.Item><Button type="primary" disabled>暂未开放</Button></Form.Item>
+            <Form layout="vertical" onFinish={handleChangePassword}>
+              <Form.Item label="当前密码" name="current_password" rules={[{ required: true, message: '请输入当前密码' }]}>
+                <Input.Password />
+              </Form.Item>
+              <Form.Item label="新密码" name="new_password" rules={[{ required: true, min: 8, message: '新密码至少 8 位' }]}>
+                <Input.Password />
+              </Form.Item>
+              <Form.Item label="确认新密码" name="confirm_password" rules={[{ required: true, message: '请再次输入新密码' }]}>
+                <Input.Password />
+              </Form.Item>
+              <Form.Item><Button type="primary" htmlType="submit" loading={passwordSaving}>修改密码并重新登录</Button></Form.Item>
             </Form>
           </Card>
         </Space>

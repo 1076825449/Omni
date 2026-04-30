@@ -7,7 +7,7 @@ from app.core.database import get_db
 from app.core.config import SESSION_COOKIE_NAME, SESSION_EXPIRE_SECONDS, AUTH_COOKIE_SECURE
 from app.models import User, Session as SessionModel, Role
 from app.models.permission import ROLE_PERMISSIONS, ALL_PERMISSIONS
-from app.schemas.schemas import LoginRequest, LoginResponse, LogoutResponse, UserInfo
+from app.schemas.schemas import ChangePasswordRequest, LoginRequest, LoginResponse, LogoutResponse, UserInfo
 from app.services.audit import log_action
 from app.services.auth import (
     hash_password,
@@ -185,3 +185,45 @@ def get_my_permissions(current_user: User = Depends(get_current_user)):
         "role": current_user.role,
         "permissions": get_user_permissions(current_user),
     }
+
+
+@router.post("/change-password")
+def change_password(
+    body: ChangePasswordRequest,
+    request: Request,
+    db: SASession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if len(body.new_password) < 8:
+        raise HTTPException(status_code=400, detail="新密码至少需要 8 位")
+    if not verify_password(body.current_password, current_user.hashed_password):
+        log_action(
+            db,
+            action="change_password",
+            target_id=str(current_user.id),
+            operator_id=current_user.id,
+            detail="修改密码失败：当前密码不正确",
+            result="failed",
+            module="auth",
+            request=request,
+        )
+        raise HTTPException(status_code=400, detail="当前密码不正确")
+    if verify_password(body.new_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="新密码不能与当前密码相同")
+
+    current_user.hashed_password = hash_password(body.new_password)
+    db.query(SessionModel).filter(
+        SessionModel.user_id == current_user.id,
+        SessionModel.is_valid == True,
+    ).update({SessionModel.is_valid: False})
+    db.commit()
+    log_action(
+        db,
+        action="change_password",
+        target_id=str(current_user.id),
+        operator_id=current_user.id,
+        detail="用户修改密码",
+        module="auth",
+        request=request,
+    )
+    return {"success": True, "message": "密码已修改，请重新登录"}

@@ -154,6 +154,11 @@ export const authApi = {
     }),
   logout: () =>
     request<{ success: boolean; message: string }>('/api/auth/logout', { method: 'POST' }),
+  changePassword: (current_password: string, new_password: string) =>
+    request<{ success: boolean; message: string }>('/api/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ current_password, new_password }),
+    }),
   me: () => request<any>('/api/auth/me'),
 }
 

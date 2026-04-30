@@ -234,6 +234,43 @@ def test_login_logout_are_audited(auth_client):
         db.close()
 
 
+def test_change_password_rejects_wrong_current_password(auth_client):
+    resp = auth_client.post(
+        "/api/auth/change-password",
+        json={"current_password": "wrong-password", "new_password": "new-admin-123"},
+    )
+    assert resp.status_code == 400
+
+
+def test_change_password_invalidates_old_password_and_audits(seeded_db):
+    with TestClient(app) as client:
+        login_resp = client.post("/api/auth/login", json={"username": "admin", "password": "admin123"})
+        assert login_resp.status_code == 200
+        change_resp = client.post(
+            "/api/auth/change-password",
+            json={"current_password": "admin123", "new_password": "new-admin-123"},
+        )
+        assert change_resp.status_code == 200
+
+        old_login = client.post("/api/auth/login", json={"username": "admin", "password": "admin123"})
+        assert old_login.status_code == 401
+        new_login = client.post("/api/auth/login", json={"username": "admin", "password": "new-admin-123"})
+        assert new_login.status_code == 200
+
+    db = TestingSessionLocal()
+    try:
+        from app.models.record import OperationLog
+
+        log = db.query(OperationLog).filter(
+            OperationLog.module == "auth",
+            OperationLog.action == "change_password",
+            OperationLog.result == "success",
+        ).first()
+        assert log is not None
+    finally:
+        db.close()
+
+
 def test_login_wrong_password(seeded_db):
     with TestClient(app) as client:
         resp = client.post("/api/auth/login", json={"username": "admin", "password": "wrong"})

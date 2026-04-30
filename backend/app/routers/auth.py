@@ -1,14 +1,21 @@
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from functools import wraps
-from fastapi import APIRouter, Depends, HTTPException, Response, Cookie
+from fastapi import APIRouter, Depends, HTTPException, Response, Cookie, Request
 from sqlalchemy.orm import Session as SASession
 from app.core.database import get_db
-from app.core.config import SESSION_COOKIE_NAME, SESSION_EXPIRE_SECONDS
+from app.core.config import SESSION_COOKIE_NAME, SESSION_EXPIRE_SECONDS, AUTH_COOKIE_SECURE
 from app.models import User, Session as SessionModel, Role
 from app.models.permission import ROLE_PERMISSIONS, ALL_PERMISSIONS
 from app.schemas.schemas import LoginRequest, LoginResponse, LogoutResponse, UserInfo
-from app.services.auth import hash_password, verify_password, create_session_id, make_expires_at
+from app.services.audit import log_action
+from app.services.auth import (
+    hash_password,
+    verify_password,
+    password_needs_rehash,
+    create_session_id,
+    make_expires_at,
+)
 
 router = APIRouter(prefix="/api/auth", tags=["认证"])
 
@@ -80,6 +87,7 @@ def require_permission(permission: str):
 def login(
     body: LoginRequest,
     response: Response,
+    request: Request,
     db: SASession = Depends(get_db),
 ):
     """登录接口。传入用户名和密码，成功返回 session cookie。"""
@@ -88,6 +96,8 @@ def login(
         raise HTTPException(status_code=401, detail="用户名或密码错误")
     if not user.is_active:
         raise HTTPException(status_code=403, detail="账号已被禁用")
+    if password_needs_rehash(user.hashed_password):
+        user.hashed_password = hash_password(body.password)
 
     sid = create_session_id()
     session = SessionModel(
@@ -97,6 +107,15 @@ def login(
     )
     db.add(session)
     db.commit()
+    log_action(
+        db,
+        action="login",
+        target_id=str(user.id),
+        operator_id=user.id,
+        detail=f"用户登录: {user.username}",
+        module="auth",
+        request=request,
+    )
 
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
@@ -104,6 +123,7 @@ def login(
         httponly=True,
         samesite="lax",
         max_age=SESSION_EXPIRE_SECONDS,
+        secure=AUTH_COOKIE_SECURE,
     )
     return LoginResponse(
         success=True,
@@ -120,6 +140,7 @@ def login(
 @router.post("/logout", response_model=LogoutResponse)
 def logout(
     response: Response,
+    request: Request,
     session_id: Optional[str] = Cookie(None, alias=SESSION_COOKIE_NAME),
     db: SASession = Depends(get_db),
 ):
@@ -127,6 +148,15 @@ def logout(
     if session_id:
         session = db.query(SessionModel).filter(SessionModel.session_id == session_id).first()
         if session:
+            log_action(
+                db,
+                action="logout",
+                target_id=str(session.user_id),
+                operator_id=session.user_id,
+                detail="用户退出登录",
+                module="auth",
+                request=request,
+            )
             session.is_valid = False
             db.commit()
     response.delete_cookie(SESSION_COOKIE_NAME)

@@ -3,6 +3,7 @@ Omni 平台后端 API 冒烟测试
 覆盖真实 Cookie 登录态，避免鉴权回归。
 """
 import io
+import hashlib
 import time
 import pytest
 import tempfile
@@ -194,6 +195,43 @@ def test_login_success(seeded_db):
         data = resp.json()
         assert data["success"] is True
         assert data["user"]["username"] == "admin"
+
+
+def test_login_upgrades_legacy_password_hash(seeded_db):
+    legacy_user = User(
+        username="legacy",
+        hashed_password=hashlib.sha256("legacy123".encode()).hexdigest(),
+        nickname="Legacy",
+        role="admin",
+        is_active=True,
+    )
+    seeded_db.add(legacy_user)
+    seeded_db.commit()
+
+    with TestClient(app) as client:
+        resp = client.post("/api/auth/login", json={"username": "legacy", "password": "legacy123"})
+        assert resp.status_code == 200
+
+    seeded_db.refresh(legacy_user)
+    assert legacy_user.hashed_password.startswith("pbkdf2_sha256$")
+
+
+def test_login_logout_are_audited(auth_client):
+    resp = auth_client.post("/api/auth/logout")
+    assert resp.status_code == 200
+
+    db = TestingSessionLocal()
+    try:
+        from app.models.record import OperationLog
+
+        actions = [
+            log.action
+            for log in db.query(OperationLog).filter(OperationLog.module == "auth").all()
+        ]
+        assert "login" in actions
+        assert "logout" in actions
+    finally:
+        db.close()
 
 
 def test_login_wrong_password(seeded_db):

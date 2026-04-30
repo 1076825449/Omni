@@ -62,9 +62,9 @@ export default function PlatformHeader() {
       disabled: true,
     },
     { type: 'divider' },
-    { key: 'modules', label: '系统管理：全部功能' },
-    { key: 'tasks', label: '系统管理：任务记录' },
-    { key: 'files', label: '系统管理：文件记录' },
+    { key: 'modules', label: '系统管理：功能入口' },
+    { key: 'tasks', label: '系统管理：运行记录' },
+    { key: 'files', label: '系统管理：资料留存' },
     { key: 'logs', label: '系统管理：操作记录' },
     { key: 'stats', label: '系统管理：工作统计' },
     { key: 'settings', label: '系统管理：系统设置' },
@@ -101,7 +101,7 @@ export default function PlatformHeader() {
       </nav>
 
       <Input.Search
-        placeholder="搜索企业/风险/文书"
+        placeholder="搜索企业、风险、资料"
         value={searchValue}
         onChange={e => setSearchValue(e.target.value)}
         onKeyDown={handleSearch}

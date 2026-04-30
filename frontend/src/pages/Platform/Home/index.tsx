@@ -17,7 +17,7 @@ const roleLabels: Record<string, string> = {
 }
 
 const roleDescriptions: Record<string, string> = {
-  admin: '可管理用户、角色、模块注册、备份恢复和系统设置',
+  admin: '可管理用户、角色、功能入口、备份恢复和系统设置',
   user: '可使用业务功能（查户、案头分析、信息查询、风险台账、文书报告），不能管理系统配置',
   viewer: '只可查看，不能新增、编辑、删除、导入或执行任何操作',
 }
@@ -79,7 +79,7 @@ export default function Home() {
       message.success('处理状态已记录')
       await refreshTodos()
     } catch {
-      message.error('处理状态记录失败')
+      message.error('处理状态记录失败，请稍后重试或进入风险台账手工记录')
     }
   }
 
@@ -261,9 +261,9 @@ export default function Home() {
         )}
       </Card>
 
-      {/* 模块快捷入口 + 最近任务 */}
+      {/* 常用工作 + 最近记录 */}
       <Row gutter={[16, 16]}>
-        {/* 模块快捷入口 */}
+        {/* 常用工作 */}
         <Col xs={24} lg={12}>
           <Card
             title="常用工作"
@@ -306,10 +306,10 @@ export default function Home() {
           </Card>
         </Col>
 
-        {/* 最近任务 */}
+        {/* 最近记录 */}
         <Col xs={24} lg={12}>
           <Card
-            title="最近案头分析和工作记录"
+            title="最近案头分析和运行记录"
             size="small"
             extra={<Link to="/tasks"><Text type="secondary" style={{ fontSize: 12 }}>查看全部 →</Text></Link>}
           >
@@ -319,9 +319,9 @@ export default function Home() {
               <Empty
                 description={
                   <Space direction="vertical" size={4}>
-                    <Text type="secondary">还没有任务记录</Text>
+                    <Text type="secondary">还没有运行记录</Text>
                     <Text type="secondary" style={{ fontSize: 12 }}>
-                      可以从「快速开始」发起一个新任务
+                      可以先查一户企业，或导入纳税人信息后发起案头分析
                     </Text>
                   </Space>
                 }
@@ -366,7 +366,7 @@ export default function Home() {
             <Button type="link" size="small">帮助中心</Button>
           </Link>
           <Link to="/modules">
-            <Button type="link" size="small">全部功能</Button>
+            <Button type="link" size="small">系统管理：全部功能</Button>
           </Link>
         </Space>
       </Card>

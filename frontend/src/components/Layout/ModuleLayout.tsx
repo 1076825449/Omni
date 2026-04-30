@@ -42,12 +42,12 @@ export default function ModuleLayout({ moduleName, moduleDesc, items, children }
         borderBottom: '1px solid var(--omni-border-color)',
         padding: '12px 24px 0',
       }}>
-        {/* 面包屑：平台 → 模块 */}
+        {/* 面包屑：首页 → 功能 */}
         <Breadcrumb
           style={{ marginBottom: 8 }}
           items={[
-            { title: <Link to="/">平台首页</Link> },
-            { title: <Link to="/modules">模块中心</Link> },
+            { title: <Link to="/">首页</Link> },
+            { title: <Link to="/modules">系统管理：全部功能</Link> },
             { title: moduleName },
           ]}
         />

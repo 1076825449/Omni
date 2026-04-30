@@ -1,5 +1,5 @@
 // 系统设置 - 含备份中心 + 角色管理
-import { Card, Tabs, Typography, Form, Input, Button, Space, List, Tag, Checkbox, Spin, Descriptions, Divider, Result } from 'antd'
+import { Alert, Card, Tabs, Typography, Form, Input, Button, Space, List, Tag, Checkbox, Spin, Descriptions, Divider, Result } from 'antd'
 import { useState, useEffect } from 'react'
 import { backupApi, BackupRecord, platformSettingsApi, rolesApi, RoleRecord } from '../../services/api'
 import { useAuthStore } from '../../stores/auth'
@@ -22,32 +22,32 @@ function formatSize(bytes: number) {
 
 // 权限分组展示
 const PERMISSION_GROUPS: Record<string, string[]> = {
-  '分析工作模块': [
+  '案头分析': [
     'module:analysis-workbench:view',
     'module:analysis-workbench:operate',
     'module:analysis-workbench:export',
   ],
-  '对象管理模块': [
+  '辅助数据管理': [
     'module:record-operations:view',
     'module:record-operations:operate',
   ],
-  '学习训练模块': [
+  '学习训练': [
     'module:learning-lab:view',
     'module:learning-lab:operate',
   ],
-  '平台任务': [
+  '运行记录': [
     'platform:task:view',
     'platform:task:operate',
   ],
-  '平台文件': [
+  '资料留存': [
     'platform:file:view',
     'platform:file:operate',
   ],
-  '平台日志': [
+  '操作记录': [
     'platform:log:view',
     'platform:log:export',
   ],
-  '平台备份': [
+  '备份恢复': [
     'platform:backup:create',
     'platform:backup:restore',
   ],
@@ -142,7 +142,7 @@ export default function Settings() {
         loadBackups()
       }
     } catch {
-      message.error('发起备份失败')
+      message.error('发起备份失败，请确认当前账号有备份权限')
     } finally {
       setCreating(false)
     }
@@ -162,7 +162,7 @@ export default function Settings() {
       setEditingRole(null)
       loadRoles()
     } catch {
-      message.error('更新失败')
+      message.error('角色权限更新失败，请确认当前账号仍有管理员权限')
     }
   }
 
@@ -179,23 +179,25 @@ export default function Settings() {
   }
 
   const accountTab = (
-    <Form layout="vertical" form={form} style={{ maxWidth: 480 }}>
-      <Form.Item label="用户名" name="username" initialValue={user?.username}>
-        <Input disabled />
-      </Form.Item>
-      <Form.Item label="角色" name="role" initialValue={user?.role}>
-        <Input disabled />
-      </Form.Item>
-      <Form.Item label="昵称" name="nickname" initialValue={user?.nickname}>
-        <Input placeholder="请输入昵称" />
-      </Form.Item>
-      <Form.Item label="邮箱" name="email">
-        <Input placeholder="请输入邮箱" />
-      </Form.Item>
-      <Form.Item>
-        <Button type="primary">保存</Button>
-      </Form.Item>
-    </Form>
+    <Space direction="vertical" style={{ width: '100%', maxWidth: 520 }}>
+      <Alert
+        type="info"
+        showIcon
+        message="账号基础信息暂由管理员统一维护"
+        description="当前页面用于查看自己的账号和角色。昵称、联系方式和密码修改后续接入账号管理后再开放，避免前端显示可保存但实际未落库。"
+      />
+      <Form layout="vertical" form={form}>
+        <Form.Item label="用户名" name="username" initialValue={user?.username}>
+          <Input disabled />
+        </Form.Item>
+        <Form.Item label="角色" name="role" initialValue={user?.role}>
+          <Input disabled />
+        </Form.Item>
+        <Form.Item label="昵称" name="nickname" initialValue={user?.nickname}>
+          <Input disabled placeholder="由管理员维护" />
+        </Form.Item>
+      </Form>
+    </Space>
   )
 
   const backupTab = (
@@ -246,7 +248,7 @@ export default function Settings() {
           2. 停止后端服务<br />
           3. 解压备份文件，用 <code>python3 cli.py db restore &lt;backup_id&gt;</code> 恢复数据库<br />
           4. 重启后端服务<br />
-          <Text type="secondary">⚠️ 恢复会覆盖当前数据，请在恢复前确认备份完整性。</Text>
+          <Text type="secondary">恢复会覆盖当前数据，请在恢复前确认备份完整性。</Text>
         </Paragraph>
       </Card>
     </Space>
@@ -285,9 +287,9 @@ export default function Settings() {
 
       <Card size="small" type="inner" title="角色说明" style={{ background: '#f0f5ff' }}>
         <Descriptions size="small" column={1}>
-          <Descriptions.Item label="管理员">拥有全部权限，可管理其他用户角色</Descriptions.Item>
-          <Descriptions.Item label="普通用户">可正常使用平台所有功能，不能管理角色和权限</Descriptions.Item>
-          <Descriptions.Item label="访客">仅可查看平台内容，不能执行任何操作</Descriptions.Item>
+          <Descriptions.Item label="管理员">拥有全部权限，可管理用户角色、备份恢复和系统设置</Descriptions.Item>
+          <Descriptions.Item label="普通用户">可正常使用查户、案头分析、风险台账、文书报告等业务功能</Descriptions.Item>
+          <Descriptions.Item label="访客">仅可查看，不能新增、编辑、导入、导出或批量处理</Descriptions.Item>
         </Descriptions>
       </Card>
     </Space>
@@ -328,11 +330,17 @@ export default function Settings() {
       label: '安全设置',
       children: (
         <Space direction="vertical" size="middle" style={{ maxWidth: 480 }}>
+          <Alert
+            type="warning"
+            showIcon
+            message="密码修改暂未开放"
+            description="当前版本已加强密码存储和登录审计。个人改密入口需要后端改密接口接入后再开放，避免误以为已修改成功。"
+          />
           <Card size="small" title="修改密码">
             <Form layout="vertical">
-              <Form.Item label="当前密码"><Input.Password /></Form.Item>
-              <Form.Item label="新密码"><Input.Password /></Form.Item>
-              <Form.Item><Button type="primary">修改密码</Button></Form.Item>
+              <Form.Item label="当前密码"><Input.Password disabled /></Form.Item>
+              <Form.Item label="新密码"><Input.Password disabled /></Form.Item>
+              <Form.Item><Button type="primary" disabled>暂未开放</Button></Form.Item>
             </Form>
           </Card>
         </Space>

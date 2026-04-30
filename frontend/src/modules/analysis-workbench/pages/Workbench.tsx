@@ -1,6 +1,6 @@
 // 分析工作模块 - 工作台
 import { useEffect, useState } from 'react'
-import { Card, Row, Col, Statistic, Button, Space, Typography, List, Skeleton, Tag } from 'antd'
+import { Card, Row, Col, Statistic, Button, Space, Typography, List, Skeleton, Tag, Result, Alert } from 'antd'
 import { Link, useNavigate } from 'react-router-dom'
 import { analysisApi, AnalysisTask } from '../../../services/api'
 
@@ -35,7 +35,7 @@ export default function AnalysisWorkbench() {
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} sm={8}>
           <Card size="small">
-            <Statistic title="总分析任务" value={total} loading={loading} />
+            <Statistic title="分析事项" value={total} loading={loading} />
           </Card>
         </Col>
         <Col xs={24} sm={8}>
@@ -51,20 +51,40 @@ export default function AnalysisWorkbench() {
       </Row>
 
       <Card
-        title="快捷操作"
+        title="日常操作"
         extra={<Link to="/modules/analysis-workbench/history"><Button size="small">查看全部</Button></Link>}
       >
-        <Space style={{ marginBottom: 16 }}>
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="建议从“一户式纳税人工作台”进入"
+          description="先查到具体企业，再发起案头分析，系统会自动带入纳税人识别号、名称和后续风险台账关联信息。"
+        />
+        <Space style={{ marginBottom: 16 }} wrap>
+          <Link to="/taxpayer-workbench">
+            <Button type="primary">查一户企业并发起分析</Button>
+          </Link>
           <Link to="/modules/analysis-workbench/new">
-            <Button type="primary">新建分析</Button>
+            <Button>直接发起案头分析</Button>
           </Link>
         </Space>
 
-        <Title level={5} style={{ marginTop: 16 }}>最近分析任务</Title>
+        <Title level={5} style={{ marginTop: 16 }}>最近案头分析</Title>
         {loading ? (
           <Skeleton active />
         ) : tasks.length === 0 ? (
-          <Text type="secondary">暂无分析任务，点击"新建分析"开始</Text>
+          <Result
+            status="info"
+            title="还没有案头分析记录"
+            subTitle="建议先导入纳税人信息，再从一户式工作台选择企业发起分析。"
+            extra={
+              <Space>
+                <Button type="primary" onClick={() => navigate('/taxpayer-workbench')}>查一户企业</Button>
+                <Button onClick={() => navigate('/modules/info-query')}>导入纳税人信息</Button>
+              </Space>
+            }
+          />
         ) : (
           <List
             size="small"

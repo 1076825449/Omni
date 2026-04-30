@@ -56,8 +56,9 @@ export default function Results() {
   if (!task) return (
     <Result
       status="error"
-      title="任务不存在"
-      extra={<Button onClick={() => navigate('/modules/analysis-workbench/history')}>返回历史</Button>}
+      title="分析记录不存在"
+      subTitle="可能是记录已被删除，或当前账号无权查看。"
+      extra={<Button onClick={() => navigate('/modules/analysis-workbench/history')}>返回分析记录</Button>}
     />
   )
 
@@ -155,7 +156,7 @@ export default function Results() {
           <Result
             status="info"
             title="分析执行中..."
-            subTitle="请稍候，结果将在任务完成后显示"
+            subTitle="请稍候，结果将在分析完成后显示"
           />
         )}
         {task.status === 'succeeded' && (
@@ -178,7 +179,7 @@ export default function Results() {
                   预览税务事项通知书
                 </Button>
                 <Button onClick={handleRerun}>
-                  以当前文件重跑
+                  用当前资料重新分析
                 </Button>
               </Space>
             }
@@ -187,28 +188,27 @@ export default function Results() {
         {task.status === 'failed' && (
           <Result
             status="error"
-            title="分析失败"
-            subTitle={task.result_summary || '分析过程出错，请重试'}
+            title="分析未完成"
+            subTitle={task.result_summary || '分析过程出错。建议先检查上传资料是否为空、表头是否包含期间/金额/纳税人识别号等关键字段，再重新分析。'}
             extra={
-              <Button
-                onClick={() => navigate('/modules/analysis-workbench/history')}
-              >
-                返回历史
-              </Button>
+              <Space>
+                <Button onClick={() => navigate('/modules/analysis-workbench/history')}>返回分析记录</Button>
+                <Button type="primary" onClick={handleRerun}>用当前资料重新分析</Button>
+              </Space>
             }
           />
         )}
         {task.status === 'queued' && (
           <Result
             status="warning"
-            title="任务排队中"
-            subTitle="任务已创建，正在等待处理"
+            title="等待分析"
+            subTitle="分析事项已建立，正在等待处理。"
           />
         )}
         {task.status === 'cancelled' && (
           <Result
             status="warning"
-            title="任务已取消"
+            title="分析已取消"
           />
         )}
       </Card>
@@ -230,7 +230,7 @@ export default function Results() {
             <Descriptions.Item label="形成风险事项">{task.related_record_count}</Descriptions.Item>
             <Descriptions.Item label="结果页">
               <Button type="link" style={{ padding: 0 }} onClick={() => navigate('/tasks')}>
-                查看工作任务
+              查看运行记录
               </Button>
             </Descriptions.Item>
             <Descriptions.Item label="操作日志">
@@ -388,7 +388,7 @@ export default function Results() {
             </Button>
           }
         >
-          <Text>分析完成后已形成 <strong>{task.related_record_count}</strong> 条风险事项，可继续记入风险台账并跟踪整改。</Text>
+              <Text>分析完成后已形成 <strong>{task.related_record_count}</strong> 条风险事项，可继续记入风险台账并跟踪整改。</Text>
           <br />
           <Button type="link" onClick={() => navigate('/my-risk-list')}>
             → 查看管户风险清单

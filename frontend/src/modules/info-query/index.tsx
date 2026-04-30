@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, Card, Col, Descriptions, Input, List, Modal, Row, Space, Statistic, Table, Tag, Typography, Upload } from 'antd'
+import { Alert, Button, Card, Col, Descriptions, Input, List, Modal, Row, Space, Statistic, Table, Tag, Typography, Upload } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { UploadOutlined } from '@ant-design/icons'
 import PlatformLayout from '../../components/Layout'
@@ -41,7 +41,7 @@ export default function InfoQueryModule() {
       message.success(result.message)
       load('')
     } catch {
-      message.error('导入失败，请检查表头和文件格式')
+      message.error('导入失败：请确认表头包含“纳税人识别号”和“纳税人名称”，文件未被加密且格式为 CSV/XLS/XLSX/JSON')
     } finally {
       setUploading(false)
     }
@@ -72,8 +72,8 @@ export default function InfoQueryModule() {
   return (
     <PlatformLayout>
       <ModuleLayout
-        moduleName="信息查询表"
-        moduleDesc="纳税人基础信息 · 管户归属 · 风险画像"
+        moduleName="纳税人信息查询"
+        moduleDesc="导入完整信息查询表，供查户、案头分析和风险清单复用"
         items={[{ key: 'index', label: '查询与导入', path: '/modules/info-query' }]}
       >
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
@@ -84,8 +84,14 @@ export default function InfoQueryModule() {
 
         <Card title="导入完整信息查询表" style={{ marginBottom: 16 }}>
           <Space direction="vertical" style={{ width: '100%' }}>
+            <Alert
+              type="info"
+              showIcon
+              message="这是全系统的基础数据源"
+              description="导入后，一户式工作台、案头分析、风险台账和管户风险清单都会自动带出企业名称、登记状态、管理员和地址。"
+            />
             <Text type="secondary">
-              支持 CSV、XLS、XLSX、JSON。建议字段：企业名称、纳税人识别号、行业、属地、主管税务机关、管理分局、税收管理员、风险等级、纳税信用等级。
+              支持 CSV、XLS、XLSX、JSON。必备字段：纳税人识别号、纳税人名称；建议字段：登记状态、行业、主管税务机关、管理分局、税收管理员、地址、风险等级、纳税信用等级。
             </Text>
             <Upload.Dragger accept=".csv,.xls,.xlsx,.json" customRequest={({ file }) => handleUpload(file as File)} disabled={uploading}>
               <p><UploadOutlined style={{ fontSize: 28 }} /></p>
@@ -117,6 +123,9 @@ export default function InfoQueryModule() {
             loading={loading}
             size="small"
             pagination={{ total, pageSize: 50, hideOnSinglePage: true }}
+            locale={{
+              emptyText: q ? '没有匹配的纳税人，请换用税号、企业简称或先导入完整信息查询表' : '暂无纳税人信息，请先导入完整信息查询表',
+            }}
           />
         </Card>
 

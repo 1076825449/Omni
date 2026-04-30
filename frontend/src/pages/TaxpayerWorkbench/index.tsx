@@ -58,7 +58,7 @@ export default function TaxpayerWorkbench() {
     <div className="omni-page">
       <div className="omni-page-header">
         <Title level={4} style={{ margin: 0 }}>一户式纳税人工作台</Title>
-        <Text type="secondary">输入纳税人识别号，集中查看该户信息、风险记录、案头分析和整改跟踪。</Text>
+        <Text type="secondary">输入纳税人识别号或纳税人名称，集中查看该户信息、风险记录、案头分析和整改跟踪。</Text>
       </div>
 
       <Card style={{ marginBottom: 16 }}>
@@ -90,7 +90,21 @@ export default function TaxpayerWorkbench() {
               )}
             />
           </Card>
-        ) : <Empty description="请先查询一户纳税人" />
+        ) : (
+          <Card>
+            <Empty
+              description="请先查询一户纳税人"
+            >
+              <Space direction="vertical">
+                <Text type="secondary">如果查不到企业，通常是还没有导入完整信息查询表。</Text>
+                <Space>
+                  <Button type="primary" onClick={() => navigate('/modules/info-query')}>导入纳税人信息</Button>
+                  <Button onClick={() => navigate('/modules/risk-ledger')}>建立临时风险档案</Button>
+                </Space>
+              </Space>
+            </Empty>
+          </Card>
+        )
       ) : (
         <Space direction="vertical" style={{ width: '100%' }} size={16}>
           <Card
@@ -135,7 +149,9 @@ export default function TaxpayerWorkbench() {
 
           <Card title="风险记录和整改跟踪">
             {data.entries.length === 0 ? (
-              <Empty description="该户暂无风险记录" />
+              <Empty description="该户暂无风险记录">
+                <Button type="primary" onClick={() => navigate(`/modules/risk-ledger?taxpayer_id=${data.taxpayer.taxpayer_id}`)}>新增风险记录</Button>
+              </Empty>
             ) : (
               <Timeline
                 items={data.entries.map((entry) => ({
@@ -159,7 +175,9 @@ export default function TaxpayerWorkbench() {
 
           <Card title="最近案头分析">
             {data.recent_analysis_tasks.length === 0 ? (
-              <Empty description="该户暂无案头分析记录" />
+              <Empty description="该户暂无案头分析记录">
+                <Button type="primary" onClick={() => navigate(`/modules/analysis-workbench/new?taxpayer_id=${encodeURIComponent(data.taxpayer.taxpayer_id)}&company_name=${encodeURIComponent(data.taxpayer.company_name || '')}`)}>发起案头分析</Button>
+              </Empty>
             ) : (
               <List
                 dataSource={data.recent_analysis_tasks}

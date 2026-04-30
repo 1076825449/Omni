@@ -84,7 +84,7 @@ export default function RiskLedgerModule() {
       form.resetFields()
       load()
     } catch {
-      void message.error('保存失败；若信息表未命中，请填写纳税人名称后创建临时档案')
+      void message.error('保存失败：若信息查询表未命中该税号，请填写纳税人名称后创建临时档案')
     }
   }
 
@@ -109,7 +109,7 @@ export default function RiskLedgerModule() {
       batchForm.resetFields()
       load()
     } catch {
-      void message.error('批量记录失败')
+      void message.error('批量记录失败：请检查税号是否为空、记录内容是否填写，整改中记录需补充整改期限和联系人')
     }
   }
 
@@ -120,7 +120,7 @@ export default function RiskLedgerModule() {
       void message.success(result.message)
       load()
     } catch {
-      void message.error('导入失败，请检查表头')
+      void message.error('导入失败：请检查表头是否包含“纳税人识别号、记录时间、记录内容”')
     }
     return false
   }
@@ -191,6 +191,13 @@ export default function RiskLedgerModule() {
               label: '单户记录',
               children: (
                 <Card>
+                  <Alert
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                    message="一户只建一个档案，可以连续追加多条风险和整改记录"
+                    description="如果税号已在完整信息查询表中，系统会自动带出名称、登记状态、管理员和地址；未命中时填写纳税人名称即可建立临时档案。"
+                  />
                   <Form form={form} layout="vertical" onFinish={handleCreate} initialValues={{ entry_status: '待核实', recorded_at: dayjs() }}>
                     <Row gutter={12}>
                       <Col xs={24} md={8}><Form.Item label="纳税人识别号" name="taxpayer_id" rules={[{ required: true }]}><Input /></Form.Item></Col>
@@ -218,6 +225,13 @@ export default function RiskLedgerModule() {
                 <Row gutter={[16, 16]}>
                   <Col xs={24} lg={12}>
                     <Card title="粘贴税号批量记录">
+                      <Alert
+                        type="warning"
+                        showIcon
+                        style={{ marginBottom: 12 }}
+                        message="批量记录适合同一风险、同一处理口径"
+                        description="如果每户风险内容不同，请使用右侧表格逐行导入。标记整改中时建议填写整改期限和联系人，便于首页催办。"
+                      />
                       <Form form={batchForm} layout="vertical" onFinish={handleBatchText} initialValues={{ entry_status: '待核实', recorded_at: dayjs() }}>
                         <Form.Item label="纳税人识别号（换行、逗号或空格分隔）" name="taxpayer_ids" rules={[{ required: true }]}><Input.TextArea rows={5} /></Form.Item>
                         <Form.Item label="记录时间" name="recorded_at" rules={[{ required: true }]}><DatePicker showTime style={{ width: '100%' }} /></Form.Item>
@@ -284,7 +298,17 @@ export default function RiskLedgerModule() {
             </Space>
           }
         >
-          <Table columns={columns} dataSource={rows} rowKey="taxpayer_id" loading={loading} size="small" pagination={{ total, pageSize: 50, hideOnSinglePage: true }} />
+          <Table
+            columns={columns}
+            dataSource={rows}
+            rowKey="taxpayer_id"
+            loading={loading}
+            size="small"
+            pagination={{ total, pageSize: 50, hideOnSinglePage: true }}
+            locale={{
+              emptyText: query || entryStatus ? '没有符合当前筛选条件的风险档案' : '暂无风险档案。可先单户记录、批量记录，或从案头分析结果记入风险台账。',
+            }}
+          />
         </Card>
 
         <Modal title="纳税人风险档案" open={detailOpen} onCancel={() => setDetailOpen(false)} footer={null} width={860}>

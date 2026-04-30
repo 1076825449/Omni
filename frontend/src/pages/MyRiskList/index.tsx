@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Key } from 'react'
-import { Button, Card, DatePicker, Form, Input, Modal, Select, Space, Statistic, Table, Tag, Typography, Row, Col } from 'antd'
+import { Alert, Button, Card, DatePicker, Form, Input, Modal, Select, Space, Statistic, Table, Tag, Typography, Row, Col } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
@@ -158,6 +158,13 @@ export default function MyRiskList() {
           </Space>
         }
       >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="处理口径"
+          description="这里只看每户最新处理状态。标记“整改中”必须填写整改期限和联系人，后续首页会据此催办临期和逾期事项。"
+        />
         <Space style={{ marginBottom: 12 }} wrap>
           <Text type="secondary">已勾选 {selectedRowKeys.length} 户</Text>
           <Button size="small" onClick={() => handleBatchStatus('已排除')}>批量标记已排除</Button>
@@ -172,6 +179,11 @@ export default function MyRiskList() {
           size="small"
           rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
           pagination={{ total, pageSize: 50, hideOnSinglePage: true }}
+          locale={{
+            emptyText: q || entryStatus || overdue !== undefined || temporary !== undefined
+              ? '没有符合当前筛选条件的企业，可调整搜索词或筛选项'
+              : '暂无风险清单。可先从一户式工作台或案头分析结果记入风险台账。',
+          }}
         />
       </Card>
       <Modal

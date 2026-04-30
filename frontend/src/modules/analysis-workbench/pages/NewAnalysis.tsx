@@ -56,7 +56,7 @@ export default function NewAnalysis() {
       return false
     }
     if (!taskId) {
-      message.warning('请先创建任务再上传文件')
+      message.warning('请先确认本次分析事项，再上传资料')
       return false
     }
     setUploading(true)
@@ -74,7 +74,7 @@ export default function NewAnalysis() {
 
   const handleCreate = async (values: { name: string; description: string }) => {
     if (isViewer) {
-      message.warning('只读用户不能创建任务')
+      message.warning('只读用户不能建立分析事项')
       return
     }
     try {
@@ -85,10 +85,10 @@ export default function NewAnalysis() {
       const res = await analysisApi.createTask(values.name, values.description, taxpayer)
       if (res.success) {
         setTaskId(res.task_id)
-        message.success('任务已创建，可以上传文件了')
+        message.success('分析事项已建立，可以上传资料了')
       }
     } catch {
-      message.error('创建任务失败')
+      message.error('分析事项建立失败，请检查名称后重试')
     }
   }
 
@@ -100,16 +100,16 @@ export default function NewAnalysis() {
     if (!taskId) return
     try {
       await analysisApi.runTask(taskId)
-      message.success('分析已开始，请在历史任务中查看结果')
+      message.success('分析已开始，可在“分析记录”中查看结果')
       navigate('/modules/analysis-workbench/history')
     } catch {
-      message.error('发起分析失败')
+      message.error('发起分析失败，请确认已上传资料或补录关键数据')
     }
   }
 
   const handleManualSubmit = async (values: Record<string, string | number>) => {
     if (!taskId) {
-      message.warning('请先创建任务再补录数据')
+      message.warning('请先确认本次分析事项，再补录数据')
       return
     }
     const dataKind = values.data_kind as 'vat_return' | 'cit_return' | 'pit_return'
@@ -130,7 +130,7 @@ export default function NewAnalysis() {
   const currentStep = taskId ? (fileList.length > 0 ? 2 : 1) : 0
 
   const stepItems = [
-    { title: '第1步：填写任务信息' },
+    { title: '第1步：确认分析事项' },
     { title: '第2步：上传分析资料' },
     { title: '第3步：确认资料识别结果' },
     { title: '第4步：发起分析' },
@@ -155,7 +155,7 @@ export default function NewAnalysis() {
             type="warning"
             showIcon
             message="您当前是只读用户（访客账号）"
-            description="只读用户不能创建任务、上传文件或发起分析。您可以查看历史分析结果，但不能进行任何修改操作。"
+            description="只读用户不能建立分析事项、上传资料或发起分析。您可以查看历史分析结果，但不能进行任何修改操作。"
             style={{ marginTop: 12 }}
           />
         )}
@@ -213,7 +213,7 @@ export default function NewAnalysis() {
 
           <Form.Item>
             <Button type="primary" htmlType="submit">
-              {taskId ? '新建另一个任务' : '创建任务'}
+              {taskId ? '建立另一项分析' : '确认分析事项'}
             </Button>
             {taskId && (
               <Button style={{ marginLeft: 8 }} onClick={handleRun}>

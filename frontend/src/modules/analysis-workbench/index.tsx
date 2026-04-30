@@ -9,17 +9,17 @@ import Results from './pages/Results'
 import Reports from './pages/Reports'
 
 const tabItems = [
-  { key: 'workbench', label: '工作台', path: '/modules/analysis-workbench' },
-  { key: 'new', label: '新建分析', path: '/modules/analysis-workbench/new' },
-  { key: 'history', label: '历史任务', path: '/modules/analysis-workbench/history' },
+  { key: 'workbench', label: '案头分析首页', path: '/modules/analysis-workbench' },
+  { key: 'new', label: '发起案头分析', path: '/modules/analysis-workbench/new' },
+  { key: 'history', label: '分析记录', path: '/modules/analysis-workbench/history' },
 ]
 
 export default function AnalysisWorkbench() {
   return (
     <PlatformLayout>
       <ModuleLayout
-        moduleName="分析工作模块"
-        moduleDesc="上传资料 → 生成分析结果 → 导出报告"
+        moduleName="案头分析"
+        moduleDesc="按户上传申报、发票、财报等资料，识别疑点并生成文书"
         items={tabItems}
       >
         <Routes>

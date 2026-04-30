@@ -29,10 +29,10 @@ export default function Reports() {
 
   return (
     <div>
-      <Card title="报告导出" style={{ marginBottom: 16 }}>
+      <Card title="文书报告导出" style={{ marginBottom: 16 }}>
         <Space direction="vertical" style={{ width: '100%' }}>
-          <Text>任务 ID：{id}</Text>
-          <Text type="secondary">导出税务事项通知书与税务分析报告</Text>
+          <Text>分析编号：{id}</Text>
+          <Text type="secondary">导出税务事项通知书与税务疑点核实报告</Text>
           <Space>
             {reportLinks.map((item, index) => (
               <Button key={item.key} type={item.primary || index === 0 ? 'primary' : 'default'} href={item.href}>
@@ -95,7 +95,7 @@ export default function Reports() {
         extra={
           <Space>
             <Button onClick={() => navigate(`/modules/analysis-workbench/results/${id}`)}>返回结果页</Button>
-            <Button onClick={() => navigate('/modules/analysis-workbench/history')}>返回历史任务</Button>
+            <Button onClick={() => navigate('/modules/analysis-workbench/history')}>返回分析记录</Button>
           </Space>
         }
       />

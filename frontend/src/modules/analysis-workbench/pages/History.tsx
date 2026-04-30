@@ -50,7 +50,7 @@ export default function History() {
 
   const columns: ColumnsType<AnalysisTask> = [
     {
-      title: '任务名称',
+      title: '分析事项',
       dataIndex: 'name',
       key: 'name',
       render: (name: string, r) => (
@@ -70,7 +70,7 @@ export default function History() {
       },
     },
     {
-      title: '文件数',
+      title: '资料数',
       dataIndex: 'file_count',
       key: 'file_count',
       width: 80,
@@ -93,7 +93,7 @@ export default function History() {
           </Button>
           {r.file_count > 0 && (
             <Button size="small" onClick={() => handleRerun(r.task_id)}>
-              重跑
+              重新分析
             </Button>
           )}
           {r.status === 'queued' && (
@@ -107,9 +107,16 @@ export default function History() {
   ]
 
   return (
-    <Card title="分析历史">
+    <Card title="案头分析记录">
       {tasks.length === 0 && !loading ? (
-        <Empty description="暂无分析历史，请先新建分析" />
+        <Empty
+          description="暂无案头分析记录"
+        >
+          <Space>
+            <Button type="primary" onClick={() => navigate('/taxpayer-workbench')}>查一户企业</Button>
+            <Button onClick={() => navigate('/modules/analysis-workbench/new')}>直接发起分析</Button>
+          </Space>
+        </Empty>
       ) : (
         <Table
           columns={columns}

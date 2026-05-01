@@ -1,11 +1,12 @@
 // 平台首页
-import { Card, Row, Col, Statistic, Button, Space, Typography, List, Skeleton, Empty, Alert, Tag, Input } from 'antd'
+import { Card, Row, Col, Statistic, Button, Space, Typography, List, Skeleton, Empty, Alert, Tag, Input, Upload } from 'antd'
+import { UploadOutlined } from '@ant-design/icons'
 import { Link, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '../../../stores/auth'
 import { useNotificationStore } from '../../../stores/notification'
 import type { Module, PlatformStatsOverview, Task, WorkbenchTodoData } from '../../../services/api'
-import { modulesApi, platformStatsApi, riskLedgerApi, tasksApi, taxOfficerWorkbenchApi } from '../../../services/api'
+import { infoQueryApi, modulesApi, platformStatsApi, riskLedgerApi, tasksApi, taxOfficerWorkbenchApi } from '../../../services/api'
 import { useAppMessage } from '../../../hooks/useAppMessage'
 
 const { Title, Text, Paragraph } = Typography
@@ -37,6 +38,7 @@ export default function Home() {
   const [riskSummary, setRiskSummary] = useState<Record<string, number>>({})
   const [todos, setTodos] = useState<WorkbenchTodoData>({ items: [], summary: {} })
   const [taxpayerId, setTaxpayerId] = useState('')
+  const [importing, setImporting] = useState(false)
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
   const message = useAppMessage()
@@ -48,7 +50,7 @@ export default function Home() {
       modulesApi.list(),
       tasksApi.list({ limit: 5, offset: 0 }),
       platformStatsApi.overview(),
-      taxOfficerWorkbenchApi.myRiskList({ limit: 1 }),
+      taxOfficerWorkbenchApi.taxpayerRecords({ limit: 1 }),
       taxOfficerWorkbenchApi.todos({ limit: 8 }),
     ]).then(([moduleData, taskData, statsData, riskData, todoData]) => {
       setModules(moduleData.modules.filter((m: Module) => m.status === 'active'))
@@ -62,7 +64,7 @@ export default function Home() {
 
   const refreshTodos = async () => {
     const [riskData, todoData] = await Promise.all([
-      taxOfficerWorkbenchApi.myRiskList({ limit: 1 }),
+      taxOfficerWorkbenchApi.taxpayerRecords({ limit: 1 }),
       taxOfficerWorkbenchApi.todos({ limit: 8 }),
     ])
     setRiskSummary(riskData.summary)
@@ -83,13 +85,33 @@ export default function Home() {
     }
   }
 
+  const handleSourceUpload = async (file: File) => {
+    setImporting(true)
+    try {
+      const result = await infoQueryApi.importFile(file)
+      message.success(result.message)
+      const [statsData, riskData, todoData] = await Promise.all([
+        platformStatsApi.overview(),
+        taxOfficerWorkbenchApi.taxpayerRecords({ limit: 1 }),
+        taxOfficerWorkbenchApi.todos({ limit: 8 }),
+      ])
+      setStats(statsData)
+      setRiskSummary(riskData.summary)
+      setTodos(todoData)
+    } catch {
+      message.error('导入失败：请确认文件为税务登记信息查询表，且包含纳税人识别号、纳税人名称等字段')
+    } finally {
+      setImporting(false)
+    }
+    return false
+  }
+
   const quickActions = [
-    { path: '/taxpayer-workbench', key: 'taxpayer-workbench', label: '查一户企业', desc: '进入一户式工作台', primary: true },
-    { path: '/modules/info-query', key: 'info-query', label: '管户分配', desc: '导入信息查询表并查看管理员管户', primary: false },
+    { path: '/taxpayer-workbench', key: 'taxpayer-workbench', label: '信息查询', desc: '按税号、名称、法人、管理员查企业', primary: true },
+    { path: '/modules/info-query', key: 'info-query', label: '管户分配', desc: '查看全部管户和自动标签', primary: false },
     { path: '/modules/risk-ledger', key: 'risk-ledger', label: '管户记录', desc: '记录风险、排除和整改过程', primary: false },
-    { path: '/my-risk-list', key: 'risk-ledger', label: '处理风险清单', desc: '查看待核实和整改事项', primary: false },
     { path: '/modules/learning-lab', key: 'learning-lab', label: '刷题程序', desc: '业务题库练习和错题复盘', primary: false },
-  ].filter(action => modules.some(module => module.key === action.key))
+  ].filter(action => action.key === 'taxpayer-workbench' || modules.some(module => module.key === action.key))
 
   const hasData = stats && (stats.task_total > 0 || stats.file_total > 0)
 
@@ -102,7 +124,7 @@ export default function Home() {
             税源管理员今日工作台
           </Title>
           <Paragraph type="secondary" style={{ margin: 0 }}>
-            从这里查一户企业、处理风险清单、跟踪整改进展。
+            从这里导入数据源、查询企业、记录风险、跟踪整改进展。
           </Paragraph>
         </Space>
       </div>
@@ -134,7 +156,7 @@ export default function Home() {
               <Text>建议按以下顺序开始：</Text>
               <Space wrap>
                 <Button size="small" type="primary" onClick={() => navigate('/modules/info-query')}>
-                  第1步：导入纳税人信息
+                  第1步：导入数据源
                 </Button>
                 <Button size="small" type="primary" onClick={() => navigate('/modules/analysis-workbench')}>
                   第2步：开展案头分析
@@ -196,12 +218,12 @@ export default function Home() {
           <Card size="small">
             <Statistic
               title="我的管户数"
-              value={riskSummary.dossier_total ?? 0}
+              value={riskSummary.taxpayer_total ?? riskSummary.dossier_total ?? 0}
               loading={loading}
               suffix="户"
             />
             <Text type="secondary" style={{ fontSize: 11 }}>
-              已纳入风险跟踪
+              来自统一数据源
             </Text>
           </Card>
         </Col>
@@ -211,7 +233,7 @@ export default function Home() {
         title="今日应处理"
         size="small"
         style={{ marginBottom: 16 }}
-        extra={<Link to="/my-risk-list"><Text type="secondary" style={{ fontSize: 12 }}>查看全部风险清单 →</Text></Link>}
+        extra={<Link to="/modules/risk-ledger"><Text type="secondary" style={{ fontSize: 12 }}>查看全部管户记录 →</Text></Link>}
       >
         {loading ? (
           <Skeleton active paragraph={{ rows: 3 }} />
@@ -241,7 +263,7 @@ export default function Home() {
                     </Space>
                     <Space wrap>
                       <Button size="small" onClick={() => navigate(`/taxpayer-workbench?taxpayer_id=${encodeURIComponent(item.taxpayer_id)}`)}>
-                        查看一户式
+                        查看信息
                       </Button>
                       <Button size="small" onClick={() => navigate(`/modules/risk-ledger?taxpayer_id=${encodeURIComponent(item.taxpayer_id)}`)}>
                         记录整改情况
@@ -264,19 +286,40 @@ export default function Home() {
 
       {/* 常用工作 + 最近记录 */}
       <Row gutter={[16, 16]}>
+        <Col xs={24} lg={12}>
+          <Card title="导入数据源" size="small">
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <Alert
+                type="info"
+                showIcon
+                message="这里导入的是全系统共用的企业基础信息"
+                description="导入后，可用于信息查询、管户分配、管户记录、案头分析，以及后续新增模块自动匹配企业名称、状态、管理员和地址。"
+              />
+              <Upload.Dragger accept=".xls,.xlsx,.csv,.json" customRequest={({ file }) => handleSourceUpload(file as File)} disabled={importing} showUploadList={false}>
+                <p><UploadOutlined style={{ fontSize: 28 }} /></p>
+                <p>上传“税务登记信息查询”数据源</p>
+                <Text type="secondary" style={{ fontSize: 12 }}>支持 XLS、XLSX、CSV、JSON</Text>
+              </Upload.Dragger>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                模板字段可包含：纳税人识别号、纳税人名称、状态、行业、经营范围、经营地址、法定代表人、税收管理员。
+              </Text>
+            </Space>
+          </Card>
+        </Col>
+
         {/* 常用工作 */}
         <Col xs={24} lg={12}>
           <Card
             title="常用工作"
             size="small"
-            extra={<Link to="/my-risk-list"><Text type="secondary" style={{ fontSize: 12 }}>查看管户风险清单 →</Text></Link>}
+            extra={<Link to="/modules/risk-ledger"><Text type="secondary" style={{ fontSize: 12 }}>查看管户记录 →</Text></Link>}
           >
             {loading ? (
               <Skeleton active />
             ) : (
               <Space direction="vertical" style={{ width: '100%' }} size={8}>
                 <Input.Search
-                  placeholder="输入纳税人识别号，直接查一户"
+                  placeholder="输入税号、名称、法人或管理员，直接查询"
                   allowClear
                   enterButton="查询"
                   value={taxpayerId}
@@ -321,9 +364,7 @@ export default function Home() {
                 description={
                   <Space direction="vertical" size={4}>
                     <Text type="secondary">还没有运行记录</Text>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      可以先查一户企业，或导入纳税人信息后发起案头分析
-                    </Text>
+                    <Text type="secondary" style={{ fontSize: 12 }}>可以先导入数据源，再查询企业或发起案头分析</Text>
                   </Space>
                 }
                 image={Empty.PRESENTED_IMAGE_SIMPLE}

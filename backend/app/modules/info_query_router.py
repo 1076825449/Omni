@@ -2,6 +2,7 @@ import csv
 import io
 import json
 import secrets
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
@@ -34,7 +35,9 @@ FIELD_ALIASES = {
     "tax_officer": ["税收管理员", "管理员", "管户人员", "tax_officer"],
     "credit_rating": ["纳税信用等级", "信用等级", "credit_rating"],
     "risk_level": ["风险等级", "风险级别", "risk_level"],
-    "address": ["注册地址", "生产经营地址", "经营地址", "地址", "address"],
+    "business_address": ["生产经营地址", "经营地址"],
+    "registered_address": ["注册地址"],
+    "address": ["地址", "address"],
     "phone": ["联系电话", "电话", "注册地联系电话", "经营地联系电话", "法定代表人（负责人、业主）移动电话", "phone"],
     "business_scope": ["经营范围", "business_scope"],
 }
@@ -50,6 +53,7 @@ class TaxpayerInfoSchema(BaseModel):
     taxpayer_type: str
     registration_status: str
     industry: str
+    industry_tag: str = ""
     region: str
     tax_bureau: str
     manager_department: str
@@ -57,9 +61,11 @@ class TaxpayerInfoSchema(BaseModel):
     credit_rating: str
     risk_level: str
     address: str
+    address_tag: str = ""
     phone: str
     business_scope: str
     source_batch: str
+    last_used_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 
@@ -83,6 +89,8 @@ class AssignmentStatsResponse(BaseModel):
     by_officer: dict[str, int]
     by_department: dict[str, int]
     by_risk_level: dict[str, int]
+    by_industry_tag: dict[str, int]
+    by_address_tag: dict[str, int]
     total: int
 
 
@@ -103,6 +111,57 @@ def normalize_row(row: dict[str, Any]) -> dict[str, Any]:
         if canonical not in normalized or (not normalized[canonical] and text):
             normalized[canonical] = text
     return normalized
+
+
+def compact_text(value: str) -> str:
+    return re.sub(r"\s+", "", str(value or "").strip())
+
+
+def derive_industry_tag(industry: str, company_name: str, business_scope: str) -> str:
+    source = compact_text(industry)
+    if source:
+        return source[:30]
+    haystack = compact_text(f"{company_name}{business_scope}")
+    keyword_groups = [
+        ("餐饮食品", ["餐饮", "饭店", "餐馆", "小吃", "食品", "奶茶", "烧烤"]),
+        ("建材五金", ["建材", "装饰", "五金", "钢材", "水泥", "砂石", "陶瓷"]),
+        ("交通运输", ["运输", "物流", "货运", "快递", "汽车租赁"]),
+        ("农林牧渔", ["农业", "种植", "养殖", "农资", "苗圃", "水产"]),
+        ("批发零售", ["批发", "零售", "商贸", "超市", "便利店", "销售"]),
+        ("房产物业", ["房地产", "物业", "置业", "不动产", "房屋租赁"]),
+        ("制造加工", ["制造", "加工", "机械", "配件", "设备", "工厂"]),
+        ("医药健康", ["医药", "药店", "诊所", "医院", "医疗", "健康"]),
+        ("教育培训", ["教育", "培训", "学校", "托管", "文化艺术"]),
+        ("商务服务", ["咨询", "广告", "传媒", "服务", "管理"]),
+    ]
+    for tag, keywords in keyword_groups:
+        if any(keyword in haystack for keyword in keywords):
+            return tag
+    return "未分类"
+
+
+def derive_address_tag(address: str) -> str:
+    text = compact_text(address)
+    if not text:
+        return ""
+    text = re.sub(r"[，,。；;（）()【】\[\]]", "", text)
+    text = re.sub(r"(广西壮族自治区|广西|柳州市|柳江区|柳南区|城中区|鱼峰区|柳北区)", "", text)
+    broad_only = re.fullmatch(r"[\u4e00-\u9fa5]{2,8}(镇|乡|村|社区|县|区|市)", text)
+    if broad_only:
+        return ""
+
+    road_match = re.search(r"([\u4e00-\u9fa5A-Za-z0-9]{2,30}(?:大道|路|街|巷|道))([0-9一二三四五六七八九十]+号)?", text)
+    if road_match:
+        road = road_match.group(1)
+        number = road_match.group(2) or ""
+        if road.endswith("大道") and number:
+            return f"{road}{number}"
+        return road
+
+    place_match = re.search(r"([\u4e00-\u9fa5A-Za-z0-9]{2,30}(?:市场|园区|小区|商贸城|工业园|广场|商城|城))", text)
+    if place_match:
+        return place_match.group(1)
+    return ""
 
 
 def parse_upload_rows(file: UploadFile, content: bytes) -> tuple[list[dict[str, Any]], list[str]]:
@@ -140,22 +199,28 @@ def parse_upload_rows(file: UploadFile, content: bytes) -> tuple[list[dict[str, 
 
 
 def row_to_taxpayer(row: dict[str, Any], batch: str, owner_id: int) -> dict[str, Any]:
+    address = row.get("business_address") or row.get("address") or row.get("registered_address", "")
+    industry = row.get("industry", "")
+    business_scope = row.get("business_scope", "")
+    company_name = row.get("company_name", "")
     return {
         "taxpayer_id": row.get("taxpayer_id", ""),
-        "company_name": row.get("company_name", ""),
+        "company_name": company_name,
         "legal_person": row.get("legal_person", ""),
         "taxpayer_type": row.get("taxpayer_type", ""),
         "registration_status": row.get("registration_status", ""),
-        "industry": row.get("industry", ""),
+        "industry": industry,
+        "industry_tag": derive_industry_tag(industry, company_name, business_scope),
         "region": row.get("region", ""),
         "tax_bureau": row.get("tax_bureau", ""),
         "manager_department": row.get("manager_department", ""),
         "tax_officer": row.get("tax_officer", ""),
         "credit_rating": row.get("credit_rating", ""),
         "risk_level": row.get("risk_level", ""),
-        "address": row.get("address", ""),
+        "address": address,
+        "address_tag": derive_address_tag(address),
         "phone": row.get("phone", ""),
-        "business_scope": row.get("business_scope", ""),
+        "business_scope": business_scope,
         "source_batch": batch,
         "raw_json": json.dumps(row, ensure_ascii=False),
         "owner_id": owner_id,
@@ -227,6 +292,9 @@ def list_taxpayers(
     tax_officer: Optional[str] = Query(None),
     manager_department: Optional[str] = Query(None),
     industry: Optional[str] = Query(None),
+    industry_tag: Optional[str] = Query(None),
+    address_tag: Optional[str] = Query(None),
+    registration_status: Optional[str] = Query(None),
     region: Optional[str] = Query(None),
     risk_level: Optional[str] = Query(None),
     limit: int = Query(20, le=100),
@@ -241,6 +309,7 @@ def list_taxpayers(
             TaxpayerInfo.company_name.like(like),
             TaxpayerInfo.taxpayer_id.like(like),
             TaxpayerInfo.legal_person.like(like),
+            TaxpayerInfo.tax_officer.like(like),
         ))
     if tax_officer:
         query = query.filter(TaxpayerInfo.tax_officer.like(f"%{tax_officer}%"))
@@ -248,6 +317,12 @@ def list_taxpayers(
         query = query.filter(TaxpayerInfo.manager_department.like(f"%{manager_department}%"))
     if industry:
         query = query.filter(TaxpayerInfo.industry.like(f"%{industry}%"))
+    if industry_tag:
+        query = query.filter(TaxpayerInfo.industry_tag == industry_tag)
+    if address_tag:
+        query = query.filter(TaxpayerInfo.address_tag == address_tag)
+    if registration_status:
+        query = query.filter(TaxpayerInfo.registration_status == registration_status)
     if region:
         query = query.filter(TaxpayerInfo.region.like(f"%{region}%"))
     if risk_level:
@@ -281,13 +356,19 @@ def assignment_stats(
     by_officer: dict[str, int] = {}
     by_department: dict[str, int] = {}
     by_risk_level: dict[str, int] = {}
+    by_industry_tag: dict[str, int] = {}
+    by_address_tag: dict[str, int] = {}
     for row in rows:
         by_officer[row.tax_officer or "未分配"] = by_officer.get(row.tax_officer or "未分配", 0) + 1
         by_department[row.manager_department or "未分配"] = by_department.get(row.manager_department or "未分配", 0) + 1
         by_risk_level[row.risk_level or "未标记"] = by_risk_level.get(row.risk_level or "未标记", 0) + 1
+        by_industry_tag[row.industry_tag or "未分类"] = by_industry_tag.get(row.industry_tag or "未分类", 0) + 1
+        by_address_tag[row.address_tag or "未识别地址"] = by_address_tag.get(row.address_tag or "未识别地址", 0) + 1
     return AssignmentStatsResponse(
         by_officer=by_officer,
         by_department=by_department,
         by_risk_level=by_risk_level,
+        by_industry_tag=by_industry_tag,
+        by_address_tag=by_address_tag,
         total=len(rows),
     )

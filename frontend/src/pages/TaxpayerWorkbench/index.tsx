@@ -13,9 +13,17 @@ export default function TaxpayerWorkbench() {
   const [taxpayerId, setTaxpayerId] = useState(params.get('taxpayer_id') || '')
   const [data, setData] = useState<TaxpayerWorkbenchData | null>(null)
   const [candidates, setCandidates] = useState<TaxpayerWorkbenchData['taxpayer'][]>([])
+  const [recentSearches, setRecentSearches] = useState<TaxpayerWorkbenchData['taxpayer'][]>([])
+  const [recentOps, setRecentOps] = useState<TaxpayerWorkbenchData['taxpayer'][]>([])
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
   const message = useAppMessage()
+
+  const rememberSearch = (item: TaxpayerWorkbenchData['taxpayer']) => {
+    const next = [item, ...recentSearches.filter(row => row.taxpayer_id !== item.taxpayer_id)].slice(0, 8)
+    setRecentSearches(next)
+    localStorage.setItem('tax_recent_searches', JSON.stringify(next))
+  }
 
   const load = async (value = taxpayerId) => {
     if (!value.trim()) return
@@ -23,6 +31,7 @@ export default function TaxpayerWorkbench() {
     try {
       const result = await taxOfficerWorkbenchApi.taxpayer(value.trim())
       setData(result)
+      rememberSearch(result.taxpayer)
       setCandidates([])
       setParams({ taxpayer_id: value.trim() })
     } catch {
@@ -31,6 +40,7 @@ export default function TaxpayerWorkbench() {
         setTaxpayerId(search.items[0].taxpayer_id)
         const result = await taxOfficerWorkbenchApi.taxpayer(search.items[0].taxpayer_id)
         setData(result)
+        rememberSearch(result.taxpayer)
         setCandidates([])
         setParams({ taxpayer_id: search.items[0].taxpayer_id })
         return
@@ -48,6 +58,15 @@ export default function TaxpayerWorkbench() {
   }
 
   useEffect(() => {
+    const stored = localStorage.getItem('tax_recent_searches')
+    if (stored) {
+      try {
+        setRecentSearches(JSON.parse(stored))
+      } catch {
+        setRecentSearches([])
+      }
+    }
+    void taxOfficerWorkbenchApi.recentTaxpayers().then(result => setRecentOps(result.items as any)).catch(() => setRecentOps([]))
     const value = params.get('taxpayer_id')
     if (!value) return
     setTaxpayerId(value)
@@ -57,14 +76,14 @@ export default function TaxpayerWorkbench() {
   return (
     <div className="omni-page">
       <div className="omni-page-header">
-        <Title level={4} style={{ margin: 0 }}>一户式纳税人工作台</Title>
-        <Text type="secondary">输入纳税人识别号或纳税人名称，集中查看该户信息、风险记录、案头分析和整改跟踪。</Text>
+        <Title level={4} style={{ margin: 0 }}>信息查询</Title>
+        <Text type="secondary">按纳税人识别号、企业名称、法定代表人或税收管理员查询，查看该户信息、风险记录、案头分析和整改跟踪。</Text>
       </div>
 
       <Card style={{ marginBottom: 16 }}>
         <Space.Compact style={{ width: '100%' }}>
           <Input.Search
-            placeholder="输入纳税人识别号或纳税人名称"
+            placeholder="输入税号、企业名称、法定代表人或税收管理员"
             value={taxpayerId}
             loading={loading}
             allowClear
@@ -93,7 +112,7 @@ export default function TaxpayerWorkbench() {
         ) : (
           <Card>
             <Empty
-              description="请先查询一户纳税人"
+              description="请输入关键字查询纳税人"
             >
               <Space direction="vertical">
                 <Text type="secondary">如果查不到企业，通常是还没有导入完整信息查询表。</Text>
@@ -103,6 +122,38 @@ export default function TaxpayerWorkbench() {
                 </Space>
               </Space>
             </Empty>
+            {(recentSearches.length > 0 || recentOps.length > 0) && (
+              <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+                <Col xs={24} md={12}>
+                  <Card size="small" title="上次搜索的企业">
+                    <List
+                      size="small"
+                      dataSource={recentSearches}
+                      locale={{ emptyText: '暂无搜索记录' }}
+                      renderItem={(item) => (
+                        <List.Item actions={[<Button size="small" onClick={() => load(item.taxpayer_id)}>查看</Button>]}>
+                          <List.Item.Meta title={item.company_name || item.taxpayer_id} description={`${item.taxpayer_id}；管理员：${item.tax_officer || '—'}`} />
+                        </List.Item>
+                      )}
+                    />
+                  </Card>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Card size="small" title="最近操作的企业">
+                    <List
+                      size="small"
+                      dataSource={recentOps}
+                      locale={{ emptyText: '暂无操作记录' }}
+                      renderItem={(item) => (
+                        <List.Item actions={[<Button size="small" onClick={() => load(item.taxpayer_id)}>查看</Button>]}>
+                          <List.Item.Meta title={item.company_name || item.taxpayer_id} description={`${item.taxpayer_id}；管理员：${item.tax_officer || '—'}`} />
+                        </List.Item>
+                      )}
+                    />
+                  </Card>
+                </Col>
+              </Row>
+            )}
           </Card>
         )
       ) : (
@@ -113,7 +164,7 @@ export default function TaxpayerWorkbench() {
               <Space>
                 <Button onClick={() => navigate(`/modules/analysis-workbench/new?taxpayer_id=${encodeURIComponent(data.taxpayer.taxpayer_id)}&company_name=${encodeURIComponent(data.taxpayer.company_name || '')}`)}>发起案头分析</Button>
                 <Button type="primary" onClick={() => navigate(`/modules/risk-ledger?taxpayer_id=${data.taxpayer.taxpayer_id}`)}>新增风险记录</Button>
-                <Button onClick={() => navigate('/my-risk-list')}>查看风险清单</Button>
+                <Button onClick={() => navigate('/modules/risk-ledger')}>查看管户记录</Button>
               </Space>
             }
           >
@@ -175,7 +226,7 @@ export default function TaxpayerWorkbench() {
 
           <Card title="最近案头分析">
             {data.recent_analysis_tasks.length === 0 ? (
-              <Empty description="该户暂无案头分析记录">
+              <Empty description="该户暂无案头分析结果">
                 <Button type="primary" onClick={() => navigate(`/modules/analysis-workbench/new?taxpayer_id=${encodeURIComponent(data.taxpayer.taxpayer_id)}&company_name=${encodeURIComponent(data.taxpayer.company_name || '')}`)}>发起案头分析</Button>
               </Empty>
             ) : (

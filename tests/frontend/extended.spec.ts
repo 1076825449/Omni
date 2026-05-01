@@ -80,14 +80,14 @@ test.describe('Extended Smoke - All 7 Modules Complete Flow', () => {
     await page.waitForURL(/\/$/, { timeout: 5000 })
   })
 
-  test('analysis-workbench full flow: new -> upload -> run -> result -> history', async ({ page }) => {
+  test('analysis-workbench full flow: new -> upload -> run -> result', async ({ page }) => {
     const analysisName = `Ext Smoke 分析 ${suffix}`
     await page.goto('/modules/analysis-workbench/new')
-    await expect(page.getByText('新建分析事项')).toBeVisible()
+    await expect(page.getByText('分析事项', { exact: true })).toBeVisible()
     await page.getByLabel('分析名称').fill(analysisName)
     await page.getByLabel('描述').fill('扩展冒烟测试')
-    await page.getByRole('button', { name: '创建任务' }).click()
-    await expect(page.getByText('上传分析资料（第2步）')).toBeVisible()
+    await page.getByRole('button', { name: '保存分析事项' }).click()
+    await expect(page.getByText('上传分析资料')).toBeVisible()
 
     // 上传文件
     await page.locator('input[type="file"]').setInputFiles({
@@ -98,12 +98,8 @@ test.describe('Extended Smoke - All 7 Modules Complete Flow', () => {
     await expect(page.getByText(`ext-analysis-${suffix}.txt`).first()).toBeVisible()
 
     // 发起分析
-    await page.getByRole('button', { name: '发起分析（第4步）' }).click()
-    await page.waitForURL(/\/history$/, { timeout: 5000 })
-    await expect(page.getByRole('button', { name: analysisName }).first()).toBeVisible()
-
-    // 查看结果
-    await page.getByRole('button', { name: analysisName }).first().click()
+    await page.getByRole('button', { name: '发起分析', exact: true }).click()
+    await page.waitForURL(/\/results\//, { timeout: 5000 })
     await expect(page.getByText('分析结果')).toBeVisible()
   })
 
@@ -121,7 +117,7 @@ test.describe('Extended Smoke - All 7 Modules Complete Flow', () => {
   test('record-operations: create object -> verify in list', async ({ page }) => {
     const objName = `Ext Smoke 对象 ${suffix}`
     await page.goto('/modules/record-operations/list')
-    await expect(page.getByRole('tab', { name: '对象列表' })).toBeVisible()
+    await expect(page.getByRole('tab', { name: '辅助记录列表' })).toBeVisible()
     await page.getByRole('button', { name: '新建对象' }).click()
     await page.waitForTimeout(500)
 
@@ -143,10 +139,10 @@ test.describe('Extended Smoke - All 7 Modules Complete Flow', () => {
     }
   })
 
-  test('risk-ledger: single record tab visible', async ({ page }) => {
+  test('risk-ledger: taxpayer record list visible', async ({ page }) => {
     await page.goto('/modules/risk-ledger')
-    await expect(page.getByRole('tab', { name: '单户记录' })).toBeVisible()
-    await page.getByRole('tab', { name: '单户记录' }).click()
+    await expect(page.getByText('管户记录列表').first()).toBeVisible()
+    await expect(page.getByRole('tab', { name: '单户补充' })).toBeVisible()
     await page.waitForTimeout(300)
   })
 

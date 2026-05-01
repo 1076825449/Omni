@@ -89,7 +89,7 @@ export default function ModuleCenter() {
         <Space direction="vertical" size={4} style={{ width: '100%' }}>
           <Title level={4} style={{ margin: 0 }}>系统管理：全部功能</Title>
           <Text type="secondary">
-            这里集中放置业务功能和系统管理功能。日常工作建议优先从首页、查一户企业、案头分析和风险清单进入。
+            这里集中放置业务功能和系统管理功能。日常工作建议优先从首页、信息查询、管户分配、管户记录和案头分析进入。
           </Text>
         </Space>
       </div>

@@ -204,6 +204,7 @@ export interface TaxpayerProfile {
   taxpayer_type?: string
   registration_status?: string
   industry: string
+  industry_tag?: string
   region: string
   tax_bureau: string
   manager_department: string
@@ -211,9 +212,11 @@ export interface TaxpayerProfile {
   credit_rating: string
   risk_level: string
   address?: string
+  address_tag?: string
   phone?: string
   business_scope?: string
   source_batch?: string
+  last_used_at?: string | null
   created_at?: string
   updated_at?: string
 }
@@ -539,12 +542,15 @@ export const infoQueryApi = {
       body: form,
     }).then(r => r.json() as Promise<{ success: boolean; message: string; batch: string; imported: number; updated: number; skipped: number; headers: string[] }>)
   },
-  list: (params?: { q?: string; tax_officer?: string; manager_department?: string; industry?: string; region?: string; risk_level?: string; limit?: number; offset?: number }) => {
+  list: (params?: { q?: string; tax_officer?: string; manager_department?: string; industry?: string; industry_tag?: string; address_tag?: string; registration_status?: string; region?: string; risk_level?: string; limit?: number; offset?: number }) => {
     const sp = new URLSearchParams()
     if (params?.q) sp.set('q', params.q)
     if (params?.tax_officer) sp.set('tax_officer', params.tax_officer)
     if (params?.manager_department) sp.set('manager_department', params.manager_department)
     if (params?.industry) sp.set('industry', params.industry)
+    if (params?.industry_tag) sp.set('industry_tag', params.industry_tag)
+    if (params?.address_tag) sp.set('address_tag', params.address_tag)
+    if (params?.registration_status) sp.set('registration_status', params.registration_status)
     if (params?.region) sp.set('region', params.region)
     if (params?.risk_level) sp.set('risk_level', params.risk_level)
     if (params?.limit) sp.set('limit', String(params.limit))
@@ -552,7 +558,7 @@ export const infoQueryApi = {
     return request<{ taxpayers: TaxpayerProfile[]; total: number }>('/api/modules/info-query/taxpayers?' + sp)
   },
   get: (taxpayerId: string) => request<TaxpayerProfile>('/api/modules/info-query/taxpayers/' + encodeURIComponent(taxpayerId)),
-  assignmentStats: () => request<{ by_officer: Record<string, number>; by_department: Record<string, number>; by_risk_level: Record<string, number>; total: number }>('/api/modules/info-query/assignment-stats'),
+  assignmentStats: () => request<{ by_officer: Record<string, number>; by_department: Record<string, number>; by_risk_level: Record<string, number>; by_industry_tag: Record<string, number>; by_address_tag: Record<string, number>; total: number }>('/api/modules/info-query/assignment-stats'),
 }
 
 export interface RiskDossier {
@@ -562,6 +568,10 @@ export interface RiskDossier {
   registration_status: string
   tax_officer: string
   address: string
+  industry?: string
+  industry_tag?: string
+  address_tag?: string
+  manager_department?: string
   is_temporary: boolean
   source: string
   owner_id: number
@@ -667,6 +677,8 @@ export interface TaxpayerWorkbenchData {
     industry: string
     tax_bureau: string
     manager_department: string
+    industry_tag?: string
+    address_tag?: string
   }
   dossier: RiskDossier | null
   entries: RiskLedgerEntry[]
@@ -681,6 +693,12 @@ export interface MyRiskListData {
   summary: Record<string, number>
 }
 
+export interface TaxpayerRecordListData {
+  items: RiskDossier[]
+  total: number
+  summary: Record<string, number>
+}
+
 export interface WorkbenchTodoData {
   items: Array<RiskDossier & { todo_type: string; todo_label: string }>
   summary: Record<string, number>
@@ -689,6 +707,21 @@ export interface WorkbenchTodoData {
 export const taxOfficerWorkbenchApi = {
   taxpayer: (taxpayerId: string) => request<TaxpayerWorkbenchData>('/api/workbench/taxpayer/' + encodeURIComponent(taxpayerId)),
   searchTaxpayers: (q: string) => request<{ items: TaxpayerProfile[] }>('/api/workbench/taxpayers/search?q=' + encodeURIComponent(q)),
+  recentTaxpayers: (limit = 8) => request<{ items: TaxpayerProfile[] }>('/api/workbench/recent-taxpayers?limit=' + limit),
+  taxpayerRecords: (params?: { q?: string; tax_officer?: string; registration_status?: string; entry_status?: string; overdue?: boolean; temporary?: boolean; industry_tag?: string; address_tag?: string; limit?: number; offset?: number }) => {
+    const sp = new URLSearchParams()
+    if (params?.q) sp.set('q', params.q)
+    if (params?.tax_officer) sp.set('tax_officer', params.tax_officer)
+    if (params?.registration_status) sp.set('registration_status', params.registration_status)
+    if (params?.entry_status) sp.set('entry_status', params.entry_status)
+    if (params?.overdue !== undefined) sp.set('overdue', String(params.overdue))
+    if (params?.temporary !== undefined) sp.set('temporary', String(params.temporary))
+    if (params?.industry_tag) sp.set('industry_tag', params.industry_tag)
+    if (params?.address_tag) sp.set('address_tag', params.address_tag)
+    if (params?.limit) sp.set('limit', String(params.limit))
+    if (params?.offset) sp.set('offset', String(params.offset))
+    return request<TaxpayerRecordListData>('/api/workbench/taxpayer-records?' + sp)
+  },
   todos: (params?: { limit?: number; due_days?: number }) => {
     const sp = new URLSearchParams()
     if (params?.limit) sp.set('limit', String(params.limit))

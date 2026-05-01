@@ -110,7 +110,7 @@ def resolve_notification_target(notification: Notification) -> tuple[Optional[st
         if match:
             task_id = match.group(1)
             return f"/modules/analysis-workbench/results/{task_id}", "查看分析结果"
-        return "/modules/analysis-workbench/history", "查看分析历史"
+        return "/reports", "查看文书报告"
 
     if notification.title == "定时任务执行完成":
         return "/modules/schedule-workbench", "查看定时任务"

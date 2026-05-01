@@ -56,9 +56,9 @@ export default function Results() {
   if (!task) return (
     <Result
       status="error"
-      title="分析记录不存在"
+      title="分析结果不存在"
       subTitle="可能是记录已被删除，或当前账号无权查看。"
-      extra={<Button onClick={() => navigate('/modules/analysis-workbench/history')}>返回分析记录</Button>}
+      extra={<Button onClick={() => navigate('/reports')}>返回文书报告</Button>}
     />
   )
 
@@ -192,7 +192,7 @@ export default function Results() {
             subTitle={task.result_summary || '分析过程出错。建议先检查上传资料是否为空、表头是否包含期间/金额/纳税人识别号等关键字段，再重新分析。'}
             extra={
               <Space>
-                <Button onClick={() => navigate('/modules/analysis-workbench/history')}>返回分析记录</Button>
+                <Button onClick={() => navigate('/reports')}>返回文书报告</Button>
                 <Button type="primary" onClick={handleRerun}>用当前资料重新分析</Button>
               </Space>
             }
@@ -243,7 +243,7 @@ export default function Results() {
       )}
 
       {task.status === 'succeeded' && (
-        <Card title="税务风险清单" style={{ marginTop: 16 }}>
+        <Card title="税务风险事项" style={{ marginTop: 16 }}>
           {task.risks.length === 0 ? (
             <Result
               status="success"
@@ -383,15 +383,15 @@ export default function Results() {
           title="已形成的风险事项"
           style={{ marginTop: 16 }}
           extra={
-            <Button size="small" onClick={() => navigate('/my-risk-list')}>
+            <Button size="small" onClick={() => navigate('/modules/risk-ledger')}>
               查看全部 {task.related_record_count} 条
             </Button>
           }
         >
               <Text>分析完成后已形成 <strong>{task.related_record_count}</strong> 条风险事项，可继续记入风险台账并跟踪整改。</Text>
           <br />
-          <Button type="link" onClick={() => navigate('/my-risk-list')}>
-            → 查看管户风险清单
+          <Button type="link" onClick={() => navigate('/modules/risk-ledger')}>
+            → 查看管户记录
           </Button>
         </Card>
       )}

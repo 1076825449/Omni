@@ -77,6 +77,15 @@ def ensure_lightweight_migrations():
             for column, sql in task_migrations.items():
                 if column not in task_columns:
                     conn.execute(text(sql))
+            taxpayer_columns = {row[1] for row in conn.execute(text("PRAGMA table_info(taxpayer_infos)")).fetchall()}
+            taxpayer_migrations = {
+                "industry_tag": "ALTER TABLE taxpayer_infos ADD COLUMN industry_tag VARCHAR(120) DEFAULT ''",
+                "address_tag": "ALTER TABLE taxpayer_infos ADD COLUMN address_tag VARCHAR(120) DEFAULT ''",
+                "last_used_at": "ALTER TABLE taxpayer_infos ADD COLUMN last_used_at DATETIME",
+            }
+            for column, sql in taxpayer_migrations.items():
+                if column not in taxpayer_columns:
+                    conn.execute(text(sql))
     elif engine.dialect.name == "postgresql":
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE risk_ledger_entries ADD COLUMN IF NOT EXISTS rectification_deadline TIMESTAMP"))
@@ -84,6 +93,9 @@ def ensure_lightweight_migrations():
             conn.execute(text("ALTER TABLE risk_ledger_entries ADD COLUMN IF NOT EXISTS contact_phone VARCHAR(100) DEFAULT ''"))
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS taxpayer_id VARCHAR(64) DEFAULT ''"))
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS company_name VARCHAR(255) DEFAULT ''"))
+            conn.execute(text("ALTER TABLE taxpayer_infos ADD COLUMN IF NOT EXISTS industry_tag VARCHAR(120) DEFAULT ''"))
+            conn.execute(text("ALTER TABLE taxpayer_infos ADD COLUMN IF NOT EXISTS address_tag VARCHAR(120) DEFAULT ''"))
+            conn.execute(text("ALTER TABLE taxpayer_infos ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMP"))
 
 
 @asynccontextmanager

@@ -95,7 +95,7 @@ export default function Reports() {
         extra={
           <Space>
             <Button onClick={() => navigate(`/modules/analysis-workbench/results/${id}`)}>返回结果页</Button>
-            <Button onClick={() => navigate('/modules/analysis-workbench/history')}>返回分析记录</Button>
+            <Button onClick={() => navigate('/reports')}>返回文书报告</Button>
           </Space>
         }
       />

@@ -1,5 +1,5 @@
 // 分析工作模块 - 新建分析
-import { Card, Form, Input, Button, Upload, Typography, Space, List, Row, Col, Alert, Tag, Select, InputNumber, Steps } from 'antd'
+import { Card, Form, Input, Button, Upload, Typography, Space, List, Row, Col, Alert, Tag, Select, InputNumber } from 'antd'
 import { UploadOutlined, FileOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -8,16 +8,6 @@ import { useAppMessage } from '../../../hooks/useAppMessage'
 import { useAuthStore } from '../../../stores/auth'
 
 const { Text, Paragraph } = Typography
-
-const uploadGuides = [
-  { key: 'sales', title: '销项发票', examples: '期间、企业名称、纳税人识别号、金额、购方名称、商品名称', tag: 'sales_invoice' },
-  { key: 'purchase', title: '进项发票', examples: '期间、企业名称、纳税人识别号、金额、供应商名称、商品名称', tag: 'purchase_invoice' },
-  { key: 'vat', title: '增值税申报', examples: '期间、申报销售额、申报销项、申报进项', tag: 'vat_return' },
-  { key: 'cit', title: '企业所得税', examples: '期间、收入总额、主营业务成本、利润总额、应纳税所得额', tag: 'cit_return' },
-  { key: 'pit', title: '个人所得税', examples: '期间、工资薪金、申报人数、个税税额、应纳税所得额', tag: 'pit_return' },
-  { key: 'finance', title: '财务报表', examples: '期间、主营业务收入、主营业务成本、期初存货、期末存货', tag: 'financial_statement' },
-  { key: 'expense', title: '费用/报销', examples: '期间、费用金额、凭证类型', tag: 'expense_detail' },
-]
 
 const kindLabel: Record<string, string> = {
   sales_invoice: '销项发票',
@@ -50,22 +40,34 @@ export default function NewAnalysis() {
   const { user } = useAuthStore()
   const isViewer = user?.role === 'viewer'
 
+  const taxpayerContext = {
+    taxpayer_id: searchParams.get('taxpayer_id') || '',
+    company_name: searchParams.get('company_name') || '',
+  }
+
+  const ensureTask = async () => {
+    if (taskId) return taskId
+    const values = form.getFieldsValue()
+    const name = values.name || (taxpayerContext.company_name ? `${taxpayerContext.company_name}案头分析` : `案头分析_${new Date().toLocaleDateString('zh-CN')}`)
+    const description = values.description || (taxpayerContext.taxpayer_id ? `针对纳税人识别号 ${taxpayerContext.taxpayer_id} 开展案头分析` : '上传或补录资料后开展案头分析')
+    const res = await analysisApi.createTask(name, description, taxpayerContext)
+    setTaskId(res.task_id)
+    return res.task_id
+  }
+
   const handleUpload = async (file: File) => {
     if (isViewer) {
       message.warning('只读用户不能上传文件')
       return false
     }
-    if (!taskId) {
-      message.warning('请先确认本次分析事项，再上传资料')
-      return false
-    }
     setUploading(true)
     try {
-      const result = await analysisApi.uploadFile(taskId, file)
+      const currentTaskId = await ensureTask()
+      const result = await analysisApi.uploadFile(currentTaskId, file)
       message.success(`${file.name} 上传成功`)
       setFileList(prev => [...prev, { name: file.name, status: 'done', profile: result.profile }])
     } catch {
-      message.error(`${file.name} 上传失败`)
+      message.error(`${file.name} 上传失败，请检查文件是否加密或格式是否正确`)
     } finally {
       setUploading(false)
     }
@@ -97,24 +99,21 @@ export default function NewAnalysis() {
       message.warning('只读用户不能发起分析')
       return
     }
-    if (!taskId) return
+    const currentTaskId = taskId || await ensureTask()
     try {
-      await analysisApi.runTask(taskId)
-      message.success('分析已开始，可在“分析记录”中查看结果')
-      navigate('/modules/analysis-workbench/history')
+      await analysisApi.runTask(currentTaskId)
+      message.success('分析已开始，完成后可进入结果页查看疑点并生成文书')
+      navigate(`/modules/analysis-workbench/results/${currentTaskId}`)
     } catch {
       message.error('发起分析失败，请确认已上传资料或补录关键数据')
     }
   }
 
   const handleManualSubmit = async (values: Record<string, string | number>) => {
-    if (!taskId) {
-      message.warning('请先确认本次分析事项，再补录数据')
-      return
-    }
     const dataKind = values.data_kind as 'vat_return' | 'cit_return' | 'pit_return'
     try {
-      const result = await analysisApi.addManualData(taskId, dataKind, values)
+      const currentTaskId = await ensureTask()
+      const result = await analysisApi.addManualData(currentTaskId, dataKind, values)
       setFileList(prev => [...prev, { name: `手工补录-${kindLabel[dataKind]}`, status: 'done', profile: result.profile }])
       manualForm.resetFields(['sales_declared', 'output_declared', 'input_declared', 'revenue', 'cost', 'profit', 'taxable_income', 'salary_amount', 'employee_count', 'pit_tax_amount'])
       message.success('补录数据已纳入本次分析')
@@ -123,24 +122,9 @@ export default function NewAnalysis() {
     }
   }
 
-  const taxpayerContext = {
-    taxpayer_id: searchParams.get('taxpayer_id') || '',
-    company_name: searchParams.get('company_name') || '',
-  }
-  const currentStep = taskId ? (fileList.length > 0 ? 2 : 1) : 0
-
-  const stepItems = [
-    { title: '第1步：确认分析事项' },
-    { title: '第2步：上传分析资料' },
-    { title: '第3步：确认资料识别结果' },
-    { title: '第4步：发起分析' },
-    { title: '第5步：查看分析结果' },
-  ]
-
   return (
     <div>
       <Card title={taxpayerContext.taxpayer_id ? '为该户开展案头分析' : '发起税务风险分析'} style={{ marginBottom: 16 }}>
-        <Steps current={currentStep} size="small" items={stepItems.map(s => ({ title: s.title }))} />
         {taxpayerContext.taxpayer_id && (
           <Alert
             type="info"
@@ -161,38 +145,7 @@ export default function NewAnalysis() {
         )}
       </Card>
 
-      <Card title="上传资料说明" style={{ marginBottom: 16 }}>
-        <Alert
-          type="info"
-          showIcon
-          style={{ marginBottom: 16 }}
-          message="推荐上传顺序（按此顺序效果更好）"
-          description="先传发票明细，再传增值税/所得税申报，再传财务报表和费用明细。风险识别会更完整，通知书与分析报告也会更具体。"
-        />
-        <Row gutter={[12, 12]}>
-          {uploadGuides.map((item) => (
-            <Col xs={24} md={12} xl={8} key={item.key}>
-              <Card size="small">
-                <Space direction="vertical" size={4}>
-                  <Space>
-                    <Text strong>{item.title}</Text>
-                  </Space>
-                  <Text type="secondary" style={{ fontSize: 12 }}>{item.examples}</Text>
-                </Space>
-              </Card>
-            </Col>
-          ))}
-        </Row>
-        <Alert
-          type="warning"
-          showIcon
-          style={{ marginTop: 12 }}
-          message="图片和 PDF 文件"
-          description="图片和 PDF 当前作为佐证材料保存，不会自动 OCR。请同时在下方「手工补录」中录入关键申报数据，以确保分析完整性。"
-        />
-      </Card>
-
-      <Card title={taxpayerContext.taxpayer_id ? '确认本户分析事项' : '新建分析事项'} style={{ marginBottom: 16 }}>
+      <Card title="分析事项" style={{ marginBottom: 16 }}>
         <Form
           form={form}
           layout="vertical"
@@ -213,22 +166,21 @@ export default function NewAnalysis() {
 
           <Form.Item>
             <Button type="primary" htmlType="submit">
-              {taskId ? '建立另一项分析' : '确认分析事项'}
+              {taskId ? '已建立，可继续上传' : '保存分析事项'}
             </Button>
             {taskId && (
               <Button style={{ marginLeft: 8 }} onClick={handleRun}>
-                发起分析
+                立即分析
               </Button>
             )}
           </Form.Item>
         </Form>
       </Card>
 
-      {taskId && (
-        <Card title="上传分析资料（第2步）" style={{ marginBottom: 16 }}>
+      <Card title="上传分析资料" style={{ marginBottom: 16 }}>
           <Space style={{ width: '100%' }} direction="vertical">
             <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-              文件名建议直接包含资料类型，例如：「2026年3月销项发票.xlsx」「增值税申报_2026-03.csv」「财务报表_2026Q1.xlsx」。
+              可一次上传任意期间的发票、增值税、企业所得税、个人所得税、财务报表、费用明细等资料；期间不限制为单个年度。
             </Paragraph>
             <Upload.Dragger
               accept=".csv,.xls,.xlsx,.json,.txt,.png,.jpg,.jpeg,.webp,.pdf"
@@ -243,10 +195,8 @@ export default function NewAnalysis() {
             </Upload.Dragger>
           </Space>
         </Card>
-      )}
 
-      {taskId && (
-        <Card title="无表格/无图片时：申报数据手工补录" style={{ marginBottom: 16 }}>
+      <Card title="手工填写关键数据" style={{ marginBottom: 16 }}>
           <Alert
             type="warning"
             showIcon
@@ -324,7 +274,6 @@ export default function NewAnalysis() {
             <Button type="primary" htmlType="submit">保存补录数据</Button>
           </Form>
         </Card>
-      )}
 
       {taskId && fileList.length > 0 && (
         <Card title="已上传文件确认（第3步）" style={{ marginBottom: 16 }}>
@@ -362,7 +311,7 @@ export default function NewAnalysis() {
           />
           <div style={{ marginTop: 16, textAlign: 'center' }}>
             <Button type="primary" onClick={handleRun} size="large">
-              发起分析（第4步）
+              发起分析
             </Button>
           </div>
         </Card>

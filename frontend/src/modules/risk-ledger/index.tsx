@@ -9,7 +9,7 @@ import dayjs from 'dayjs'
 import { useSearchParams } from 'react-router-dom'
 import PlatformLayout from '../../components/Layout'
 import ModuleLayout from '../../components/Layout/ModuleLayout'
-import { RiskDossier, riskLedgerApi } from '../../services/api'
+import { RiskDossier, riskLedgerApi, taxOfficerWorkbenchApi } from '../../services/api'
 import { useAppMessage } from '../../hooks/useAppMessage'
 
 const { Text, Paragraph } = Typography
@@ -31,6 +31,7 @@ export default function RiskLedgerModule() {
   const [stats, setStats] = useState<any>(null)
   const [query, setQuery] = useState('')
   const [entryStatus, setEntryStatus] = useState<string | undefined>()
+  const [rowDrafts, setRowDrafts] = useState<Record<string, any>>({})
   const [loading, setLoading] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
   const [detail, setDetail] = useState<any>(null)
@@ -40,10 +41,10 @@ export default function RiskLedgerModule() {
   const load = (q = query) => {
     setLoading(true)
     Promise.all([
-      riskLedgerApi.list({ q, entry_status: entryStatus, limit: 50 }),
+      taxOfficerWorkbenchApi.taxpayerRecords({ q, entry_status: entryStatus, limit: 50 }),
       riskLedgerApi.stats(),
     ]).then(([list, stat]) => {
-      setRows(list.dossiers)
+      setRows(list.items)
       setTotal(list.total)
       setStats(stat)
       setLoading(false)
@@ -85,6 +86,39 @@ export default function RiskLedgerModule() {
       load()
     } catch {
       void message.error('保存失败：若信息查询表未命中该税号，请填写纳税人名称后创建临时档案')
+    }
+  }
+
+  const updateDraft = (taxpayerId: string, patch: any) => {
+    setRowDrafts(prev => ({ ...prev, [taxpayerId]: { ...(prev[taxpayerId] || {}), ...patch } }))
+  }
+
+  const handleInlineSave = async (record: RiskDossier) => {
+    const draft = rowDrafts[record.taxpayer_id] || {}
+    if (!draft.content?.trim()) {
+      void message.warning('请先填写记录内容')
+      return
+    }
+    try {
+      await riskLedgerApi.createEntry({
+        taxpayer_id: record.taxpayer_id,
+        company_name: record.company_name,
+        registration_status: record.registration_status,
+        tax_officer: record.tax_officer,
+        address: record.address,
+        recorded_at: (draft.recorded_at || dayjs()).format('YYYY-MM-DD HH:mm:ss'),
+        rectification_deadline: draft.rectification_deadline?.format('YYYY-MM-DD HH:mm:ss'),
+        entry_status: draft.entry_status || '待核实',
+        content: draft.content,
+        contact_person: draft.contact_person,
+        contact_phone: draft.contact_phone,
+        note: draft.note,
+      })
+      void message.success('记录已保存')
+      setRowDrafts(prev => ({ ...prev, [record.taxpayer_id]: {} }))
+      load()
+    } catch {
+      void message.error('保存失败，请检查记录内容、整改期限和联系人')
     }
   }
 
@@ -153,6 +187,8 @@ export default function RiskLedgerModule() {
     { title: '识别号', dataIndex: 'taxpayer_id', key: 'taxpayer_id', width: 180 },
     { title: '登记状态', dataIndex: 'registration_status', key: 'registration_status', width: 100, render: v => v || <Text type="secondary">—</Text> },
     { title: '管理员', dataIndex: 'tax_officer', key: 'tax_officer', width: 110, render: v => v || <Text type="secondary">—</Text> },
+    { title: '行业标签', dataIndex: 'industry_tag', key: 'industry_tag', width: 100, render: v => v ? <Tag color="blue">{v}</Tag> : <Text type="secondary">—</Text> },
+    { title: '地址标签', dataIndex: 'address_tag', key: 'address_tag', width: 110, render: v => v ? <Tag>{v}</Tag> : <Text type="secondary">—</Text> },
     {
       title: '最新事项',
       dataIndex: 'latest_entry_status',
@@ -163,6 +199,23 @@ export default function RiskLedgerModule() {
     { title: '记录时间', dataIndex: 'latest_recorded_at', key: 'latest_recorded_at', width: 160, render: v => v ? dayjs(v).format('YYYY-MM-DD HH:mm') : <Text type="secondary">—</Text> },
     { title: '整改期限', dataIndex: 'latest_rectification_deadline', key: 'latest_rectification_deadline', width: 120, render: (v, record) => v ? <Tag color={record.is_overdue ? 'red' : 'blue'}>{dayjs(v).format('YYYY-MM-DD')}</Tag> : <Text type="secondary">—</Text> },
     { title: '记录内容', dataIndex: 'latest_content', key: 'latest_content', ellipsis: true, render: v => v || <Text type="secondary">—</Text> },
+    {
+      title: '本次记录',
+      key: 'inline_record',
+      width: 560,
+      render: (_, record) => {
+        const draft = rowDrafts[record.taxpayer_id] || {}
+        return (
+          <Space.Compact style={{ width: '100%' }}>
+            <DatePicker value={draft.recorded_at || dayjs()} onChange={value => updateDraft(record.taxpayer_id, { recorded_at: value })} style={{ width: 130 }} />
+            <Select value={draft.entry_status || '待核实'} onChange={value => updateDraft(record.taxpayer_id, { entry_status: value })} options={statuses.map(s => ({ value: s, label: s }))} style={{ width: 100 }} />
+            <Input value={draft.content} onChange={event => updateDraft(record.taxpayer_id, { content: event.target.value })} placeholder="记录内容" style={{ width: 200 }} />
+            <Input value={draft.contact_person} onChange={event => updateDraft(record.taxpayer_id, { contact_person: event.target.value })} placeholder="联系人" style={{ width: 90 }} />
+            <Button type="primary" onClick={() => handleInlineSave(record)}>保存</Button>
+          </Space.Compact>
+        )
+      },
+    },
     { title: '次数', dataIndex: 'entry_count', key: 'entry_count', width: 70 },
   ]
 
@@ -170,7 +223,7 @@ export default function RiskLedgerModule() {
     <PlatformLayout>
       <ModuleLayout
         moduleName="管户记录"
-        moduleDesc="一户一档 · 风险留痕 · 排除整改跟踪"
+        moduleDesc="企业列表内直接记录风险、排除和整改情况"
         items={[{ key: 'index', label: '管户记录', path: '/modules/risk-ledger' }]}
       >
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
@@ -182,13 +235,38 @@ export default function RiskLedgerModule() {
           <Col xs={12} md={4}><Card size="small"><Statistic title="临时档案" value={stats?.temporary_count || 0} /></Card></Col>
         </Row>
 
+        <Card
+          title="管户记录列表"
+          style={{ marginBottom: 16 }}
+          extra={
+            <Space>
+              <Input.Search placeholder="税号/名称/法人/管理员/地址" allowClear onSearch={(value) => { setQuery(value); load(value) }} style={{ width: 260 }} />
+              <Select placeholder="事项状态" allowClear value={entryStatus} onChange={setEntryStatus} style={{ width: 130 }} options={statuses.map(s => ({ value: s, label: s }))} />
+              <Button onClick={() => load()}>刷新</Button>
+            </Space>
+          }
+        >
+          <Table
+            columns={columns}
+            dataSource={rows}
+            rowKey="taxpayer_id"
+            loading={loading}
+            size="small"
+            scroll={{ x: 1500 }}
+            pagination={{ total, pageSize: 50, hideOnSinglePage: true }}
+            locale={{
+              emptyText: query || entryStatus ? '没有符合当前筛选条件的企业' : '暂无企业数据。请先在首页导入税务登记信息查询数据源。',
+            }}
+          />
+        </Card>
+
         <Tabs
           activeKey={activeTab}
           onChange={setActiveTab}
           items={[
             {
               key: 'single',
-              label: '单户记录',
+              label: '单户补充',
               children: (
                 <Card>
                   <Alert
@@ -287,29 +365,6 @@ export default function RiskLedgerModule() {
             }
           />
         )}
-
-        <Card
-          title="管户记录台账"
-          extra={
-            <Space>
-              <Input.Search placeholder="税号/名称/地址" allowClear onSearch={(value) => { setQuery(value); load(value) }} style={{ width: 240 }} />
-              <Select placeholder="事项状态" allowClear value={entryStatus} onChange={setEntryStatus} style={{ width: 130 }} options={statuses.map(s => ({ value: s, label: s }))} />
-              <Button onClick={() => load()}>刷新</Button>
-            </Space>
-          }
-        >
-          <Table
-            columns={columns}
-            dataSource={rows}
-            rowKey="taxpayer_id"
-            loading={loading}
-            size="small"
-            pagination={{ total, pageSize: 50, hideOnSinglePage: true }}
-            locale={{
-              emptyText: query || entryStatus ? '没有符合当前筛选条件的风险档案' : '暂无风险档案。可先单户记录、批量记录，或从案头分析结果记入风险台账。',
-            }}
-          />
-        </Card>
 
         <Modal title="纳税人风险档案" open={detailOpen} onCancel={() => setDetailOpen(false)} footer={null} width={860}>
           {detail && (

@@ -1,17 +1,13 @@
 // 分析工作模块 - 入口
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import PlatformLayout from '../../components/Layout'
 import ModuleLayout from '../../components/Layout/ModuleLayout'
-import Workbench from './pages/Workbench'
 import NewAnalysis from './pages/NewAnalysis'
-import History from './pages/History'
 import Results from './pages/Results'
 import Reports from './pages/Reports'
 
 const tabItems = [
-  { key: 'workbench', label: '案头分析首页', path: '/modules/analysis-workbench' },
-  { key: 'new', label: '发起案头分析', path: '/modules/analysis-workbench/new' },
-  { key: 'history', label: '分析记录', path: '/modules/analysis-workbench/history' },
+  { key: 'new', label: '案头分析', path: '/modules/analysis-workbench' },
 ]
 
 export default function AnalysisWorkbench() {
@@ -23,9 +19,9 @@ export default function AnalysisWorkbench() {
         items={tabItems}
       >
         <Routes>
-          <Route index element={<Workbench />} />
+          <Route index element={<NewAnalysis />} />
           <Route path="new" element={<NewAnalysis />} />
-          <Route path="history" element={<History />} />
+          <Route path="history" element={<Navigate to="/reports" replace />} />
           <Route path="results/:id" element={<Results />} />
           <Route path="reports/:id" element={<Reports />} />
         </Routes>

@@ -141,7 +141,7 @@ export default function TaskCenter() {
           </Button>
           <Button
             size="small"
-            onClick={() => navigate(record.module === 'analysis-workbench' ? '/modules/analysis-workbench/history' : `/modules/${record.module}`)}
+            onClick={() => navigate(record.module === 'analysis-workbench' ? '/reports' : `/modules/${record.module}`)}
           >
             来源
           </Button>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Alert, Button, Card, Col, Descriptions, Input, List, Modal, Row, Space, Statistic, Table, Tag, Typography, Upload } from 'antd'
+import { Alert, Button, Card, Col, Descriptions, Input, List, Modal, Row, Select, Space, Statistic, Table, Tag, Typography, Upload } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { UploadOutlined } from '@ant-design/icons'
 import PlatformLayout from '../../components/Layout'
@@ -13,16 +13,17 @@ export default function InfoQueryModule() {
   const [rows, setRows] = useState<TaxpayerProfile[]>([])
   const [total, setTotal] = useState(0)
   const [q, setQ] = useState('')
+  const [filters, setFilters] = useState<{ tax_officer?: string; manager_department?: string; industry_tag?: string; address_tag?: string; registration_status?: string }>({})
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [stats, setStats] = useState<{ by_officer: Record<string, number>; by_department: Record<string, number>; by_risk_level: Record<string, number>; total: number } | null>(null)
+  const [stats, setStats] = useState<{ by_officer: Record<string, number>; by_department: Record<string, number>; by_risk_level: Record<string, number>; by_industry_tag: Record<string, number>; by_address_tag: Record<string, number>; total: number } | null>(null)
   const [selected, setSelected] = useState<TaxpayerProfile | null>(null)
   const message = useAppMessage()
 
   const load = (keyword = q) => {
     setLoading(true)
     Promise.all([
-      infoQueryApi.list({ q: keyword, limit: 50 }),
+      infoQueryApi.list({ q: keyword, ...filters, limit: 50 }),
       infoQueryApi.assignmentStats(),
     ]).then(([list, stat]) => {
       setRows(list.taxpayers)
@@ -32,7 +33,7 @@ export default function InfoQueryModule() {
     }).catch(() => setLoading(false))
   }
 
-  useEffect(() => { load('') }, [])
+  useEffect(() => { load(q) }, [filters])
 
   const handleUpload = async (file: File) => {
     setUploading(true)
@@ -57,6 +58,8 @@ export default function InfoQueryModule() {
     },
     { title: '纳税人识别号', dataIndex: 'taxpayer_id', key: 'taxpayer_id', width: 180 },
     { title: '行业', dataIndex: 'industry', key: 'industry', width: 140 },
+    { title: '行业标签', dataIndex: 'industry_tag', key: 'industry_tag', width: 110, render: v => v ? <Tag color="blue">{v}</Tag> : <Text type="secondary">未分类</Text> },
+    { title: '地址标签', dataIndex: 'address_tag', key: 'address_tag', width: 120, render: v => v ? <Tag>{v}</Tag> : <Text type="secondary">未识别</Text> },
     { title: '属地', dataIndex: 'region', key: 'region', width: 120 },
     { title: '管户部门', dataIndex: 'manager_department', key: 'manager_department', width: 140 },
     { title: '管理员', dataIndex: 'tax_officer', key: 'tax_officer', width: 120 },
@@ -73,7 +76,7 @@ export default function InfoQueryModule() {
     <PlatformLayout>
       <ModuleLayout
         moduleName="管户分配"
-        moduleDesc="导入完整信息查询表，按管理员、管户部门查看纳税人分布"
+        moduleDesc="展示全部管户，按管理员、行业标签、地址标签查看和筛选"
         items={[{ key: 'index', label: '查询与导入', path: '/modules/info-query' }]}
       >
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
@@ -84,12 +87,7 @@ export default function InfoQueryModule() {
 
         <Card title="导入完整信息查询表 / 管户分配数据源" style={{ marginBottom: 16 }}>
           <Space direction="vertical" style={{ width: '100%' }}>
-            <Alert
-              type="info"
-              showIcon
-              message="这是全系统的基础数据源"
-              description="导入后，系统会按税收管理员、管户部门形成管户分布；一户式工作台、案头分析、管户记录和风险清单都会自动带出企业名称、登记状态、管理员和地址。"
-            />
+            <Alert type="info" showIcon message="这是全系统的基础数据源" description="首页也可以导入。导入后，信息查询、管户分配、管户记录、案头分析和后续模块都会自动带出企业名称、登记状态、管理员、行业标签和地址标签。" />
             <Text type="secondary">
               支持 CSV、XLS、XLSX、JSON。必备字段：纳税人识别号、纳税人名称；建议字段：登记状态、行业、主管税务机关、管理分局、税收管理员、地址、风险等级、纳税信用等级。
             </Text>
@@ -105,7 +103,7 @@ export default function InfoQueryModule() {
           extra={
             <Space>
               <Input.Search
-                placeholder="企业名称、税号、法人"
+                placeholder="企业名称、税号、法人、管理员"
                 allowClear
                 value={q}
                 onChange={(event) => setQ(event.target.value)}
@@ -115,7 +113,15 @@ export default function InfoQueryModule() {
               <Button onClick={() => load(q)}>刷新</Button>
             </Space>
           }
-        >
+      >
+          <Space wrap style={{ marginBottom: 12 }}>
+            <Select placeholder="管理员" allowClear style={{ width: 150 }} value={filters.tax_officer} onChange={value => setFilters(prev => ({ ...prev, tax_officer: value }))} options={Object.keys(stats?.by_officer || {}).map(value => ({ value: value === '未分配' ? '' : value, label: value }))} />
+            <Select placeholder="管户部门" allowClear style={{ width: 180 }} value={filters.manager_department} onChange={value => setFilters(prev => ({ ...prev, manager_department: value }))} options={Object.keys(stats?.by_department || {}).map(value => ({ value: value === '未分配' ? '' : value, label: value }))} />
+            <Select placeholder="行业标签" allowClear style={{ width: 150 }} value={filters.industry_tag} onChange={value => setFilters(prev => ({ ...prev, industry_tag: value }))} options={Object.keys(stats?.by_industry_tag || {}).map(value => ({ value: value === '未分类' ? '' : value, label: value }))} />
+            <Select placeholder="地址标签" allowClear style={{ width: 150 }} value={filters.address_tag} onChange={value => setFilters(prev => ({ ...prev, address_tag: value }))} options={Object.keys(stats?.by_address_tag || {}).filter(value => value !== '未识别地址').map(value => ({ value, label: value }))} />
+            <Select placeholder="登记状态" allowClear style={{ width: 140 }} value={filters.registration_status} onChange={value => setFilters(prev => ({ ...prev, registration_status: value }))} options={[...new Set(rows.map(row => row.registration_status).filter(Boolean))].map(value => ({ value, label: value }))} />
+            <Button onClick={() => setFilters({})}>清空筛选</Button>
+          </Space>
           <Table
             columns={columns}
             dataSource={rows}
@@ -158,7 +164,9 @@ export default function InfoQueryModule() {
               <Descriptions.Item label="纳税人类型">{selected.taxpayer_type || '—'}</Descriptions.Item>
               <Descriptions.Item label="登记状态">{selected.registration_status || '—'}</Descriptions.Item>
               <Descriptions.Item label="行业">{selected.industry || '—'}</Descriptions.Item>
+              <Descriptions.Item label="行业标签">{selected.industry_tag || '—'}</Descriptions.Item>
               <Descriptions.Item label="属地">{selected.region || '—'}</Descriptions.Item>
+              <Descriptions.Item label="地址标签">{selected.address_tag || '—'}</Descriptions.Item>
               <Descriptions.Item label="主管税务机关">{selected.tax_bureau || '—'}</Descriptions.Item>
               <Descriptions.Item label="管户部门">{selected.manager_department || '—'}</Descriptions.Item>
               <Descriptions.Item label="管理员">{selected.tax_officer || '—'}</Descriptions.Item>

@@ -283,6 +283,9 @@ def create_entry(body: EntryCreateRequest, db: Session, user: User) -> RiskLedge
     db.add(entry)
     db.flush()
     dossier.updated_at = datetime.utcnow()
+    taxpayer = get_taxpayer_profile(dossier.taxpayer_id, db, user.id)
+    if taxpayer:
+        taxpayer.last_used_at = datetime.utcnow()
     return entry
 
 

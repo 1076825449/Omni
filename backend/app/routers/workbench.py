@@ -47,6 +47,10 @@ class TaxpayerSearchResponse(BaseModel):
 
 
 def dossier_payload(dossier: RiskDossier, db: Session) -> dict:
+    taxpayer = db.query(TaxpayerInfo).filter(
+        TaxpayerInfo.owner_id == dossier.owner_id,
+        TaxpayerInfo.taxpayer_id == dossier.taxpayer_id,
+    ).first()
     entries = db.query(RiskLedgerEntry).filter(
         RiskLedgerEntry.dossier_id == dossier.id,
         RiskLedgerEntry.owner_id == dossier.owner_id,
@@ -66,6 +70,10 @@ def dossier_payload(dossier: RiskDossier, db: Session) -> dict:
         "registration_status": dossier.registration_status,
         "tax_officer": dossier.tax_officer,
         "address": dossier.address,
+        "industry": taxpayer.industry if taxpayer else "",
+        "industry_tag": taxpayer.industry_tag if taxpayer else "",
+        "address_tag": taxpayer.address_tag if taxpayer else "",
+        "manager_department": taxpayer.manager_department if taxpayer else "",
         "is_temporary": dossier.is_temporary,
         "entry_count": len(entries),
         "latest_recorded_at": latest_recorded_at.isoformat() if latest_recorded_at else None,
@@ -90,6 +98,23 @@ def entry_payload(entry: RiskLedgerEntry) -> dict:
         "contact_phone": entry.contact_phone,
         "note": entry.note,
         "created_at": entry.created_at.isoformat() if entry.created_at else None,
+    }
+
+
+def taxpayer_search_payload(item: TaxpayerInfo) -> dict:
+    return {
+        "taxpayer_id": item.taxpayer_id,
+        "company_name": item.company_name,
+        "registration_status": item.registration_status,
+        "tax_officer": item.tax_officer,
+        "address": item.address,
+        "industry": item.industry,
+        "industry_tag": item.industry_tag,
+        "address_tag": item.address_tag,
+        "tax_bureau": item.tax_bureau,
+        "manager_department": item.manager_department,
+        "legal_person": item.legal_person,
+        "last_used_at": item.last_used_at.isoformat() if item.last_used_at else None,
     }
 
 
@@ -160,6 +185,116 @@ def build_risk_list_items(
     return items, len(items)
 
 
+def latest_dossier_by_taxpayer(db: Session, user_id: int) -> dict[str, RiskDossier]:
+    rows = db.query(RiskDossier).filter(RiskDossier.owner_id == user_id).all()
+    return {row.taxpayer_id: row for row in rows}
+
+
+def build_taxpayer_record_items(
+    db: Session,
+    user_id: int,
+    q: Optional[str] = None,
+    tax_officer: Optional[str] = None,
+    registration_status: Optional[str] = None,
+    entry_status: Optional[str] = None,
+    overdue: Optional[bool] = None,
+    temporary: Optional[bool] = None,
+    industry_tag: Optional[str] = None,
+    address_tag: Optional[str] = None,
+) -> tuple[list[dict], int, dict]:
+    dossier_map = latest_dossier_by_taxpayer(db, user_id)
+    query = db.query(TaxpayerInfo).filter(TaxpayerInfo.owner_id == user_id)
+    if q:
+        like = f"%{q}%"
+        query = query.filter(or_(
+            TaxpayerInfo.taxpayer_id.like(like),
+            TaxpayerInfo.company_name.like(like),
+            TaxpayerInfo.legal_person.like(like),
+            TaxpayerInfo.tax_officer.like(like),
+            TaxpayerInfo.address.like(like),
+        ))
+    if tax_officer:
+        query = query.filter(TaxpayerInfo.tax_officer.like(f"%{tax_officer}%"))
+    if registration_status:
+        query = query.filter(TaxpayerInfo.registration_status == registration_status)
+    if industry_tag:
+        query = query.filter(TaxpayerInfo.industry_tag == industry_tag)
+    if address_tag:
+        query = query.filter(TaxpayerInfo.address_tag == address_tag)
+    taxpayers = query.order_by(TaxpayerInfo.last_used_at.desc().nullslast(), TaxpayerInfo.updated_at.desc()).all()
+
+    items: list[dict] = []
+    seen: set[str] = set()
+    for taxpayer in taxpayers:
+        dossier = dossier_map.get(taxpayer.taxpayer_id)
+        if dossier:
+            item = dossier_payload(dossier, db)
+        else:
+            item = {
+                "taxpayer_id": taxpayer.taxpayer_id,
+                "company_name": taxpayer.company_name,
+                "registration_status": taxpayer.registration_status,
+                "tax_officer": taxpayer.tax_officer,
+                "address": taxpayer.address,
+                "industry": taxpayer.industry,
+                "industry_tag": taxpayer.industry_tag,
+                "address_tag": taxpayer.address_tag,
+                "manager_department": taxpayer.manager_department,
+                "is_temporary": False,
+                "entry_count": 0,
+                "latest_recorded_at": None,
+                "latest_rectification_deadline": None,
+                "latest_content": "",
+                "latest_entry_status": "",
+                "latest_contact_person": "",
+                "latest_contact_phone": "",
+                "is_overdue": False,
+            }
+        if entry_status and item["latest_entry_status"] != entry_status:
+            continue
+        if overdue is not None and item["is_overdue"] != overdue:
+            continue
+        if temporary is not None and item["is_temporary"] != temporary:
+            continue
+        seen.add(item["taxpayer_id"])
+        items.append(item)
+
+    for dossier in dossier_map.values():
+        if dossier.taxpayer_id in seen:
+            continue
+        item = dossier_payload(dossier, db)
+        if q:
+            like_text = q.strip()
+            if like_text not in item["taxpayer_id"] and like_text not in item["company_name"] and like_text not in item["address"]:
+                continue
+        if tax_officer and tax_officer not in item["tax_officer"]:
+            continue
+        if registration_status and item["registration_status"] != registration_status:
+            continue
+        if industry_tag and item.get("industry_tag") != industry_tag:
+            continue
+        if address_tag and item.get("address_tag") != address_tag:
+            continue
+        if entry_status and item["latest_entry_status"] != entry_status:
+            continue
+        if overdue is not None and item["is_overdue"] != overdue:
+            continue
+        if temporary is not None and item["is_temporary"] != temporary:
+            continue
+        items.append(item)
+
+    summary = {
+        "taxpayer_total": db.query(TaxpayerInfo).filter(TaxpayerInfo.owner_id == user_id).count(),
+        "dossier_total": len(dossier_map),
+        "pending_count": sum(1 for item in items if item["latest_entry_status"] == "待核实"),
+        "rectifying_count": sum(1 for item in items if item["latest_entry_status"] == "整改中"),
+        "rectified_count": sum(1 for item in items if item["latest_entry_status"] == "已整改"),
+        "excluded_count": sum(1 for item in items if item["latest_entry_status"] == "已排除"),
+        "temporary_count": sum(1 for item in items if item["is_temporary"]),
+    }
+    return items, len(items), summary
+
+
 @router.get("/taxpayer/{taxpayer_id}", response_model=TaxpayerWorkbenchResponse)
 def taxpayer_workbench(
     taxpayer_id: str,
@@ -182,6 +317,9 @@ def taxpayer_workbench(
         ).order_by(RiskLedgerEntry.recorded_at.desc(), RiskLedgerEntry.id.desc()).limit(20).all()
     recent_tasks, material_gaps = recent_analysis_for_taxpayer(taxpayer_id, db, current_user.id)
     latest_risk = entry_payload(entries[0]) if entries else None
+    if taxpayer:
+        taxpayer.last_used_at = datetime.utcnow()
+        db.commit()
     return TaxpayerWorkbenchResponse(
         taxpayer={
             "taxpayer_id": taxpayer_id,
@@ -190,6 +328,8 @@ def taxpayer_workbench(
             "tax_officer": taxpayer.tax_officer if taxpayer else dossier.tax_officer if dossier else "",
             "address": taxpayer.address if taxpayer else dossier.address if dossier else "",
             "industry": taxpayer.industry if taxpayer else "",
+            "industry_tag": taxpayer.industry_tag if taxpayer else "",
+            "address_tag": taxpayer.address_tag if taxpayer else "",
             "tax_bureau": taxpayer.tax_bureau if taxpayer else "",
             "manager_department": taxpayer.manager_department if taxpayer else "",
         },
@@ -214,22 +354,46 @@ def search_taxpayers(
         or_(
             TaxpayerInfo.taxpayer_id.like(like),
             TaxpayerInfo.company_name.like(like),
+            TaxpayerInfo.legal_person.like(like),
+            TaxpayerInfo.tax_officer.like(like),
             TaxpayerInfo.address.like(like),
         ),
     ).order_by(TaxpayerInfo.updated_at.desc()).limit(limit).all()
-    return TaxpayerSearchResponse(items=[
-        {
-            "taxpayer_id": item.taxpayer_id,
-            "company_name": item.company_name,
-            "registration_status": item.registration_status,
-            "tax_officer": item.tax_officer,
-            "address": item.address,
-            "industry": item.industry,
-            "tax_bureau": item.tax_bureau,
-            "manager_department": item.manager_department,
-        }
-        for item in taxpayers
-    ])
+    return TaxpayerSearchResponse(items=[taxpayer_search_payload(item) for item in taxpayers])
+
+
+@router.get("/recent-taxpayers", response_model=TaxpayerSearchResponse)
+def recent_taxpayers(
+    limit: int = Query(8, le=20),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    taxpayers = db.query(TaxpayerInfo).filter(
+        TaxpayerInfo.owner_id == current_user.id,
+        TaxpayerInfo.last_used_at.isnot(None),
+    ).order_by(TaxpayerInfo.last_used_at.desc()).limit(limit).all()
+    return TaxpayerSearchResponse(items=[taxpayer_search_payload(item) for item in taxpayers])
+
+
+@router.get("/taxpayer-records", response_model=RiskListResponse)
+def taxpayer_records(
+    q: Optional[str] = Query(None),
+    tax_officer: Optional[str] = Query(None),
+    registration_status: Optional[str] = Query(None),
+    entry_status: Optional[str] = Query(None),
+    overdue: Optional[bool] = Query(None),
+    temporary: Optional[bool] = Query(None),
+    industry_tag: Optional[str] = Query(None),
+    address_tag: Optional[str] = Query(None),
+    limit: int = Query(50, le=100),
+    offset: int = Query(0),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    matched_items, total, summary = build_taxpayer_record_items(
+        db, current_user.id, q, tax_officer, registration_status, entry_status, overdue, temporary, industry_tag, address_tag
+    )
+    return RiskListResponse(items=matched_items[offset:offset + limit], total=total, summary=summary)
 
 
 @router.get("/my-risk-list", response_model=RiskListResponse)

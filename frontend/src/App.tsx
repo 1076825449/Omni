@@ -18,7 +18,7 @@ const Stats = lazy(() => import('./pages/Stats'))
 const Help = lazy(() => import('./pages/Help'))
 const GettingStarted = lazy(() => import('./pages/Help/GettingStarted'))
 const TaxpayerWorkbench = lazy(() => import('./pages/TaxpayerWorkbench'))
-const MyRiskList = lazy(() => import('./pages/MyRiskList'))
+const DocumentReports = lazy(() => import('./pages/DocumentReports'))
 const AnalysisWorkbench = lazy(() => import('./modules/analysis-workbench'))
 const DashboardWorkbench = lazy(() => import('./modules/dashboard-workbench'))
 const InfoQuery = lazy(() => import('./modules/info-query'))
@@ -145,7 +145,15 @@ function App() {
               path="/my-risk-list"
               element={
                 <ProtectedRoute>
-                  <PlatformLayout><MyRiskList /></PlatformLayout>
+                  <Navigate to="/modules/risk-ledger" replace />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/reports"
+              element={
+                <ProtectedRoute>
+                  <PlatformLayout><DocumentReports /></PlatformLayout>
                 </ProtectedRoute>
               }
             />

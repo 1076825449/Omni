@@ -169,9 +169,9 @@ export default function RiskLedgerModule() {
   return (
     <PlatformLayout>
       <ModuleLayout
-        moduleName="风险记录台账"
+        moduleName="管户记录"
         moduleDesc="一户一档 · 风险留痕 · 排除整改跟踪"
-        items={[{ key: 'index', label: '台账', path: '/modules/risk-ledger' }]}
+        items={[{ key: 'index', label: '管户记录', path: '/modules/risk-ledger' }]}
       >
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
           <Col xs={12} md={4}><Card size="small"><Statistic title="档案数" value={stats?.dossier_total || 0} /></Card></Col>
@@ -289,7 +289,7 @@ export default function RiskLedgerModule() {
         )}
 
         <Card
-          title="风险记录台账"
+          title="管户记录台账"
           extra={
             <Space>
               <Input.Search placeholder="税号/名称/地址" allowClear onSearch={(value) => { setQuery(value); load(value) }} style={{ width: 240 }} />

@@ -72,8 +72,8 @@ export default function InfoQueryModule() {
   return (
     <PlatformLayout>
       <ModuleLayout
-        moduleName="纳税人信息查询"
-        moduleDesc="导入完整信息查询表，供查户、案头分析和风险清单复用"
+        moduleName="管户分配"
+        moduleDesc="导入完整信息查询表，按管理员、管户部门查看纳税人分布"
         items={[{ key: 'index', label: '查询与导入', path: '/modules/info-query' }]}
       >
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
@@ -82,13 +82,13 @@ export default function InfoQueryModule() {
           <Col xs={24} md={8}><Card size="small"><Statistic title="管理部门数" value={Object.keys(stats?.by_department || {}).length} /></Card></Col>
         </Row>
 
-        <Card title="导入完整信息查询表" style={{ marginBottom: 16 }}>
+        <Card title="导入完整信息查询表 / 管户分配数据源" style={{ marginBottom: 16 }}>
           <Space direction="vertical" style={{ width: '100%' }}>
             <Alert
               type="info"
               showIcon
               message="这是全系统的基础数据源"
-              description="导入后，一户式工作台、案头分析、风险台账和管户风险清单都会自动带出企业名称、登记状态、管理员和地址。"
+              description="导入后，系统会按税收管理员、管户部门形成管户分布；一户式工作台、案头分析、管户记录和风险清单都会自动带出企业名称、登记状态、管理员和地址。"
             />
             <Text type="secondary">
               支持 CSV、XLS、XLSX、JSON。必备字段：纳税人识别号、纳税人名称；建议字段：登记状态、行业、主管税务机关、管理分局、税收管理员、地址、风险等级、纳税信用等级。
@@ -101,7 +101,7 @@ export default function InfoQueryModule() {
         </Card>
 
         <Card
-          title="信息查询"
+          title="管户查询"
           extra={
             <Space>
               <Input.Search

@@ -13,7 +13,7 @@ try:
     modules_data = [
         {
             "key": "analysis-workbench",
-            "name": "分析工作模块",
+            "name": "案头分析",
             "description": "统一处理上传、校验、分析、结果、报告输出。支持发票、申报、财报交叉识别与通知书/分析报告导出。",
             "type": "workflow",
             "priority": "high",
@@ -22,8 +22,8 @@ try:
         },
         {
             "key": "record-operations",
-            "name": "对象管理模块",
-            "description": "统一处理对象管理、分类、分配、批量调整和导出。是平台统一对象落点，支持导入与标签管理。",
+            "name": "辅助数据管理",
+            "description": "统一处理辅助记录、分类标签、批量调整和导出，作为系统辅助数据落点。",
             "type": "list",
             "priority": "high",
             "status": "active",
@@ -31,8 +31,8 @@ try:
         },
         {
             "key": "info-query",
-            "name": "信息查询表",
-            "description": "导入纳税人完整信息查询表，供案头分析、管户分配和后续模块复用。",
+            "name": "管户分配",
+            "description": "导入纳税人完整信息查询表，按管理员和管户部门查看纳税人分布，供案头分析、管户记录和后续模块复用。",
             "type": "list",
             "priority": "high",
             "status": "active",
@@ -40,8 +40,8 @@ try:
         },
         {
             "key": "risk-ledger",
-            "name": "风险记录台账",
-            "description": "按纳税人建立风险记录档案，支持单户记录、批量留痕和整改状态跟踪。",
+            "name": "管户记录",
+            "description": "按纳税人建立管户记录档案，支持单户记录、批量留痕、风险排除和整改状态跟踪。",
             "type": "list",
             "priority": "high",
             "status": "active",
@@ -49,8 +49,8 @@ try:
         },
         {
             "key": "learning-lab",
-            "name": "学习训练模块",
-            "description": "统一处理题库、训练、错题、收藏和统计。支持真实答题、得分统计和会话持续。",
+            "name": "刷题程序",
+            "description": "统一处理题库、刷题、错题、收藏和统计。支持真实答题、得分统计和会话持续。",
             "type": "interactive",
             "priority": "medium",
             "status": "active",

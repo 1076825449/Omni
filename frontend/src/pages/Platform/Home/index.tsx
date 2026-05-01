@@ -85,9 +85,10 @@ export default function Home() {
 
   const quickActions = [
     { path: '/taxpayer-workbench', key: 'taxpayer-workbench', label: '查一户企业', desc: '进入一户式工作台', primary: true },
+    { path: '/modules/info-query', key: 'info-query', label: '管户分配', desc: '导入信息查询表并查看管理员管户', primary: false },
+    { path: '/modules/risk-ledger', key: 'risk-ledger', label: '管户记录', desc: '记录风险、排除和整改过程', primary: false },
     { path: '/my-risk-list', key: 'risk-ledger', label: '处理风险清单', desc: '查看待核实和整改事项', primary: false },
-    { path: '/modules/info-query', key: 'info-query', label: '导入纳税人信息', desc: '建立企业基础信息库', primary: false },
-    { path: '/modules/risk-ledger', key: 'risk-ledger', label: '记录风险', desc: '补充风险和整改记录', primary: false },
+    { path: '/modules/learning-lab', key: 'learning-lab', label: '刷题程序', desc: '业务题库练习和错题复盘', primary: false },
   ].filter(action => modules.some(module => module.key === action.key))
 
   const hasData = stats && (stats.task_total > 0 || stats.file_total > 0)

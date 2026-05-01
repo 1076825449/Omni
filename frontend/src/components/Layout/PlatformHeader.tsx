@@ -9,9 +9,11 @@ import { useWsStore } from '../../stores/ws'
 const navItems = [
   { label: '首页', path: '/' },
   { label: '查一户企业', path: '/taxpayer-workbench' },
+  { label: '管户分配', path: '/modules/info-query' },
+  { label: '管户记录', path: '/modules/risk-ledger' },
   { label: '案头分析', path: '/modules/analysis-workbench' },
   { label: '风险清单', path: '/my-risk-list' },
-  { label: '纳税人信息', path: '/modules/info-query' },
+  { label: '刷题程序', path: '/modules/learning-lab' },
   { label: '文书报告', path: '/modules/analysis-workbench/history' },
   { label: '帮助', path: '/help' },
 ]

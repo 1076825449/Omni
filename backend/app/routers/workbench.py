@@ -358,7 +358,6 @@ def search_taxpayers(
             TaxpayerInfo.company_name.like(like),
             TaxpayerInfo.legal_person.like(like),
             TaxpayerInfo.tax_officer.like(like),
-            TaxpayerInfo.address.like(like),
         ),
     ).order_by(TaxpayerInfo.updated_at.desc()).limit(limit).all()
     return TaxpayerSearchResponse(items=[taxpayer_search_payload(item) for item in taxpayers])

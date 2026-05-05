@@ -596,6 +596,18 @@ def test_info_query_import_assignment_stats_and_analysis_profile(auth_client):
     name_search_resp = auth_client.get("/api/workbench/taxpayers/search?q=信息企业A")
     assert name_search_resp.status_code == 200
     assert name_search_resp.json()["items"][0]["taxpayer_id"] == "91310000INFO0001"
+    address_only_csv = (
+        "企业名称,纳税人识别号,法定代表人,行业,经营地址,税收管理员\n"
+        "地址命中企业,91310000INFOADDR,赵法人,批发零售,柳大路1号,赵税官\n"
+    )
+    address_import_resp = auth_client.post(
+        "/api/modules/info-query/import",
+        files={"file": ("address-only.csv", io.BytesIO(address_only_csv.encode("utf-8-sig")), "text/csv")},
+    )
+    assert address_import_resp.status_code == 200
+    address_search_resp = auth_client.get("/api/workbench/taxpayers/search?q=柳大")
+    assert address_search_resp.status_code == 200
+    assert address_search_resp.json()["items"] == []
     recent_resp = auth_client.get("/api/workbench/recent-taxpayers")
     assert recent_resp.status_code == 200
     assert recent_resp.json()["items"][0]["taxpayer_id"] == "91310000INFO0001"

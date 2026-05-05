@@ -516,6 +516,15 @@ def test_info_query_import_assignment_stats_and_analysis_profile(auth_client):
     assert stats["by_industry_tag"]["制造业"] == 1
     assert stats["by_address_tag"]["柳堡路"] == 1
 
+    history_resp = auth_client.get("/api/modules/info-query/import-history")
+    assert history_resp.status_code == 200
+    history = history_resp.json()["items"]
+    assert history[0]["filename"] == "taxpayer-info.csv"
+    assert history[0]["imported"] == 2
+    assert history[0]["updated"] == 0
+    assert history[0]["skipped"] == 0
+    assert history[0]["total_processed"] == 2
+
     create_resp = auth_client.post(
         "/api/modules/analysis-workbench/tasks",
         json={"name": "信息表画像联动测试", "description": "验证案头分析引用纳税人画像"},

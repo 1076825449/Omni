@@ -221,6 +221,17 @@ export interface TaxpayerProfile {
   updated_at?: string
 }
 
+export interface ImportHistoryItem {
+  batch: string
+  filename: string
+  imported: number
+  updated: number
+  skipped: number
+  total_processed: number
+  created_at: string
+  detail: string
+}
+
 export interface AnalysisRisk {
   risk_type: string
   severity: string
@@ -542,6 +553,7 @@ export const infoQueryApi = {
       body: form,
     }).then(r => r.json() as Promise<{ success: boolean; message: string; batch: string; imported: number; updated: number; skipped: number; headers: string[] }>)
   },
+  importHistory: (limit = 8) => request<{ items: ImportHistoryItem[] }>('/api/modules/info-query/import-history?limit=' + limit),
   list: (params?: { q?: string; tax_officer?: string; manager_department?: string; industry?: string; industry_tag?: string; address_tag?: string; registration_status?: string; region?: string; risk_level?: string; limit?: number; offset?: number }) => {
     const sp = new URLSearchParams()
     if (params?.q) sp.set('q', params.q)

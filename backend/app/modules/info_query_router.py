@@ -85,6 +85,21 @@ class ImportPreviewResponse(BaseModel):
     headers: list[str]
 
 
+class ImportHistoryItem(BaseModel):
+    batch: str
+    filename: str
+    imported: int
+    updated: int
+    skipped: int
+    total_processed: int
+    created_at: datetime
+    detail: str
+
+
+class ImportHistoryResponse(BaseModel):
+    items: list[ImportHistoryItem]
+
+
 class AssignmentStatsResponse(BaseModel):
     by_officer: dict[str, int]
     by_department: dict[str, int]
@@ -242,6 +257,26 @@ def log_action(db: Session, action: str, target_id: str, operator_id: int, detai
     ))
 
 
+def parse_import_log(log: OperationLog) -> ImportHistoryItem:
+    filename_match = re.search(r"导入信息查询表:\s*(.*?),\s*新增", log.detail or "")
+    imported_match = re.search(r"新增\s*(\d+)", log.detail or "")
+    updated_match = re.search(r"更新\s*(\d+)", log.detail or "")
+    skipped_match = re.search(r"跳过\s*(\d+)", log.detail or "")
+    imported = int(imported_match.group(1)) if imported_match else 0
+    updated = int(updated_match.group(1)) if updated_match else 0
+    skipped = int(skipped_match.group(1)) if skipped_match else 0
+    return ImportHistoryItem(
+        batch=log.target_id,
+        filename=filename_match.group(1).strip() if filename_match else "",
+        imported=imported,
+        updated=updated,
+        skipped=skipped,
+        total_processed=imported + updated + skipped,
+        created_at=log.created_at,
+        detail=log.detail or "",
+    )
+
+
 @router.post("/import", response_model=ImportPreviewResponse)
 def import_taxpayer_info(
     file: UploadFile = File(...),
@@ -287,6 +322,21 @@ def import_taxpayer_info(
         skipped=skipped,
         headers=headers,
     )
+
+
+@router.get("/import-history", response_model=ImportHistoryResponse)
+def import_history(
+    limit: int = Query(8, le=30),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    logs = db.query(OperationLog).filter(
+        OperationLog.operator_id == current_user.id,
+        OperationLog.module == "info-query",
+        OperationLog.action == "import",
+        OperationLog.result == "success",
+    ).order_by(OperationLog.created_at.desc()).limit(limit).all()
+    return ImportHistoryResponse(items=[parse_import_log(log) for log in logs])
 
 
 @router.get("/taxpayers", response_model=TaxpayerListResponse)

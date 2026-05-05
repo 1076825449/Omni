@@ -1,11 +1,11 @@
 // 平台首页
-import { Card, Row, Col, Statistic, Button, Space, Typography, List, Skeleton, Empty, Alert, Tag, Input, Upload } from 'antd'
+import { Card, Row, Col, Statistic, Button, Space, Typography, List, Skeleton, Empty, Alert, Tag, Input, Upload, Progress, Descriptions } from 'antd'
 import { UploadOutlined } from '@ant-design/icons'
 import { Link, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '../../../stores/auth'
 import { useNotificationStore } from '../../../stores/notification'
-import type { Module, PlatformStatsOverview, Task, WorkbenchTodoData } from '../../../services/api'
+import type { ImportHistoryItem, Module, PlatformStatsOverview, Task, WorkbenchTodoData } from '../../../services/api'
 import { infoQueryApi, modulesApi, platformStatsApi, riskLedgerApi, tasksApi, taxOfficerWorkbenchApi } from '../../../services/api'
 import { useAppMessage } from '../../../hooks/useAppMessage'
 
@@ -39,6 +39,11 @@ export default function Home() {
   const [todos, setTodos] = useState<WorkbenchTodoData>({ items: [], summary: {} })
   const [taxpayerId, setTaxpayerId] = useState('')
   const [importing, setImporting] = useState(false)
+  const [importStartedAt, setImportStartedAt] = useState<number | null>(null)
+  const [importElapsed, setImportElapsed] = useState(0)
+  const [importFileName, setImportFileName] = useState('')
+  const [lastImportResult, setLastImportResult] = useState<ImportHistoryItem | null>(null)
+  const [importHistory, setImportHistory] = useState<ImportHistoryItem[]>([])
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
   const message = useAppMessage()
@@ -52,15 +57,29 @@ export default function Home() {
       platformStatsApi.overview(),
       taxOfficerWorkbenchApi.taxpayerRecords({ limit: 1 }),
       taxOfficerWorkbenchApi.todos({ limit: 8 }),
-    ]).then(([moduleData, taskData, statsData, riskData, todoData]) => {
+      infoQueryApi.importHistory(6),
+    ]).then(([moduleData, taskData, statsData, riskData, todoData, historyData]) => {
       setModules(moduleData.modules.filter((m: Module) => m.status === 'active'))
       setRecentTasks(taskData.tasks)
       setStats(statsData)
       setRiskSummary(riskData.summary)
       setTodos(todoData)
+      setImportHistory(historyData.items)
+      setLastImportResult(historyData.items[0] || null)
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (!importing || !importStartedAt) {
+      setImportElapsed(0)
+      return
+    }
+    const timer = window.setInterval(() => {
+      setImportElapsed(Math.max(1, Math.floor((Date.now() - importStartedAt) / 1000)))
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [importing, importStartedAt])
 
   const refreshTodos = async () => {
     const [riskData, todoData] = await Promise.all([
@@ -86,18 +105,33 @@ export default function Home() {
   }
 
   const handleSourceUpload = async (file: File) => {
+    setImportFileName(file.name)
+    setImportStartedAt(Date.now())
+    setLastImportResult(null)
     setImporting(true)
     try {
       const result = await infoQueryApi.importFile(file)
       message.success(result.message)
-      const [statsData, riskData, todoData] = await Promise.all([
+      const [statsData, riskData, todoData, historyData] = await Promise.all([
         platformStatsApi.overview(),
         taxOfficerWorkbenchApi.taxpayerRecords({ limit: 1 }),
         taxOfficerWorkbenchApi.todos({ limit: 8 }),
+        infoQueryApi.importHistory(6),
       ])
       setStats(statsData)
       setRiskSummary(riskData.summary)
       setTodos(todoData)
+      setImportHistory(historyData.items)
+      setLastImportResult(historyData.items[0] || {
+        batch: result.batch,
+        filename: file.name,
+        imported: result.imported,
+        updated: result.updated,
+        skipped: result.skipped,
+        total_processed: result.imported + result.updated + result.skipped,
+        created_at: new Date().toISOString(),
+        detail: result.message,
+      })
     } catch {
       message.error('导入失败：请确认文件为税务登记信息查询表，且包含纳税人识别号、纳税人名称等字段')
     } finally {
@@ -300,6 +334,63 @@ export default function Home() {
                 <p>上传“税务登记信息查询”数据源</p>
                 <Text type="secondary" style={{ fontSize: 12 }}>支持 XLS、XLSX、CSV、JSON</Text>
               </Upload.Dragger>
+              {importing && (
+                <Alert
+                  type="warning"
+                  showIcon
+                  message={`正在导入：${importFileName || '数据源文件'}`}
+                  description={
+                    <Space direction="vertical" style={{ width: '100%' }} size={6}>
+                      <Progress percent={65} status="active" />
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        大表导入需要等待解析和写入数据库，当前已等待约 {importElapsed} 秒。请不要重复上传或关闭页面。
+                      </Text>
+                    </Space>
+                  }
+                />
+              )}
+              {lastImportResult && !importing && (
+                <Card size="small" title="最近一次导入结果">
+                  <Descriptions size="small" column={1}>
+                    <Descriptions.Item label="文件">{lastImportResult.filename || '未记录文件名'}</Descriptions.Item>
+                    <Descriptions.Item label="导入时间">{new Date(lastImportResult.created_at).toLocaleString('zh-CN')}</Descriptions.Item>
+                    <Descriptions.Item label="批次">{lastImportResult.batch}</Descriptions.Item>
+                    <Descriptions.Item label="结果">
+                      <Space wrap>
+                        <Tag color="green">新增 {lastImportResult.imported}</Tag>
+                        <Tag color="blue">更新 {lastImportResult.updated}</Tag>
+                        <Tag color={lastImportResult.skipped > 0 ? 'orange' : 'default'}>跳过 {lastImportResult.skipped}</Tag>
+                      </Space>
+                    </Descriptions.Item>
+                  </Descriptions>
+                </Card>
+              )}
+              <Card size="small" title="导入历史" extra={<Button size="small" onClick={() => infoQueryApi.importHistory(6).then(data => setImportHistory(data.items))}>刷新</Button>}>
+                {importHistory.length === 0 ? (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无导入历史" />
+                ) : (
+                  <List
+                    size="small"
+                    dataSource={importHistory}
+                    renderItem={(item) => (
+                      <List.Item>
+                        <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                          <Space wrap>
+                            <Text strong>{item.filename || '未记录文件名'}</Text>
+                            <Tag>处理 {item.total_processed}</Tag>
+                            <Tag color="green">新增 {item.imported}</Tag>
+                            <Tag color="blue">更新 {item.updated}</Tag>
+                            {item.skipped > 0 && <Tag color="orange">跳过 {item.skipped}</Tag>}
+                          </Space>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            {new Date(item.created_at).toLocaleString('zh-CN')} · 批次 {item.batch}
+                          </Text>
+                        </Space>
+                      </List.Item>
+                    )}
+                  />
+                )}
+              </Card>
               <Text type="secondary" style={{ fontSize: 12 }}>
                 模板字段可包含：纳税人识别号、纳税人名称、状态、行业、经营范围、经营地址、法定代表人、税收管理员。
               </Text>

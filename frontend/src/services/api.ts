@@ -232,6 +232,25 @@ export interface ImportHistoryItem {
   detail: string
 }
 
+export interface ImportJob {
+  job_id: string
+  status: 'queued' | 'running' | 'succeeded' | 'failed'
+  phase: string
+  filename: string
+  batch: string
+  progress_percent: number
+  total_rows: number
+  processed_rows: number
+  imported: number
+  updated: number
+  skipped: number
+  message: string
+  error: string
+  created_at: string
+  updated_at: string
+  completed_at?: string | null
+}
+
 export interface AnalysisRisk {
   risk_type: string
   severity: string
@@ -553,6 +572,19 @@ export const infoQueryApi = {
       body: form,
     }).then(r => r.json() as Promise<{ success: boolean; message: string; batch: string; imported: number; updated: number; skipped: number; headers: string[] }>)
   },
+  startImportJob: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return fetch(API_BASE + '/api/modules/info-query/import-jobs', {
+      method: 'POST',
+      credentials: 'include',
+      body: form,
+    }).then(async r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      return r.json() as Promise<ImportJob>
+    })
+  },
+  getImportJob: (jobId: string) => request<ImportJob>('/api/modules/info-query/import-jobs/' + encodeURIComponent(jobId)),
   importHistory: (limit = 8) => request<{ items: ImportHistoryItem[] }>('/api/modules/info-query/import-history?limit=' + limit),
   list: (params?: { q?: string; tax_officer?: string; manager_department?: string; industry?: string; industry_tag?: string; address_tag?: string; registration_status?: string; region?: string; risk_level?: string; limit?: number; offset?: number }) => {
     const sp = new URLSearchParams()

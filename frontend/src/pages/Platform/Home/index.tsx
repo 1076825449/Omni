@@ -5,7 +5,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '../../../stores/auth'
 import { useNotificationStore } from '../../../stores/notification'
-import type { ImportHistoryItem, Module, PlatformStatsOverview, Task, WorkbenchTodoData } from '../../../services/api'
+import type { ImportHistoryItem, ImportJob, Module, PlatformStatsOverview, Task, WorkbenchTodoData } from '../../../services/api'
 import { infoQueryApi, modulesApi, platformStatsApi, riskLedgerApi, tasksApi, taxOfficerWorkbenchApi } from '../../../services/api'
 import { useAppMessage } from '../../../hooks/useAppMessage'
 
@@ -42,6 +42,7 @@ export default function Home() {
   const [importStartedAt, setImportStartedAt] = useState<number | null>(null)
   const [importElapsed, setImportElapsed] = useState(0)
   const [importFileName, setImportFileName] = useState('')
+  const [importJob, setImportJob] = useState<ImportJob | null>(null)
   const [lastImportResult, setLastImportResult] = useState<ImportHistoryItem | null>(null)
   const [importHistory, setImportHistory] = useState<ImportHistoryItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -108,10 +109,20 @@ export default function Home() {
     setImportFileName(file.name)
     setImportStartedAt(Date.now())
     setLastImportResult(null)
+    setImportJob(null)
     setImporting(true)
     try {
-      const result = await infoQueryApi.importFile(file)
-      message.success(result.message)
+      let job = await infoQueryApi.startImportJob(file)
+      setImportJob(job)
+      while (job.status === 'queued' || job.status === 'running') {
+        await new Promise(resolve => window.setTimeout(resolve, 1000))
+        job = await infoQueryApi.getImportJob(job.job_id)
+        setImportJob(job)
+      }
+      if (job.status === 'failed') {
+        throw new Error(job.error || job.message)
+      }
+      message.success(job.message)
       const [statsData, riskData, todoData, historyData] = await Promise.all([
         platformStatsApi.overview(),
         taxOfficerWorkbenchApi.taxpayerRecords({ limit: 1 }),
@@ -123,14 +134,14 @@ export default function Home() {
       setTodos(todoData)
       setImportHistory(historyData.items)
       setLastImportResult(historyData.items[0] || {
-        batch: result.batch,
-        filename: file.name,
-        imported: result.imported,
-        updated: result.updated,
-        skipped: result.skipped,
-        total_processed: result.imported + result.updated + result.skipped,
+        batch: job.batch,
+        filename: job.filename || file.name,
+        imported: job.imported,
+        updated: job.updated,
+        skipped: job.skipped,
+        total_processed: job.imported + job.updated + job.skipped,
         created_at: new Date().toISOString(),
-        detail: result.message,
+        detail: job.message,
       })
     } catch {
       message.error('导入失败：请确认文件为税务登记信息查询表，且包含纳税人识别号、纳税人名称等字段')
@@ -341,7 +352,15 @@ export default function Home() {
                   message={`正在导入：${importFileName || '数据源文件'}`}
                   description={
                     <Space direction="vertical" style={{ width: '100%' }} size={6}>
-                      <Progress percent={65} status="active" />
+                      <Progress percent={importJob?.progress_percent || 1} status="active" />
+                      <Text strong style={{ fontSize: 12 }}>
+                        {importJob?.phase || '上传文件'}：{importJob?.message || '正在上传文件并准备解析'}
+                      </Text>
+                      {importJob?.total_rows ? (
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          已处理 {importJob.processed_rows} / {importJob.total_rows} 行；新增 {importJob.imported}，更新 {importJob.updated}，跳过 {importJob.skipped}
+                        </Text>
+                      ) : null}
                       <Text type="secondary" style={{ fontSize: 12 }}>
                         大表导入需要等待解析和写入数据库，当前已等待约 {importElapsed} 秒。请不要重复上传或关闭页面。
                       </Text>

@@ -35,10 +35,16 @@ def override_get_db():
 def setup_db():
     Base.metadata.create_all(bind=engine)
     app.dependency_overrides[get_db] = override_get_db
+    from app.modules import info_query_router
+    original_info_query_session = info_query_router.SessionLocal
+    info_query_router.SessionLocal = TestingSessionLocal
+    info_query_router.IMPORT_JOBS.clear()
     # 清理 rate limiter 状态
     from app.middleware.rate_limit import _limiter
     _limiter._hits.clear()
     yield
+    info_query_router.SessionLocal = original_info_query_session
+    info_query_router.IMPORT_JOBS.clear()
     app.dependency_overrides.clear()
     Base.metadata.drop_all(bind=engine)
 
@@ -524,6 +530,30 @@ def test_info_query_import_assignment_stats_and_analysis_profile(auth_client):
     assert history[0]["updated"] == 0
     assert history[0]["skipped"] == 0
     assert history[0]["total_processed"] == 2
+
+    job_csv = (
+        "企业名称,纳税人识别号,法定代表人,行业,经营地址,税收管理员\n"
+        "任务导入企业,91310000JOB0001,赵法人,批发零售,柳堡路88号,赵税官\n"
+    )
+    job_resp = auth_client.post(
+        "/api/modules/info-query/import-jobs",
+        files={"file": ("taxpayer-job.csv", io.BytesIO(job_csv.encode("utf-8-sig")), "text/csv")},
+    )
+    assert job_resp.status_code == 200
+    job_id = job_resp.json()["job_id"]
+    job_detail = None
+    for _ in range(20):
+        job_detail_resp = auth_client.get(f"/api/modules/info-query/import-jobs/{job_id}")
+        assert job_detail_resp.status_code == 200
+        job_detail = job_detail_resp.json()
+        if job_detail["status"] in {"succeeded", "failed"}:
+            break
+        time.sleep(0.1)
+    assert job_detail is not None
+    assert job_detail["status"] == "succeeded"
+    assert job_detail["progress_percent"] == 100
+    assert job_detail["processed_rows"] == 1
+    assert job_detail["imported"] == 1
 
     create_resp = auth_client.post(
         "/api/modules/analysis-workbench/tasks",

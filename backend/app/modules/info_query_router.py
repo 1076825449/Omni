@@ -3,16 +3,17 @@ import io
 import json
 import secrets
 import re
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
+from app.core.database import SessionLocal, get_db
 from app.models import User
 from app.models.record import OperationLog
 from app.models.taxpayer import TaxpayerInfo
@@ -20,6 +21,9 @@ from app.routers.auth import get_current_user
 from app.services.xlsx_reader import read_xls_rows, read_xlsx_rows
 
 router = APIRouter(prefix="/api/modules/info-query", tags=["信息查询表"])
+
+IMPORT_JOBS: dict[str, dict[str, Any]] = {}
+IMPORT_JOBS_LOCK = threading.Lock()
 
 
 FIELD_ALIASES = {
@@ -98,6 +102,25 @@ class ImportHistoryItem(BaseModel):
 
 class ImportHistoryResponse(BaseModel):
     items: list[ImportHistoryItem]
+
+
+class ImportJobResponse(BaseModel):
+    job_id: str
+    status: str
+    phase: str
+    filename: str
+    batch: str
+    progress_percent: int
+    total_rows: int
+    processed_rows: int
+    imported: int
+    updated: int
+    skipped: int
+    message: str
+    error: str = ""
+    created_at: datetime
+    updated_at: datetime
+    completed_at: Optional[datetime] = None
 
 
 class AssignmentStatsResponse(BaseModel):
@@ -257,6 +280,112 @@ def log_action(db: Session, action: str, target_id: str, operator_id: int, detai
     ))
 
 
+def job_payload(job: dict[str, Any]) -> ImportJobResponse:
+    payload = {key: value for key, value in job.items() if key != "owner_id"}
+    return ImportJobResponse(**payload)
+
+
+def update_import_job(job_id: str, **patch: Any):
+    with IMPORT_JOBS_LOCK:
+        job = IMPORT_JOBS.get(job_id)
+        if not job:
+            return
+        job.update(patch)
+        job["updated_at"] = datetime.utcnow()
+
+
+def apply_import_rows(
+    rows: list[dict[str, Any]],
+    filename: str,
+    batch: str,
+    owner_id: int,
+    db: Session,
+    job_id: Optional[str] = None,
+) -> tuple[int, int, int]:
+    imported = 0
+    updated = 0
+    skipped = 0
+    total = len(rows)
+    for index, row in enumerate(rows, start=1):
+        taxpayer_id = row.get("taxpayer_id", "")
+        company_name = row.get("company_name", "")
+        if not taxpayer_id or not company_name:
+            skipped += 1
+        else:
+            payload = row_to_taxpayer(row, batch, owner_id)
+            existing = db.query(TaxpayerInfo).filter(
+                TaxpayerInfo.owner_id == owner_id,
+                TaxpayerInfo.taxpayer_id == taxpayer_id,
+            ).first()
+            if existing:
+                for key, value in payload.items():
+                    if key != "owner_id":
+                        setattr(existing, key, value)
+                updated += 1
+            else:
+                db.add(TaxpayerInfo(**payload))
+                imported += 1
+
+        if job_id and (index == total or index % 100 == 0):
+            update_import_job(
+                job_id,
+                phase="写入数据库",
+                processed_rows=index,
+                imported=imported,
+                updated=updated,
+                skipped=skipped,
+                progress_percent=15 + int(index / max(total, 1) * 80),
+                message=f"正在写入第 {index} / {total} 行",
+            )
+
+    log_action(db, "import", batch, owner_id, f"导入信息查询表: {filename}, 新增 {imported}, 更新 {updated}, 跳过 {skipped}")
+    db.commit()
+    return imported, updated, skipped
+
+
+def process_import_job(job_id: str, filename: str, content: bytes, owner_id: int):
+    db = SessionLocal()
+    try:
+        update_import_job(job_id, status="running", phase="解析文件", progress_percent=5, message="正在读取表格字段")
+        upload_stub = type("UploadStub", (), {"filename": filename})()
+        rows, headers = parse_upload_rows(upload_stub, content)  # type: ignore[arg-type]
+        with IMPORT_JOBS_LOCK:
+            job = IMPORT_JOBS[job_id]
+        update_import_job(
+            job_id,
+            phase="准备写入",
+            total_rows=len(rows),
+            progress_percent=15,
+            message=f"已识别 {len(rows)} 行，准备写入数据库",
+        )
+        imported, updated, skipped = apply_import_rows(rows, filename, job["batch"], owner_id, db, job_id)
+        update_import_job(
+            job_id,
+            status="succeeded",
+            phase="导入完成",
+            processed_rows=len(rows),
+            imported=imported,
+            updated=updated,
+            skipped=skipped,
+            progress_percent=100,
+            message=f"导入完成：新增 {imported} 条，更新 {updated} 条，跳过 {skipped} 条",
+            headers=headers,
+            completed_at=datetime.utcnow(),
+        )
+    except Exception as exc:
+        db.rollback()
+        update_import_job(
+            job_id,
+            status="failed",
+            phase="导入失败",
+            error=str(exc),
+            message="导入失败，请检查文件是否加密、表头是否正确或重新上传",
+            completed_at=datetime.utcnow(),
+        )
+    finally:
+        db.close()
+
+
 def parse_import_log(log: OperationLog) -> ImportHistoryItem:
     filename_match = re.search(r"导入信息查询表:\s*(.*?),\s*新增", log.detail or "")
     imported_match = re.search(r"新增\s*(\d+)", log.detail or "")
@@ -286,33 +415,7 @@ def import_taxpayer_info(
     content = file.file.read()
     rows, headers = parse_upload_rows(file, content)
     batch = f"info-{datetime.now().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(4)}"
-    imported = 0
-    updated = 0
-    skipped = 0
-
-    for row in rows:
-        taxpayer_id = row.get("taxpayer_id", "")
-        company_name = row.get("company_name", "")
-        if not taxpayer_id or not company_name:
-            skipped += 1
-            continue
-
-        payload = row_to_taxpayer(row, batch, current_user.id)
-        existing = db.query(TaxpayerInfo).filter(
-            TaxpayerInfo.owner_id == current_user.id,
-            TaxpayerInfo.taxpayer_id == taxpayer_id,
-        ).first()
-        if existing:
-            for key, value in payload.items():
-                if key != "owner_id":
-                    setattr(existing, key, value)
-            updated += 1
-        else:
-            db.add(TaxpayerInfo(**payload))
-            imported += 1
-
-    log_action(db, "import", batch, current_user.id, f"导入信息查询表: {file.filename}, 新增 {imported}, 更新 {updated}, 跳过 {skipped}")
-    db.commit()
+    imported, updated, skipped = apply_import_rows(rows, file.filename or "unknown", batch, current_user.id, db)
     return ImportPreviewResponse(
         success=True,
         message=f"导入完成：新增 {imported} 条，更新 {updated} 条，跳过 {skipped} 条",
@@ -322,6 +425,55 @@ def import_taxpayer_info(
         skipped=skipped,
         headers=headers,
     )
+
+
+@router.post("/import-jobs", response_model=ImportJobResponse)
+def start_import_job(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    content = file.file.read()
+    now = datetime.utcnow()
+    job_id = f"job-{secrets.token_hex(8)}"
+    batch = f"info-{datetime.now().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(4)}"
+    with IMPORT_JOBS_LOCK:
+        IMPORT_JOBS[job_id] = {
+            "job_id": job_id,
+            "owner_id": current_user.id,
+            "status": "queued",
+            "phase": "等待处理",
+            "filename": file.filename or "unknown",
+            "batch": batch,
+            "progress_percent": 1,
+            "total_rows": 0,
+            "processed_rows": 0,
+            "imported": 0,
+            "updated": 0,
+            "skipped": 0,
+            "message": "文件已上传，等待后台解析",
+            "error": "",
+            "created_at": now,
+            "updated_at": now,
+            "completed_at": None,
+        }
+    background_tasks.add_task(process_import_job, job_id, file.filename or "unknown", content, current_user.id)
+    with IMPORT_JOBS_LOCK:
+        return job_payload(IMPORT_JOBS[job_id])
+
+
+@router.get("/import-jobs/{job_id}", response_model=ImportJobResponse)
+def get_import_job(
+    job_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    with IMPORT_JOBS_LOCK:
+        job = IMPORT_JOBS.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="导入任务不存在或已过期")
+    if job.get("owner_id") != current_user.id:
+        raise HTTPException(status_code=404, detail="导入任务不存在或已过期")
+    return job_payload(job)
 
 
 @router.get("/import-history", response_model=ImportHistoryResponse)

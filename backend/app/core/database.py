@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, declarative_base
 import os
 from pathlib import Path
@@ -11,7 +11,16 @@ if DATABASE_URL.startswith("sqlite:///"):
     db_path = os.path.expanduser(db_path)
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     DATABASE_URL = f"sqlite:///{db_path}"
-    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False, "timeout": 30})
+
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragmas(dbapi_connection, connection_record):
+        _ = connection_record
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=30000")
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 else:
     engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_size=5, max_overflow=10)
 

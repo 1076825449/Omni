@@ -1,6 +1,6 @@
-import { Card, Row, Col, Statistic, Button, Space, Typography, Alert, Tag, Input, Upload, Progress, Descriptions, Skeleton } from 'antd'
+import { Card, Row, Col, Statistic, Space, Typography, Alert, Tag, Upload, Progress, Descriptions, Skeleton } from 'antd'
 import { UploadOutlined } from '@ant-design/icons'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '../../../stores/auth'
 import type { ImportHistoryItem, ImportJob, Module, PlatformStatsOverview } from '../../../services/api'
@@ -19,7 +19,6 @@ export default function Home() {
   const [modules, setModules] = useState<Module[]>([])
   const [stats, setStats] = useState<PlatformStatsOverview | null>(null)
   const [riskSummary, setRiskSummary] = useState<Record<string, number>>({})
-  const [taxpayerId, setTaxpayerId] = useState('')
   const [importing, setImporting] = useState(false)
   const [importStartedAt, setImportStartedAt] = useState<number | null>(null)
   const [importElapsed, setImportElapsed] = useState(0)
@@ -27,7 +26,6 @@ export default function Home() {
   const [importJob, setImportJob] = useState<ImportJob | null>(null)
   const [lastImportResult, setLastImportResult] = useState<ImportHistoryItem | null>(null)
   const [loading, setLoading] = useState(true)
-  const navigate = useNavigate()
   const message = useAppMessage()
   const { user } = useAuthStore()
 
@@ -99,12 +97,6 @@ export default function Home() {
     return false
   }
 
-  const goSearch = (value: string) => {
-    const keyword = value.trim()
-    if (!keyword) return
-    navigate(`/taxpayer-workbench?taxpayer_id=${encodeURIComponent(keyword)}`)
-  }
-
   const actionCards = [
     { path: '/taxpayer-workbench', key: 'taxpayer-workbench', title: '信息查询', desc: '按税号、名称、法人或管理员查企业', color: '#1677ff' },
     { path: '/modules/info-query', key: 'info-query', title: '管户分配', desc: '查看全部管户、行业标签和地址标签', color: '#13a8a8' },
@@ -161,39 +153,8 @@ export default function Home() {
       </Row>
 
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col xs={24} lg={14}>
-          <Card
-            style={{
-              minHeight: 260,
-              background: 'linear-gradient(135deg, #f7fbff 0%, #ffffff 58%, #fff7e6 100%)',
-              border: '1px solid #d9e8ff',
-            }}
-          >
-            <Space direction="vertical" size={18} style={{ width: '100%' }}>
-              <Space direction="vertical" size={4}>
-                <Title level={3} style={{ margin: 0 }}>先查一户企业</Title>
-                <Text type="secondary">输入税号、纳税人名称、法定代表人或税收管理员，进入该户完整工作台。</Text>
-              </Space>
-              <Input.Search
-                size="large"
-                placeholder="例如：柳大、企业名称、法人姓名、管理员姓名或纳税人识别号"
-                allowClear
-                enterButton="查询"
-                value={taxpayerId}
-                onChange={(event) => setTaxpayerId(event.target.value)}
-                onSearch={goSearch}
-              />
-              <Space wrap>
-                <Button type="primary" onClick={() => goSearch(taxpayerId)}>查询企业</Button>
-                <Button onClick={() => navigate('/modules/risk-ledger')}>打开管户记录</Button>
-                <Button onClick={() => navigate('/modules/analysis-workbench')}>发起案头分析</Button>
-              </Space>
-            </Space>
-          </Card>
-        </Col>
-
-        <Col xs={24} lg={10}>
-          <Card title="统一数据源" size="small" style={{ minHeight: 260 }}>
+        <Col xs={24} lg={9}>
+          <Card title="统一数据源" size="small" style={{ height: '100%' }}>
             <Space direction="vertical" style={{ width: '100%' }} size={12}>
               <Alert
                 type={lastImportResult ? 'success' : 'info'}
@@ -237,31 +198,33 @@ export default function Home() {
             </Space>
           </Card>
         </Col>
-      </Row>
 
-      <Card title="业务入口" size="small">
-        {loading ? (
-          <Skeleton active paragraph={{ rows: 2 }} />
-        ) : (
-          <Row gutter={[12, 12]}>
-            {actionCards.map(action => (
-              <Col xs={24} sm={12} lg={8} key={action.key}>
-                <Link to={action.path}>
-                  <Card hoverable size="small" style={{ height: '100%' }}>
-                    <Space align="start">
-                      <span style={{ width: 8, height: 40, borderRadius: 4, background: action.color, display: 'inline-block' }} />
-                      <Space direction="vertical" size={2}>
-                        <Text strong>{action.title}</Text>
-                        <Text type="secondary" style={{ fontSize: 12 }}>{action.desc}</Text>
-                      </Space>
-                    </Space>
-                  </Card>
-                </Link>
-              </Col>
-            ))}
-          </Row>
-        )}
-      </Card>
+        <Col xs={24} lg={15}>
+          <Card title="业务入口" size="small" style={{ height: '100%' }}>
+            {loading ? (
+              <Skeleton active paragraph={{ rows: 2 }} />
+            ) : (
+              <Row gutter={[12, 12]}>
+                {actionCards.map(action => (
+                  <Col xs={24} sm={12} key={action.key}>
+                    <Link to={action.path}>
+                      <Card hoverable size="small" style={{ height: '100%' }}>
+                        <Space align="start">
+                          <span style={{ width: 8, height: 40, borderRadius: 4, background: action.color, display: 'inline-block' }} />
+                          <Space direction="vertical" size={2}>
+                            <Text strong>{action.title}</Text>
+                            <Text type="secondary" style={{ fontSize: 12 }}>{action.desc}</Text>
+                          </Space>
+                        </Space>
+                      </Card>
+                    </Link>
+                  </Col>
+                ))}
+              </Row>
+            )}
+          </Card>
+        </Col>
+      </Row>
     </div>
   )
 }

@@ -591,6 +591,11 @@ def test_info_query_import_assignment_stats_and_analysis_profile(auth_client):
     workbench_resp = auth_client.get("/api/workbench/taxpayer/91310000INFO0001")
     assert workbench_resp.status_code == 200
     assert workbench_resp.json()["taxpayer"]["address_tag"] == "柳堡路"
+    name_as_taxpayer_id_resp = auth_client.get("/api/workbench/taxpayer/信息企业A")
+    assert name_as_taxpayer_id_resp.status_code == 404
+    name_search_resp = auth_client.get("/api/workbench/taxpayers/search?q=信息企业A")
+    assert name_search_resp.status_code == 200
+    assert name_search_resp.json()["items"][0]["taxpayer_id"] == "91310000INFO0001"
     recent_resp = auth_client.get("/api/workbench/recent-taxpayers")
     assert recent_resp.status_code == 200
     assert recent_resp.json()["items"][0]["taxpayer_id"] == "91310000INFO0001"

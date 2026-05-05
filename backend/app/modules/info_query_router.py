@@ -145,12 +145,15 @@ def derive_address_tag(address: str) -> str:
     if not text:
         return ""
     text = re.sub(r"[，,。；;（）()【】\[\]]", "", text)
-    text = re.sub(r"(广西壮族自治区|广西|柳州市|柳江区|柳南区|城中区|鱼峰区|柳北区)", "", text)
+    text = re.sub(r"(广西壮族自治区|广西|柳州市|柳江区|柳江县|柳南区|城中区|鱼峰区|柳北区|柳城县|鹿寨县|融安县|融水县|三江县)", "", text)
     broad_only = re.fullmatch(r"[\u4e00-\u9fa5]{2,8}(镇|乡|村|社区|县|区|市)", text)
     if broad_only:
         return ""
+    text = re.sub(r"^.*?(?:街道|镇|乡|村|社区)", "", text)
+    if not text:
+        return ""
 
-    road_match = re.search(r"([\u4e00-\u9fa5A-Za-z0-9]{2,30}(?:大道|路|街|巷|道))([0-9一二三四五六七八九十]+号)?", text)
+    road_match = re.search(r"([\u4e00-\u9fa5A-Za-z0-9]{2,16}(?:大道|路|街|巷|道))([0-9一二三四五六七八九十]+号)?", text)
     if road_match:
         road = road_match.group(1)
         number = road_match.group(2) or ""

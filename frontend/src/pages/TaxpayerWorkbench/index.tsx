@@ -7,6 +7,7 @@ import { useAppMessage } from '../../hooks/useAppMessage'
 
 const { Title, Text, Paragraph } = Typography
 const statusColor: Record<string, string> = { 待核实: 'orange', 已排除: 'green', 整改中: 'blue', 已整改: 'purple' }
+const looksLikeTaxpayerId = (value: string) => /^[0-9A-Z]{8,}$/i.test(value.trim())
 
 export default function TaxpayerWorkbench() {
   const [params, setParams] = useSearchParams()
@@ -26,16 +27,23 @@ export default function TaxpayerWorkbench() {
   }
 
   const load = async (value = taxpayerId) => {
-    if (!value.trim()) return
+    const keyword = value.trim()
+    if (!keyword) return
     setLoading(true)
     try {
-      const result = await taxOfficerWorkbenchApi.taxpayer(value.trim())
-      setData(result)
-      rememberSearch(result.taxpayer)
-      setCandidates([])
-      setParams({ taxpayer_id: value.trim() })
-    } catch {
-      const search = await taxOfficerWorkbenchApi.searchTaxpayers(value.trim()).catch(() => ({ items: [] }))
+      if (looksLikeTaxpayerId(keyword)) {
+        try {
+          const result = await taxOfficerWorkbenchApi.taxpayer(keyword)
+          setData(result)
+          rememberSearch(result.taxpayer)
+          setCandidates([])
+          setParams({ taxpayer_id: keyword })
+          return
+        } catch {
+          // 税号可能录入不完整，继续按关键字模糊匹配。
+        }
+      }
+      const search = await taxOfficerWorkbenchApi.searchTaxpayers(keyword).catch(() => ({ items: [] }))
       if (search.items.length === 1) {
         setTaxpayerId(search.items[0].taxpayer_id)
         const result = await taxOfficerWorkbenchApi.taxpayer(search.items[0].taxpayer_id)
@@ -49,6 +57,18 @@ export default function TaxpayerWorkbench() {
         setCandidates(search.items as any)
         setData(null)
         return
+      }
+      if (!looksLikeTaxpayerId(keyword)) {
+        try {
+          const result = await taxOfficerWorkbenchApi.taxpayer(keyword)
+          setData(result)
+          rememberSearch(result.taxpayer)
+          setCandidates([])
+          setParams({ taxpayer_id: keyword })
+          return
+        } catch {
+          // 允许继续显示未找到提示。
+        }
       }
       void message.error('没有找到该户信息，请先导入纳税人信息或在风险台账中建立临时档案')
       setData(null)

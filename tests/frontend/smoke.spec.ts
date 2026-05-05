@@ -12,10 +12,10 @@ test('login and open key platform pages', async ({ page }) => {
   await page.getByRole('button', { name: /登\s*录/ }).click()
 
   await expect(page).toHaveURL(/\/$/)
-  await expect(page.getByText('税源管理员今日工作台').first()).toBeVisible()
-  await expect(page.getByText('常用工作').first()).toBeVisible()
-  await expect(page.getByText('今日应处理').first()).toBeVisible()
-  await expect(page.getByPlaceholder('输入税号、名称、法人或管理员，直接查询')).toBeVisible()
+  await expect(page.getByText('税务风险工作助手').first()).toBeVisible()
+  await expect(page.getByText('统一数据源').first()).toBeVisible()
+  await expect(page.getByText('业务入口').first()).toBeVisible()
+  await expect(page.getByPlaceholder('例如：柳大、企业名称、法人姓名、管理员姓名或纳税人识别号')).toBeVisible()
   // Homepage shows role info
   await expect(page.getByText('当前账号').first()).toBeVisible()
 

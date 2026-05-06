@@ -105,12 +105,12 @@ def mark_all_read(
 
 
 def resolve_notification_target(notification: Notification) -> tuple[Optional[str], Optional[str]]:
-    if notification.title == "分析任务完成":
-        match = re.search(r"任务ID[:：]\s*([a-zA-Z0-9\-]+)", notification.content or "")
+    if notification.title in {"分析任务完成", "案头分析完成"}:
+        match = re.search(r"(?:任务ID|分析编号)[:：]\s*([a-zA-Z0-9\-]+)", notification.content or "")
         if match:
             task_id = match.group(1)
             return f"/modules/analysis-workbench/results/{task_id}", "查看分析结果"
-        return "/modules/analysis-workbench/history", "查看分析历史"
+        return "/reports", "查看文书报告"
 
     if notification.title == "定时任务执行完成":
         return "/modules/schedule-workbench", "查看定时任务"

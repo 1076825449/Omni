@@ -1,7 +1,8 @@
 import secrets
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Optional, List
+from urllib.parse import quote
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, ConfigDict
@@ -10,9 +11,13 @@ from app.models import User
 from app.models.record import Task, FileRecord, OperationLog
 from app.models.records import Record
 from app.models.cross_link import CrossLinkLog
+from app.models.risk_ledger import RiskLedgerEntry
 from app.models.taxpayer import TaxpayerInfo
+from app.modules.risk_ledger_router import EntryCreateRequest, create_entry
 from app.routers.auth import get_current_user
+from app.routers.settings import get_document_settings
 from app.services.file_service import save_upload
+from app.services.document_templates import render_notice_docx, render_officer_report_docx
 from app.services.tax_analysis import analyze_files, profile_file, render_notice_text, render_officer_report_text
 
 router = APIRouter(prefix="/api/modules/analysis-workbench", tags=["分析工作模块"])
@@ -22,6 +27,8 @@ router = APIRouter(prefix="/api/modules/analysis-workbench", tags=["分析工作
 class TaskCreateRequest(BaseModel):
     name: str
     description: str = ""
+    taxpayer_id: str = ""
+    company_name: str = ""
 
 
 class TaskItem(BaseModel):
@@ -81,6 +88,15 @@ class UploadProfileResponse(BaseModel):
     warnings: List[str] = []
 
 
+def apply_document_config(payload: dict[str, Any], config: dict[str, str]) -> dict[str, Any]:
+    configured = dict(payload)
+    for key, value in config.items():
+        text = str(value or "").strip()
+        if text:
+            configured[key] = text
+    return configured
+
+
 class UploadResponse(BaseModel):
     success: bool
     message: str
@@ -96,6 +112,12 @@ class ManualDataRequest(BaseModel):
 class RiskReviewRequest(BaseModel):
     status: str
     note: str = ""
+
+
+class LedgerSyncResponse(BaseModel):
+    success: bool
+    message: str
+    entry_id: str
 
 
 class AnalysisReportResponse(BaseModel):
@@ -254,6 +276,8 @@ def create_task(
         module="analysis-workbench",
         creator_id=current_user.id,
         result_summary="任务已创建，等待处理",
+        taxpayer_id=body.taxpayer_id.strip(),
+        company_name=body.company_name.strip(),
     )
     db.add(task)
     log_action(db, "create", task_id, current_user.id, detail=f"创建分析任务: {body.name}")
@@ -345,6 +369,12 @@ def export_report(
     task_id: str,
     format: str = Query("json"),
     doc_type: str = Query("analysis"),
+    agency_name: str = Query(""),
+    document_number: str = Query(""),
+    contact_person: str = Query(""),
+    contact_phone: str = Query(""),
+    rectification_deadline: str = Query(""),
+    document_date: str = Query(""),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -357,12 +387,24 @@ def export_report(
     analysis = analyze_files(task, files) if files else analyze_files(task, [])
     filename_safe_task_id = task.task_id.replace("/", "-")
 
+    document_config = get_document_settings(db, current_user.id)
+    for key, value in {
+        "agency_name": agency_name,
+        "document_number": document_number,
+        "contact_person": contact_person,
+        "contact_phone": contact_phone,
+        "rectification_deadline": rectification_deadline,
+        "document_date": document_date,
+    }.items():
+        if str(value or "").strip():
+            document_config[key] = value
+
     if doc_type == "notice":
-        payload = analysis["notice"]
+        payload = apply_document_config(analysis["notice"], document_config)
         txt_content = render_notice_text(payload)
         suffix = "notice"
     elif doc_type == "analysis":
-        payload = analysis["analysis_report"]
+        payload = apply_document_config(analysis["analysis_report"], document_config)
         txt_content = render_officer_report_text(payload)
         suffix = "analysis"
     else:
@@ -375,12 +417,12 @@ def export_report(
     elif format == "txt":
         header = [
             f"任务名称: {report.name}",
-            f"任务ID: {report.task_id}",
+            f"分析编号: {report.task_id}",
             f"状态: {report.status}",
             f"创建时间: {report.created_at}",
             f"完成时间: {report.completed_at or '—'}",
             f"文件数: {report.file_count}",
-            f"相关对象数: {report.related_record_count}",
+            f"形成风险事项数: {report.related_record_count}",
             f"风险数: {report.risk_count}",
             "",
             "任务摘要:",
@@ -390,8 +432,15 @@ def export_report(
         content = "\n".join(header) + txt_content
         media_type = "text/plain; charset=utf-8"
         extension = "txt"
+    elif format == "docx":
+        if doc_type == "notice":
+            content = render_notice_docx(payload)
+        else:
+            content = render_officer_report_docx(payload)
+        media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        extension = "docx"
     else:
-        raise HTTPException(status_code=400, detail="仅支持 json 或 txt 格式")
+        raise HTTPException(status_code=400, detail="仅支持 json、txt 或 docx 格式")
 
     log_action(
         db,
@@ -402,11 +451,12 @@ def export_report(
     )
     db.commit()
 
+    filename = f"{filename_safe_task_id}-{suffix}.{extension}"
     return Response(
         content=content,
         media_type=media_type,
         headers={
-            "Content-Disposition": f'attachment; filename="{filename_safe_task_id}-{suffix}.{extension}"',
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
         },
     )
 
@@ -483,8 +533,8 @@ def run_task(
             ))
 
         notif = Notification(
-            title="分析任务完成",
-            content=f'任务 "{task.name}" 已完成，处理 {len(files)} 个文件，识别 {analysis["risk_count"]} 项风险，生成 {created_count} 条对象结果。任务ID: {task.task_id}',
+            title="案头分析完成",
+            content=f'案头分析 "{task.name}" 已完成，处理 {len(files)} 个文件，识别 {analysis["risk_count"]} 项风险，形成 {created_count} 条风险事项。分析编号: {task.task_id}',
             type="success",
             user_id=current_user.id,
         )
@@ -548,6 +598,63 @@ def update_risk_review(
     log_action(db, "update", task_id, current_user.id, detail=f"更新风险复核状态: {record_id} -> {body.status}")
     db.commit()
     return {"success": True, "record_id": record_id, "status": body.status}
+
+
+@router.post("/risks/{risk_id}/ledger", response_model=LedgerSyncResponse)
+def sync_risk_to_ledger(
+    risk_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    record = db.query(Record).filter(
+        Record.record_id == risk_id,
+        Record.owner_id == current_user.id,
+    ).first()
+    if not record or not record.import_batch.startswith("analysis-"):
+        raise HTTPException(status_code=404, detail="未找到可记入台账的分析风险")
+
+    task_id = record.import_batch[len("analysis-"):]
+    task = db.query(Task).filter(Task.task_id == task_id, Task.creator_id == current_user.id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="来源分析任务不存在")
+
+    files = get_task_files(task_id, db, current_user.id)
+    analysis = enrich_analysis_review_state(analyze_files(task, files), task_id, db, current_user.id)
+    matched = next((risk for risk in analysis.get("risks", []) if risk.get("review_record_id") == risk_id), None)
+    if not matched:
+        raise HTTPException(status_code=404, detail="来源风险明细不存在")
+    taxpayer_id = analysis.get("taxpayer_id", "")
+    if not taxpayer_id:
+        raise HTTPException(status_code=400, detail="未识别纳税人识别号，无法记入台账")
+
+    content = f"{matched.get('risk_type', '涉税风险')}：{matched.get('issue', record.detail or '')}"
+    note_parts = []
+    if matched.get("evidence"):
+        note_parts.append("涉及数据：" + "；".join(matched.get("evidence", [])))
+    if matched.get("verification_focus"):
+        note_parts.append("核查方向：" + matched["verification_focus"])
+    if matched.get("required_materials"):
+        note_parts.append("应调取资料：" + "、".join(matched.get("required_materials", [])))
+    existing_entry = db.query(RiskLedgerEntry).filter(
+        RiskLedgerEntry.owner_id == current_user.id,
+        RiskLedgerEntry.taxpayer_id == taxpayer_id,
+        RiskLedgerEntry.content == content,
+    ).first()
+    if existing_entry:
+        return LedgerSyncResponse(success=True, message="该风险已在风险记录台账中", entry_id=existing_entry.entry_id)
+    entry = create_entry(EntryCreateRequest(
+        taxpayer_id=taxpayer_id,
+        company_name=analysis.get("company_name", ""),
+        recorded_at=datetime.utcnow(),
+        content=content,
+        entry_status="待核实",
+        rectification_deadline=datetime.utcnow() + timedelta(days=7),
+        contact_person="主管税务人员",
+        note="\n".join(note_parts),
+    ), db, current_user)
+    log_action(db, "create", entry.entry_id, current_user.id, module="risk-ledger", detail=f"分析风险记入台账: {risk_id}")
+    db.commit()
+    return LedgerSyncResponse(success=True, message="已记入风险记录台账", entry_id=entry.entry_id)
 
 
 @router.post("/tasks/{task_id}/rerun", response_model=TaskCreatedResponse)

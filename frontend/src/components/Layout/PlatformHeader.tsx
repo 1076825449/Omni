@@ -8,12 +8,12 @@ import { useWsStore } from '../../stores/ws'
 
 const navItems = [
   { label: '首页', path: '/' },
-  { label: '仪表盘', path: '/modules/dashboard-workbench' },
-  { label: '模块中心', path: '/modules' },
-  { label: '任务中心', path: '/tasks' },
-  { label: '文件中心', path: '/files' },
-  { label: '日志中心', path: '/logs' },
-  { label: '统计', path: '/stats' },
+  { label: '信息查询', path: '/taxpayer-workbench' },
+  { label: '管户分配', path: '/modules/info-query' },
+  { label: '管户记录', path: '/modules/risk-ledger' },
+  { label: '案头分析', path: '/modules/analysis-workbench' },
+  { label: '文书报告', path: '/reports' },
+  { label: '刷题程序', path: '/modules/learning-lab' },
   { label: '帮助', path: '/help' },
 ]
 
@@ -63,7 +63,12 @@ export default function PlatformHeader() {
       disabled: true,
     },
     { type: 'divider' },
-    { key: 'settings', label: '系统设置' },
+    { key: 'modules', label: '系统管理：功能入口' },
+    { key: 'tasks', label: '系统管理：运行记录' },
+    { key: 'files', label: '系统管理：资料留存' },
+    { key: 'logs', label: '系统管理：操作记录' },
+    { key: 'stats', label: '系统管理：工作统计' },
+    { key: 'settings', label: '系统管理：系统设置' },
     { type: 'divider' },
     { key: 'logout', label: '退出登录', danger: true },
   ]
@@ -71,12 +76,17 @@ export default function PlatformHeader() {
   const onUserMenuClick: MenuProps['onClick'] = ({ key }) => {
     if (key === 'logout') handleLogout()
     if (key === 'settings') navigate('/settings')
+    if (key === 'modules') navigate('/modules')
+    if (key === 'tasks') navigate('/tasks')
+    if (key === 'files') navigate('/files')
+    if (key === 'logs') navigate('/logs')
+    if (key === 'stats') navigate('/stats')
   }
 
   return (
     <header className="omni-header">
       <Link to="/" className="omni-header-logo">
-        Omni 平台
+        税务案头助手
       </Link>
 
       <nav className="omni-header-nav">
@@ -92,7 +102,7 @@ export default function PlatformHeader() {
       </nav>
 
       <Input.Search
-        placeholder="搜索任务/文件/日志/模块"
+        placeholder="搜索企业、风险、资料"
         value={searchValue}
         onChange={e => setSearchValue(e.target.value)}
         onKeyDown={handleSearch}

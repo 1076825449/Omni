@@ -33,6 +33,9 @@ FIELD_ALIASES = {
     "recorded_at": ["记录时间", "发生时间", "触发时间", "recorded_at"],
     "content": ["记录内容", "风险内容", "内容", "问题描述", "content"],
     "entry_status": ["事项状态", "处理状态", "风险状态", "entry_status"],
+    "rectification_deadline": ["整改期限", "整改截止时间", "反馈期限", "rectification_deadline"],
+    "contact_person": ["联系人", "主管税务人员", "contact_person"],
+    "contact_phone": ["联系电话", "联系方式", "contact_phone"],
     "note": ["备注", "note"],
 }
 
@@ -52,9 +55,13 @@ class DossierSchema(BaseModel):
     created_at: datetime
     updated_at: datetime
     latest_recorded_at: Optional[datetime] = None
+    latest_rectification_deadline: Optional[datetime] = None
     latest_content: str = ""
     latest_entry_status: str = ""
+    latest_contact_person: str = ""
+    latest_contact_phone: str = ""
     entry_count: int = 0
+    is_overdue: bool = False
 
 
 class EntrySchema(BaseModel):
@@ -67,6 +74,9 @@ class EntrySchema(BaseModel):
     recorded_at: datetime
     content: str
     entry_status: str
+    rectification_deadline: Optional[datetime] = None
+    contact_person: str = ""
+    contact_phone: str = ""
     note: str
     owner_id: int
     created_by: int
@@ -88,6 +98,9 @@ class EntryCreateRequest(BaseModel):
     recorded_at: datetime
     content: str
     entry_status: str = "待核实"
+    rectification_deadline: Optional[datetime] = None
+    contact_person: str = ""
+    contact_phone: str = ""
     company_name: str = ""
     registration_status: str = ""
     tax_officer: str = ""
@@ -100,6 +113,20 @@ class BatchTextRequest(BaseModel):
     recorded_at: datetime
     content: str
     entry_status: str = "待核实"
+    rectification_deadline: Optional[datetime] = None
+    contact_person: str = ""
+    contact_phone: str = ""
+    note: str = ""
+
+
+class BatchStatusRequest(BaseModel):
+    taxpayer_ids: list[str]
+    entry_status: str
+    recorded_at: Optional[datetime] = None
+    rectification_deadline: Optional[datetime] = None
+    contact_person: str = ""
+    contact_phone: str = ""
+    content: str = ""
     note: str = ""
 
 
@@ -246,6 +273,9 @@ def create_entry(body: EntryCreateRequest, db: Session, user: User) -> RiskLedge
         recorded_at=body.recorded_at,
         content=content,
         entry_status=body.entry_status,
+        rectification_deadline=parse_datetime(body.rectification_deadline) if body.rectification_deadline else None,
+        contact_person=body.contact_person.strip(),
+        contact_phone=body.contact_phone.strip(),
         note=body.note.strip(),
         owner_id=user.id,
         created_by=user.id,
@@ -253,6 +283,9 @@ def create_entry(body: EntryCreateRequest, db: Session, user: User) -> RiskLedge
     db.add(entry)
     db.flush()
     dossier.updated_at = datetime.utcnow()
+    taxpayer = get_taxpayer_profile(dossier.taxpayer_id, db, user.id)
+    if taxpayer:
+        taxpayer.last_used_at = datetime.utcnow()
     return entry
 
 
@@ -266,6 +299,12 @@ def entry_summary(dossier_id: int, db: Session) -> tuple[Optional[RiskLedgerEntr
 
 def dossier_to_schema(dossier: RiskDossier, db: Session) -> DossierSchema:
     latest, count = entry_summary(dossier.id, db)
+    is_overdue = bool(
+        latest
+        and latest.entry_status == "整改中"
+        and latest.rectification_deadline
+        and latest.rectification_deadline < datetime.utcnow()
+    )
     return DossierSchema(
         id=dossier.id,
         taxpayer_id=dossier.taxpayer_id,
@@ -279,9 +318,13 @@ def dossier_to_schema(dossier: RiskDossier, db: Session) -> DossierSchema:
         created_at=dossier.created_at,
         updated_at=dossier.updated_at,
         latest_recorded_at=latest.recorded_at if latest else None,
+        latest_rectification_deadline=latest.rectification_deadline if latest else None,
         latest_content=latest.content if latest else "",
         latest_entry_status=latest.entry_status if latest else "",
+        latest_contact_person=latest.contact_person if latest else "",
+        latest_contact_phone=latest.contact_phone if latest else "",
         entry_count=count,
+        is_overdue=is_overdue,
     )
 
 
@@ -390,6 +433,9 @@ def add_batch_text_entries(
                 recorded_at=body.recorded_at,
                 content=body.content,
                 entry_status=body.entry_status,
+                rectification_deadline=body.rectification_deadline,
+                contact_person=body.contact_person,
+                contact_phone=body.contact_phone,
                 note=body.note,
             ), db, current_user)
             created += 1
@@ -400,6 +446,50 @@ def add_batch_text_entries(
     return BatchResultResponse(
         success=len(failures) == 0,
         message=f"批量完成：新增 {created} 条，失败 {len(failures)} 条",
+        created=created,
+        failed=len(failures),
+        failures=failures,
+    )
+
+
+@router.post("/entries/batch-status", response_model=BatchResultResponse)
+def add_batch_status_entries(
+    body: BatchStatusRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    status = validate_entry_status(body.entry_status)
+    if status == "整改中" and (not body.rectification_deadline or not body.contact_person.strip()):
+        raise HTTPException(status_code=400, detail="标记为整改中时必须填写整改期限和联系人")
+    recorded_at = parse_datetime(body.recorded_at or datetime.utcnow())
+    content = body.content.strip() or f"批量更新处理状态为：{status}"
+    created = 0
+    failures: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for raw in body.taxpayer_ids:
+        taxpayer_id = raw.strip()
+        if not taxpayer_id or taxpayer_id in seen:
+            continue
+        seen.add(taxpayer_id)
+        try:
+            create_entry(EntryCreateRequest(
+                taxpayer_id=taxpayer_id,
+                recorded_at=recorded_at,
+                rectification_deadline=body.rectification_deadline,
+                contact_person=body.contact_person,
+                contact_phone=body.contact_phone,
+                content=content,
+                entry_status=status,
+                note=body.note,
+            ), db, current_user)
+            created += 1
+        except HTTPException as exc:
+            failures.append({"taxpayer_id": taxpayer_id, "reason": str(exc.detail)})
+    log_action(db, "update", f"batch-status-{secrets.token_hex(4)}", current_user.id, f"批量更新风险处理状态为 {status}: 成功 {created}, 失败 {len(failures)}")
+    db.commit()
+    return BatchResultResponse(
+        success=len(failures) == 0,
+        message=f"批量处理完成：成功 {created} 户，失败 {len(failures)} 户",
         created=created,
         failed=len(failures),
         failures=failures,
@@ -431,6 +521,9 @@ def import_entries(
                 recorded_at=parse_datetime(row.get("recorded_at")),
                 content=content,
                 entry_status=row.get("entry_status", "待核实") or "待核实",
+                rectification_deadline=parse_datetime(row.get("rectification_deadline")) if row.get("rectification_deadline") else None,
+                contact_person=row.get("contact_person", ""),
+                contact_phone=row.get("contact_phone", ""),
                 note=row.get("note", ""),
             ), db, current_user)
             created += 1

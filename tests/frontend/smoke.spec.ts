@@ -3,7 +3,6 @@ import { expect, test } from '@playwright/test'
 test('login and open key platform pages', async ({ page }) => {
   const suffix = Date.now().toString().slice(-6)
   const scheduleName = `Smoke 调度任务 ${suffix}`
-  const analysisName = `Smoke 分析任务 ${suffix}`
 
   await page.goto('/login')
 
@@ -12,15 +11,15 @@ test('login and open key platform pages', async ({ page }) => {
   await page.getByRole('button', { name: /登\s*录/ }).click()
 
   await expect(page).toHaveURL(/\/$/)
-  // Homepage shows welcome message with Omni platform name
-  await expect(page.getByText('Omni 统一工作平台').first()).toBeVisible()
-  // Homepage shows quick start section
-  await expect(page.getByText('快速开始').first()).toBeVisible()
+  await expect(page.getByText('税务风险工作助手').first()).toBeVisible()
+  await expect(page.getByText('统一数据源').first()).toBeVisible()
+  await expect(page.getByText('业务入口').first()).toBeVisible()
+  await expect(page.getByText('信息查询').first()).toBeVisible()
   // Homepage shows role info
   await expect(page.getByText('当前账号').first()).toBeVisible()
 
   await page.goto('/modules')
-  await expect(page.getByRole('heading', { name: '模块中心' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '系统管理：全部功能' })).toBeVisible()
   // Module center shows user-friendly names (e.g. 涉税风险分析)
   await expect(page.getByText('涉税风险分析')).toBeVisible()
 
@@ -36,27 +35,23 @@ test('login and open key platform pages', async ({ page }) => {
   await expect(page.getByText(scheduleName)).toBeVisible()
 
   await page.goto('/modules/analysis-workbench/new')
-  // New analysis page shows step indicator
-  await expect(page.getByText('第1步：填写任务信息')).toBeVisible()
-  // New analysis page shows upload guidance
-  await expect(page.getByText('上传资料说明')).toBeVisible()
-  await page.getByLabel('分析名称').fill(analysisName)
-  await page.getByLabel('描述').fill('Playwright 自动创建的分析任务')
-  await page.getByRole('button', { name: '创建任务' }).click()
-  // After creating task, step 2 appears
-  await expect(page.getByText('第2步：上传分析资料')).toBeVisible()
+  await expect(page.getByText('上传资料', { exact: true })).toBeVisible()
   await page.locator('input[type="file"]').setInputFiles({
-    name: `smoke-analysis-${suffix}.txt`,
-    mimeType: 'text/plain',
-    buffer: Buffer.from(`smoke analysis payload ${suffix}`, 'utf-8'),
+    name: `purchase_invoices-${suffix}.csv`,
+    mimeType: 'text/csv',
+    buffer: Buffer.from(`期间,企业名称,纳税人识别号,金额,供应商名称,商品名称\n2026-03,冒烟企业,91310000SMOKE${suffix},120000,供应商A,材料\n`, 'utf-8'),
   })
-  await expect(page.getByText(`smoke-analysis-${suffix}.txt`).first()).toBeVisible()
-  await page.getByRole('button', { name: '发起分析（第4步）' }).click()
+  await expect(page.getByText(`purchase_invoices-${suffix}.csv`).first()).toBeVisible()
+  await page.getByRole('button', { name: '发起分析', exact: true }).click()
 
-  await expect(page).toHaveURL(/\/modules\/analysis-workbench\/history$/)
-  await expect(page.getByRole('button', { name: analysisName }).first()).toBeVisible()
-  await page.getByRole('button', { name: analysisName }).first().click()
+  await expect(page).toHaveURL(/\/modules\/analysis-workbench\/results\//)
   await expect(page.getByText('分析结果')).toBeVisible()
+  await expect(page.getByText('规则命中明细').first()).toBeVisible()
+  const resultTaskId = page.url().split('/').pop()
+  await page.goto(`/modules/analysis-workbench/reports/${resultTaskId}`)
+  await expect(page.getByText('文书信息确认')).toBeVisible()
+  await page.getByLabel('税务机关名称').fill('国家税务总局冒烟税务局')
+  await page.getByLabel('文号').fill('冒烟税通〔2026〕001号')
 
   await page.goto('/modules/dashboard-workbench')
   // Dashboard shows module cards
@@ -71,19 +66,24 @@ test('login and open key platform pages', async ({ page }) => {
   await expect(page.getByRole('button', { name: '查看列表' })).toBeVisible()
 
   await page.goto('/modules/record-operations/list')
-  await expect(page.getByRole('tab', { name: '对象列表' })).toBeVisible()
+  await expect(page.getByRole('tab', { name: '辅助记录列表' })).toBeVisible()
   await expect(page.getByRole('button', { name: '新建对象' })).toBeVisible()
 
   await page.goto('/modules/risk-ledger')
-  await expect(page.getByText('风险记录台账').first()).toBeVisible()
-  await expect(page.getByRole('tab', { name: '单户记录' })).toBeVisible()
-  await expect(page.getByRole('tab', { name: '批量记录' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '管户记录' })).toBeVisible()
+  await expect(page.getByPlaceholder('税号/名称/法人/管理员')).toBeVisible()
+
+  await page.goto('/taxpayer-workbench')
+  await expect(page.getByRole('heading', { name: '信息查询' })).toBeVisible()
+  await expect(page.getByPlaceholder('输入税号、企业名称、法定代表人或税收管理员')).toBeVisible()
+
+  await page.goto('/my-risk-list')
+  await expect(page.getByRole('heading', { name: '管户记录' })).toBeVisible()
 
   await page.goto('/modules/info-query')
-  await expect(page.getByText('信息查询表').first()).toBeVisible()
-  // Wait for stats to load
-  await page.waitForTimeout(1000)
-  await expect(page.getByText('纳税人总数')).toBeVisible({ timeout: 5000 })
+  await expect(page.getByRole('heading', { name: '管户分配' })).toBeVisible()
+  await expect(page.getByPlaceholder('企业名称、税号、法人、管理员')).toBeVisible()
+  await expect(page.getByRole('button', { name: '导出当前结果' })).toBeVisible()
 
   await page.goto('/settings')
   await expect(page.getByRole('heading', { name: '系统设置' })).toBeVisible()
@@ -95,5 +95,5 @@ test('login and open key platform pages', async ({ page }) => {
 
   await page.goto('/help')
   await expect(page.getByRole('heading', { name: '帮助中心' })).toBeVisible()
-  await expect(page.getByText('平台模块概览')).toBeVisible()
+  await expect(page.getByText('税务工作路径').first()).toBeVisible()
 })

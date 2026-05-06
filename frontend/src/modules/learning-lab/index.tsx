@@ -11,17 +11,17 @@ import Stats from './pages/Stats'
 
 const tabItems = [
   { key: 'home', label: '首页', path: '/modules/learning-lab' },
-  { key: 'sets', label: '训练集', path: '/modules/learning-lab/sets' },
-  { key: 'favorites', label: '收藏', path: '/modules/learning-lab/favorites' },
-  { key: 'stats', label: '统计', path: '/modules/learning-lab/stats' },
+  { key: 'sets', label: '题库', path: '/modules/learning-lab/sets' },
+  { key: 'favorites', label: '错题收藏', path: '/modules/learning-lab/favorites' },
+  { key: 'stats', label: '刷题统计', path: '/modules/learning-lab/stats' },
 ]
 
 export default function LearningLab() {
   return (
     <PlatformLayout>
       <ModuleLayout
-        moduleName="学习训练模块"
-        moduleDesc="练习 · 反馈 · 复盘 · 统计"
+        moduleName="刷题程序"
+        moduleDesc="题库练习 · 错题复盘 · 学习统计"
         items={tabItems}
       >
         <Routes>

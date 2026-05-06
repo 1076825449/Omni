@@ -51,6 +51,8 @@ export interface Task {
   module: string
   creator_id: number
   result_summary: string
+  taxpayer_id?: string
+  company_name?: string
   created_at: string
   updated_at: string
   completed_at: string | null
@@ -152,6 +154,11 @@ export const authApi = {
     }),
   logout: () =>
     request<{ success: boolean; message: string }>('/api/auth/logout', { method: 'POST' }),
+  changePassword: (current_password: string, new_password: string) =>
+    request<{ success: boolean; message: string }>('/api/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ current_password, new_password }),
+    }),
   me: () => request<any>('/api/auth/me'),
 }
 
@@ -197,18 +204,52 @@ export interface TaxpayerProfile {
   taxpayer_type?: string
   registration_status?: string
   industry: string
+  industry_tag?: string
   region: string
   tax_bureau: string
   manager_department: string
   tax_officer: string
+  proposed_tax_officer?: string
   credit_rating: string
   risk_level: string
   address?: string
+  address_tag?: string
   phone?: string
   business_scope?: string
   source_batch?: string
+  last_used_at?: string | null
   created_at?: string
   updated_at?: string
+}
+
+export interface ImportHistoryItem {
+  batch: string
+  filename: string
+  imported: number
+  updated: number
+  skipped: number
+  total_processed: number
+  created_at: string
+  detail: string
+}
+
+export interface ImportJob {
+  job_id: string
+  status: 'queued' | 'running' | 'succeeded' | 'failed'
+  phase: string
+  filename: string
+  batch: string
+  progress_percent: number
+  total_rows: number
+  processed_rows: number
+  imported: number
+  updated: number
+  skipped: number
+  message: string
+  error: string
+  created_at: string
+  updated_at: string
+  completed_at?: string | null
 }
 
 export interface AnalysisRisk {
@@ -224,6 +265,18 @@ export interface AnalysisRisk {
   verification_focus: string
   required_materials: string[]
   judgment_rule: string
+  rule_name: string
+  trigger_reason: string
+  threshold_text: string
+  calculation_text: string
+  source_data_refs: Array<{
+    dataset_kind: string
+    dataset_label: string
+    period: string
+    field_name: string
+    field_label: string
+    value: number | string
+  }>
   review_record_id?: string | null
   review_status?: string
 }
@@ -263,11 +316,28 @@ export const backupApi = {
   downloadUrl: (backupId: string) => API_BASE + '/api/platform/backups/' + backupId + '/download',
 }
 
+export interface DocumentConfig {
+  agency_name?: string
+  document_number?: string
+  contact_person?: string
+  contact_phone?: string
+  rectification_deadline?: string
+  document_date?: string
+}
+
+function documentConfigParams(config?: DocumentConfig) {
+  const sp = new URLSearchParams()
+  Object.entries(config || {}).forEach(([key, value]) => {
+    if (value) sp.set(key, value)
+  })
+  return sp
+}
+
 export const analysisApi = {
-  createTask: (name: string, description: string) =>
+  createTask: (name: string, description: string, taxpayer?: { taxpayer_id?: string; company_name?: string }) =>
     request<TaskCreatedResponse>('/api/modules/analysis-workbench/tasks', {
       method: 'POST',
-      body: JSON.stringify({ name, description }),
+      body: JSON.stringify({ name, description, ...(taxpayer || {}) }),
     }),
   listTasks: () =>
     request<{ tasks: AnalysisTask[]; total: number }>('/api/modules/analysis-workbench/tasks'),
@@ -301,10 +371,18 @@ export const analysisApi = {
       '/api/modules/analysis-workbench/tasks/' + taskId + '/risks/' + recordId + '/review',
       { method: 'POST', body: JSON.stringify({ status, note }) },
     ),
-  reportUrl: (taskId: string, format: 'json' | 'txt', docType: 'analysis' | 'notice' = 'analysis') =>
-    `${API_BASE}/api/modules/analysis-workbench/tasks/${taskId}/report?format=${format}&doc_type=${docType}`,
-  reportText: (taskId: string, docType: 'analysis' | 'notice' = 'analysis') =>
-    requestText(`/api/modules/analysis-workbench/tasks/${taskId}/report?format=txt&doc_type=${docType}`),
+  reportUrl: (taskId: string, format: 'json' | 'txt' | 'docx', docType: 'analysis' | 'notice' = 'analysis', config?: DocumentConfig) => {
+    const sp = documentConfigParams(config)
+    sp.set('format', format)
+    sp.set('doc_type', docType)
+    return `${API_BASE}/api/modules/analysis-workbench/tasks/${taskId}/report?${sp}`
+  },
+  reportText: (taskId: string, docType: 'analysis' | 'notice' = 'analysis', config?: DocumentConfig) => {
+    const sp = documentConfigParams(config)
+    sp.set('format', 'txt')
+    sp.set('doc_type', docType)
+    return requestText(`/api/modules/analysis-workbench/tasks/${taskId}/report?${sp}`)
+  },
 }
 
 export interface RoleRecord {
@@ -321,6 +399,22 @@ export const rolesApi = {
   getPermissions: () => request<{ permissions: string[]; defaults: Record<string, string[]> }>('/api/platform/roles/permissions'),
   update: (name: string, data: { display_name: string; description: string; permissions: string[] }) =>
     request<{ success: boolean }>('/api/platform/roles/' + name, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+}
+
+export interface DocumentDefaults {
+  agency_name: string
+  contact_person: string
+  contact_phone: string
+  rectification_deadline: string
+}
+
+export const platformSettingsApi = {
+  getDocumentDefaults: () => request<DocumentDefaults>('/api/platform/settings/document-defaults'),
+  updateDocumentDefaults: (data: DocumentDefaults) =>
+    request<DocumentDefaults>('/api/platform/settings/document-defaults', {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
@@ -479,20 +573,75 @@ export const infoQueryApi = {
       body: form,
     }).then(r => r.json() as Promise<{ success: boolean; message: string; batch: string; imported: number; updated: number; skipped: number; headers: string[] }>)
   },
-  list: (params?: { q?: string; tax_officer?: string; manager_department?: string; industry?: string; region?: string; risk_level?: string; limit?: number; offset?: number }) => {
+  startImportJob: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return fetch(API_BASE + '/api/modules/info-query/import-jobs', {
+      method: 'POST',
+      credentials: 'include',
+      body: form,
+    }).then(async r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      return r.json() as Promise<ImportJob>
+    })
+  },
+  getImportJob: (jobId: string) => request<ImportJob>('/api/modules/info-query/import-jobs/' + encodeURIComponent(jobId)),
+  importHistory: (limit = 8) => request<{ items: ImportHistoryItem[] }>('/api/modules/info-query/import-history?limit=' + limit),
+  list: (params?: { q?: string; tax_officer?: string; manager_department?: string; industry?: string; industry_tag?: string; address_tag?: string; registration_status?: string; region?: string; risk_level?: string; limit?: number; offset?: number }) => {
     const sp = new URLSearchParams()
     if (params?.q) sp.set('q', params.q)
     if (params?.tax_officer) sp.set('tax_officer', params.tax_officer)
     if (params?.manager_department) sp.set('manager_department', params.manager_department)
     if (params?.industry) sp.set('industry', params.industry)
+    if (params?.industry_tag) sp.set('industry_tag', params.industry_tag)
+    if (params?.address_tag) sp.set('address_tag', params.address_tag)
+    if (params?.registration_status) sp.set('registration_status', params.registration_status)
     if (params?.region) sp.set('region', params.region)
     if (params?.risk_level) sp.set('risk_level', params.risk_level)
     if (params?.limit) sp.set('limit', String(params.limit))
     if (params?.offset) sp.set('offset', String(params.offset))
     return request<{ taxpayers: TaxpayerProfile[]; total: number }>('/api/modules/info-query/taxpayers?' + sp)
   },
+  exportFile: async (params?: { q?: string; tax_officer?: string; manager_department?: string; industry?: string; industry_tag?: string; address_tag?: string; registration_status?: string; region?: string; risk_level?: string }) => {
+    const sp = new URLSearchParams()
+    if (params?.q) sp.set('q', params.q)
+    if (params?.tax_officer) sp.set('tax_officer', params.tax_officer)
+    if (params?.manager_department) sp.set('manager_department', params.manager_department)
+    if (params?.industry) sp.set('industry', params.industry)
+    if (params?.industry_tag) sp.set('industry_tag', params.industry_tag)
+    if (params?.address_tag) sp.set('address_tag', params.address_tag)
+    if (params?.registration_status) sp.set('registration_status', params.registration_status)
+    if (params?.region) sp.set('region', params.region)
+    if (params?.risk_level) sp.set('risk_level', params.risk_level)
+    const res = await fetch(API_BASE + '/api/modules/info-query/taxpayers/export?' + sp, {
+      credentials: 'include',
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const blob = await res.blob()
+    const disposition = res.headers.get('Content-Disposition') || ''
+    const match = disposition.match(/filename\\*=UTF-8''([^;]+)/)
+    const filename = match ? decodeURIComponent(match[1]) : '税务登记信息查询导出.csv'
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  },
   get: (taxpayerId: string) => request<TaxpayerProfile>('/api/modules/info-query/taxpayers/' + encodeURIComponent(taxpayerId)),
-  assignmentStats: () => request<{ by_officer: Record<string, number>; by_department: Record<string, number>; by_risk_level: Record<string, number>; total: number }>('/api/modules/info-query/assignment-stats'),
+  updateAssignment: (taxpayer_ids: string[], tax_officer: string) =>
+    request<{ success: boolean; updated: number; tax_officer: string; proposed_tax_officer: string }>('/api/modules/info-query/taxpayers/assignment', {
+      method: 'POST',
+      body: JSON.stringify({ taxpayer_ids, tax_officer }),
+    }),
+  updateTags: (taxpayer_ids: string[], body: { industry_tag?: string; address_tag?: string }) =>
+    request<{ success: boolean; updated: number; industry_tag: string; address_tag: string }>('/api/modules/info-query/taxpayers/tags', {
+      method: 'POST',
+      body: JSON.stringify({ taxpayer_ids, ...body }),
+    }),
+  assignmentStats: () => request<{ by_officer: Record<string, number>; by_department: Record<string, number>; by_risk_level: Record<string, number>; by_industry_tag: Record<string, number>; by_address_tag: Record<string, number>; total: number }>('/api/modules/info-query/assignment-stats'),
 }
 
 export interface RiskDossier {
@@ -502,15 +651,23 @@ export interface RiskDossier {
   registration_status: string
   tax_officer: string
   address: string
+  industry?: string
+  industry_tag?: string
+  address_tag?: string
+  manager_department?: string
   is_temporary: boolean
   source: string
   owner_id: number
   created_at: string
   updated_at: string
   latest_recorded_at: string | null
+  latest_rectification_deadline?: string | null
   latest_content: string
   latest_entry_status: string
+  latest_contact_person?: string
+  latest_contact_phone?: string
   entry_count: number
+  is_overdue?: boolean
 }
 
 export interface RiskLedgerEntry {
@@ -521,6 +678,9 @@ export interface RiskLedgerEntry {
   recorded_at: string
   content: string
   entry_status: string
+  rectification_deadline?: string | null
+  contact_person?: string
+  contact_phone?: string
   note: string
   owner_id: number
   created_by: number
@@ -565,14 +725,19 @@ export const riskLedgerApi = {
     recorded_at: string
     content: string
     entry_status: string
+    rectification_deadline?: string
+    contact_person?: string
+    contact_phone?: string
     company_name?: string
     registration_status?: string
     tax_officer?: string
     address?: string
     note?: string
   }) => request<RiskLedgerEntry>('/api/modules/risk-ledger/entries', { method: 'POST', body: JSON.stringify(data) }),
-  batchText: (data: { taxpayer_ids: string[]; recorded_at: string; content: string; entry_status: string; note?: string }) =>
+  batchText: (data: { taxpayer_ids: string[]; recorded_at: string; content: string; entry_status: string; rectification_deadline?: string; contact_person?: string; contact_phone?: string; note?: string }) =>
     request<RiskLedgerBatchResult>('/api/modules/risk-ledger/entries/batch-text', { method: 'POST', body: JSON.stringify(data) }),
+  batchStatus: (data: { taxpayer_ids: string[]; entry_status: string; recorded_at?: string; rectification_deadline?: string; contact_person?: string; contact_phone?: string; content?: string; note?: string }) =>
+    request<RiskLedgerBatchResult>('/api/modules/risk-ledger/entries/batch-status', { method: 'POST', body: JSON.stringify(data) }),
   importFile: (file: File) => {
     const form = new FormData()
     form.append('file', file)
@@ -583,6 +748,93 @@ export const riskLedgerApi = {
     }).then(r => r.json() as Promise<RiskLedgerBatchResult>)
   },
   stats: () => request<RiskLedgerStats>('/api/modules/risk-ledger/stats'),
+}
+
+export interface TaxpayerWorkbenchData {
+  taxpayer: {
+    taxpayer_id: string
+    company_name: string
+    registration_status: string
+    tax_officer: string
+    address: string
+    industry: string
+    tax_bureau: string
+    manager_department: string
+    industry_tag?: string
+    address_tag?: string
+  }
+  dossier: RiskDossier | null
+  entries: RiskLedgerEntry[]
+  recent_analysis_tasks: Array<{ task_id: string; name: string; status: string; risk_count: number; summary: string; created_at: string | null; completed_at: string | null }>
+  latest_risk: RiskLedgerEntry | null
+  material_gap_list: string[]
+}
+
+export interface MyRiskListData {
+  items: RiskDossier[]
+  total: number
+  summary: Record<string, number>
+}
+
+export interface TaxpayerRecordListData {
+  items: RiskDossier[]
+  total: number
+  summary: Record<string, number>
+}
+
+export interface WorkbenchTodoData {
+  items: Array<RiskDossier & { todo_type: string; todo_label: string }>
+  summary: Record<string, number>
+}
+
+export const taxOfficerWorkbenchApi = {
+  taxpayer: (taxpayerId: string) => request<TaxpayerWorkbenchData>('/api/workbench/taxpayer/' + encodeURIComponent(taxpayerId)),
+  searchTaxpayers: (q: string) => request<{ items: TaxpayerProfile[] }>('/api/workbench/taxpayers/search?q=' + encodeURIComponent(q)),
+  recentTaxpayers: (limit = 8) => request<{ items: TaxpayerProfile[] }>('/api/workbench/recent-taxpayers?limit=' + limit),
+  taxpayerRecords: (params?: { q?: string; tax_officer?: string; registration_status?: string; entry_status?: string; overdue?: boolean; temporary?: boolean; industry_tag?: string; address_tag?: string; limit?: number; offset?: number }) => {
+    const sp = new URLSearchParams()
+    if (params?.q) sp.set('q', params.q)
+    if (params?.tax_officer) sp.set('tax_officer', params.tax_officer)
+    if (params?.registration_status) sp.set('registration_status', params.registration_status)
+    if (params?.entry_status) sp.set('entry_status', params.entry_status)
+    if (params?.overdue !== undefined) sp.set('overdue', String(params.overdue))
+    if (params?.temporary !== undefined) sp.set('temporary', String(params.temporary))
+    if (params?.industry_tag) sp.set('industry_tag', params.industry_tag)
+    if (params?.address_tag) sp.set('address_tag', params.address_tag)
+    if (params?.limit) sp.set('limit', String(params.limit))
+    if (params?.offset) sp.set('offset', String(params.offset))
+    return request<TaxpayerRecordListData>('/api/workbench/taxpayer-records?' + sp)
+  },
+  todos: (params?: { limit?: number; due_days?: number }) => {
+    const sp = new URLSearchParams()
+    if (params?.limit) sp.set('limit', String(params.limit))
+    if (params?.due_days) sp.set('due_days', String(params.due_days))
+    return request<WorkbenchTodoData>('/api/workbench/todos?' + sp)
+  },
+  myRiskList: (params?: { q?: string; tax_officer?: string; registration_status?: string; entry_status?: string; overdue?: boolean; temporary?: boolean; limit?: number; offset?: number }) => {
+    const sp = new URLSearchParams()
+    if (params?.q) sp.set('q', params.q)
+    if (params?.tax_officer) sp.set('tax_officer', params.tax_officer)
+    if (params?.registration_status) sp.set('registration_status', params.registration_status)
+    if (params?.entry_status) sp.set('entry_status', params.entry_status)
+    if (params?.overdue !== undefined) sp.set('overdue', String(params.overdue))
+    if (params?.temporary !== undefined) sp.set('temporary', String(params.temporary))
+    if (params?.limit) sp.set('limit', String(params.limit))
+    if (params?.offset) sp.set('offset', String(params.offset))
+    return request<MyRiskListData>('/api/workbench/my-risk-list?' + sp)
+  },
+  myRiskListExportUrl: (params?: { q?: string; tax_officer?: string; registration_status?: string; entry_status?: string; overdue?: boolean; temporary?: boolean }) => {
+    const sp = new URLSearchParams()
+    if (params?.q) sp.set('q', params.q)
+    if (params?.tax_officer) sp.set('tax_officer', params.tax_officer)
+    if (params?.registration_status) sp.set('registration_status', params.registration_status)
+    if (params?.entry_status) sp.set('entry_status', params.entry_status)
+    if (params?.overdue !== undefined) sp.set('overdue', String(params.overdue))
+    if (params?.temporary !== undefined) sp.set('temporary', String(params.temporary))
+    return API_BASE + '/api/workbench/my-risk-list/export?' + sp
+  },
+  syncRiskToLedger: (riskId: string) =>
+    request<{ success: boolean; message: string; entry_id: string }>('/api/modules/analysis-workbench/risks/' + riskId + '/ledger', { method: 'POST' }),
 }
 
 export interface TrainingSet {

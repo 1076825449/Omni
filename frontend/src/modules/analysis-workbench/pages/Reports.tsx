@@ -1,35 +1,91 @@
 // 分析工作模块 - 报告导出页
-import { Card, Button, Space, Typography, Result } from 'antd'
+import { Card, Button, Space, Typography, Result, Form, Input, Row, Col } from 'antd'
+import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { analysisApi } from '../../../services/api'
+import { analysisApi, DocumentConfig, platformSettingsApi } from '../../../services/api'
 
 const { Text } = Typography
 
 export default function Reports() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [form] = Form.useForm()
+  const [docConfig, setDocConfig] = useState<DocumentConfig>({})
+
+  useEffect(() => {
+    platformSettingsApi.getDocumentDefaults().then((defaults) => {
+      form.setFieldsValue(defaults)
+      setDocConfig(defaults)
+    }).catch(() => {})
+  }, [])
   const reportLinks = id ? [
-    { key: 'analysis-json', label: '分析报告 JSON', href: analysisApi.reportUrl(id, 'json', 'analysis') },
-    { key: 'analysis-txt', label: '分析报告 TXT', href: analysisApi.reportUrl(id, 'txt', 'analysis') },
-    { key: 'notice-json', label: '通知书 JSON', href: analysisApi.reportUrl(id, 'json', 'notice') },
-    { key: 'notice-txt', label: '通知书 TXT', href: analysisApi.reportUrl(id, 'txt', 'notice') },
+    { key: 'analysis-docx', label: '下载核实报告 DOCX', href: analysisApi.reportUrl(id, 'docx', 'analysis', docConfig), primary: true },
+    { key: 'notice-docx', label: '下载通知书 DOCX', href: analysisApi.reportUrl(id, 'docx', 'notice', docConfig), primary: true },
+    { key: 'analysis-json', label: '分析报告 JSON', href: analysisApi.reportUrl(id, 'json', 'analysis', docConfig) },
+    { key: 'analysis-txt', label: '分析报告 TXT', href: analysisApi.reportUrl(id, 'txt', 'analysis', docConfig) },
+    { key: 'notice-json', label: '通知书 JSON', href: analysisApi.reportUrl(id, 'json', 'notice', docConfig) },
+    { key: 'notice-txt', label: '通知书 TXT', href: analysisApi.reportUrl(id, 'txt', 'notice', docConfig) },
   ] : []
 
   return (
     <div>
-      <Card title="报告导出" style={{ marginBottom: 16 }}>
+      <Card title="文书报告导出" style={{ marginBottom: 16 }}>
         <Space direction="vertical" style={{ width: '100%' }}>
-          <Text>任务 ID：{id}</Text>
-          <Text type="secondary">导出税务事项通知书与税务分析报告</Text>
+          <Text>分析编号：{id}</Text>
+          <Text type="secondary">导出税务事项通知书与税务疑点核实报告</Text>
           <Space>
             {reportLinks.map((item, index) => (
-              <Button key={item.key} type={index === 0 ? 'primary' : 'default'} href={item.href}>
+              <Button key={item.key} type={item.primary || index === 0 ? 'primary' : 'default'} href={item.href}>
                 {item.label}
               </Button>
             ))}
           </Space>
-          <Text type="secondary" style={{ fontSize: 12 }}>分析报告面向税务人员，通知书面向企业；两类文书均支持结构化 JSON 与可读 TXT。</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>分析报告面向税务人员，通知书面向企业；正式流转优先下载 DOCX，JSON/TXT 用于数据核对和快速预览。</Text>
         </Space>
+      </Card>
+
+      <Card title="文书信息确认" style={{ marginBottom: 16 }}>
+        <Form
+          layout="vertical"
+          form={form}
+          onValuesChange={(_, values) => setDocConfig(values)}
+        >
+          <Row gutter={16}>
+            <Col xs={24} md={12}>
+              <Form.Item label="税务机关名称" name="agency_name">
+                <Input placeholder="例如：国家税务总局XX市XX区税务局" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item label="文号" name="document_number">
+                <Input placeholder="例如：税通〔2026〕001号" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item label="联系人" name="contact_person">
+                <Input placeholder="填写经办税务人员姓名" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item label="联系电话" name="contact_phone">
+                <Input placeholder="填写联系电话" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item label="整改期限" name="rectification_deadline">
+                <Input placeholder="例如：2026年5月10日前" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item label="文书日期" name="document_date">
+                <Input placeholder="例如：2026-04-29" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            未填写的字段继续使用系统默认值；正式流转前建议至少填写税务机关、文号、联系人、联系电话、整改期限和文书日期。
+          </Text>
+        </Form>
       </Card>
 
       <Result
@@ -39,7 +95,7 @@ export default function Reports() {
         extra={
           <Space>
             <Button onClick={() => navigate(`/modules/analysis-workbench/results/${id}`)}>返回结果页</Button>
-            <Button onClick={() => navigate('/modules/analysis-workbench/history')}>返回历史任务</Button>
+            <Button onClick={() => navigate('/reports')}>返回文书报告</Button>
           </Space>
         }
       />

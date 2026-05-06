@@ -11,6 +11,7 @@ export default function Login() {
   const navigate = useNavigate()
   const message = useAppMessage()
   const login = useAuthStore(s => s.login)
+  const showDemoAccount = import.meta.env.DEV || import.meta.env.VITE_SHOW_DEMO_ACCOUNT === 'true'
   const [remember, setRemember] = useState(() => {
     return localStorage.getItem('omni-remember') === 'true'
   })
@@ -38,8 +39,8 @@ export default function Login() {
     <div className="omni-login-container">
       <div className="omni-login-box">
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <Title level={3} style={{ margin: 0 }}>Omni 统一平台</Title>
-          <Text type="secondary">统一入口 · 统一导航 · 统一体验</Text>
+          <Title level={3} style={{ margin: 0 }}>税务案头助手</Title>
+          <Text type="secondary">查户 · 分析 · 记录 · 整改 · 文书</Text>
         </div>
 
         <Form
@@ -47,7 +48,7 @@ export default function Login() {
           layout="vertical"
           onFinish={onFinish}
           size="large"
-          initialValues={{ username: lastUsername || 'admin', password: 'admin123' }}
+          initialValues={{ username: lastUsername || (showDemoAccount ? 'admin' : ''), password: showDemoAccount ? 'admin123' : '' }}
         >
           <Form.Item
             name="username"
@@ -78,11 +79,13 @@ export default function Login() {
           </Form.Item>
         </Form>
 
-        <div style={{ textAlign: 'center', marginTop: 16 }}>
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            测试账号：admin / admin123
-          </Text>
-        </div>
+        {showDemoAccount && (
+          <div style={{ textAlign: 'center', marginTop: 16 }}>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              本地测试账号：admin / admin123
+            </Text>
+          </div>
+        )}
       </div>
     </div>
   )

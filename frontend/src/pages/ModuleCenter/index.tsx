@@ -23,44 +23,44 @@ const moduleDescriptions: Record<string, {
     tagColor: 'red',
   },
   'record-operations': {
-    name: '对象管理',
-    shortDesc: '统一管理企业、任务对象、风险对象和处理记录。',
-    scenarios: ['批量导入业务对象数据', '分类标签管理', '追踪对象来源和关联'],
-    tag: '数据管理',
+    name: '辅助数据管理',
+    shortDesc: '用于管理员整理历史记录、辅助数据和系统内部留痕，普通税务人员一般不从这里开始工作。',
+    scenarios: ['整理历史辅助数据', '查看分析形成的风险事项', '维护内部分类标签'],
+    tag: '系统管理',
     tagColor: 'blue',
   },
   'info-query': {
-    name: '纳税人信息查询',
-    shortDesc: '导入和查询纳税人基础信息，是分析和风险台账的数据来源。',
-    scenarios: ['导入纳税人基本信息', '查询企业画像', '按管理员统计管户情况'],
-    tag: '基础数据',
+    name: '管户分配',
+    shortDesc: '导入完整信息查询表，按管理员、管户部门查看纳税人分布，并为案头分析和管户记录提供基础信息。',
+    scenarios: ['导入税务登记信息查询表', '查询企业画像', '按管理员统计管户情况'],
+    tag: '管户基础',
     tagColor: 'cyan',
   },
   'risk-ledger': {
-    name: '风险记录台账',
-    shortDesc: '按纳税人记录风险事项、处理过程和整改状态。',
-    scenarios: ['记录新发现的风险事项', '跟踪整改进度', '按状态统计风险情况'],
-    tag: '风险处理',
+    name: '管户记录',
+    shortDesc: '按纳税人记录风险、排除、整改和联系情况，形成一户一档的日常管户记录。',
+    scenarios: ['记录新发现的风险事项', '记录风险排除情况', '跟踪整改进度'],
+    tag: '管户记录',
     tagColor: 'orange',
   },
   'learning-lab': {
-    name: '学习训练',
-    shortDesc: '业务知识练习、错题复习和学习效果统计。',
-    scenarios: ['开始练习提升业务能力', '复习收藏的错题', '查看学习统计'],
-    tag: '学习训练',
+    name: '刷题程序',
+    shortDesc: '税务业务题库练习、错题复习和学习效果统计。',
+    scenarios: ['开始刷题练习', '复习收藏的错题', '查看学习统计'],
+    tag: '刷题训练',
     tagColor: 'green',
   },
   'dashboard-workbench': {
-    name: '数据看板',
-    shortDesc: '查看平台整体运行情况，包括任务、文件、风险和模块使用统计。',
-    scenarios: ['查看任务完成情况', '了解平台整体运转', '按时间范围查看趋势'],
-    tag: '数据总览',
+    name: '系统管理：工作统计',
+    shortDesc: '查看系统运行情况，包括分析、资料、风险和使用统计。',
+    scenarios: ['查看分析完成情况', '了解系统整体运转', '按时间范围查看趋势'],
+    tag: '系统管理',
     tagColor: 'purple',
   },
   'schedule-workbench': {
-    name: '定时任务',
-    shortDesc: '设置定时分析、定时备份或其他周期任务，自动执行。',
-    scenarios: ['设置每天自动执行分析', '定期备份平台数据', '周期性的数据整理任务'],
+    name: '系统管理：自动任务',
+    shortDesc: '设置自动分析、自动备份或其他周期工作。',
+    scenarios: ['设置每天自动执行分析', '定期备份数据', '周期性整理资料'],
     tag: '系统工具',
     tagColor: 'default',
   },
@@ -87,9 +87,9 @@ export default function ModuleCenter() {
     <div className="omni-page">
       <div className="omni-page-header">
         <Space direction="vertical" size={4} style={{ width: '100%' }}>
-          <Title level={4} style={{ margin: 0 }}>模块中心</Title>
+          <Title level={4} style={{ margin: 0 }}>系统管理：全部功能</Title>
           <Text type="secondary">
-            平台共 {modules.filter(m => m.status === 'active').length} 个可用模块，点击进入相应模块开始使用。
+            这里集中放置业务功能和系统管理功能。日常工作建议优先从首页、信息查询、管户分配、管户记录和案头分析进入。
           </Text>
         </Space>
       </div>
@@ -167,7 +167,7 @@ export default function ModuleCenter() {
                           size="small"
                           disabled={m.status !== 'active'}
                         >
-                          {m.status === 'active' ? '进入模块' : '暂不可用'}
+                          {m.status === 'active' ? '进入功能' : '暂不可用'}
                         </Button>
                       </Link>
                     </Space>

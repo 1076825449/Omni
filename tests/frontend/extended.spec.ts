@@ -27,10 +27,10 @@ test.describe('Viewer Role Permissions', () => {
   test('viewer sees read-only platform (can view modules)', async ({ page }) => {
     await page.goto('/modules')
     await page.waitForTimeout(5000)
-    // If viewer session is valid, we should see the module center. If redirected to login, skip.
+    // If viewer session is valid, we should see the system function center. If redirected to login, skip.
     const onLoginPage = page.url().includes('/login')
     if (onLoginPage) { test.skip(); return }
-    await expect(page.getByRole('heading', { name: '模块中心' })).toBeVisible({ timeout: 8000 })
+    await expect(page.getByRole('heading', { name: '系统管理：全部功能' })).toBeVisible({ timeout: 8000 })
   })
 
   test('viewer cannot see create buttons in platform centers', async ({ page }) => {
@@ -80,14 +80,9 @@ test.describe('Extended Smoke - All 7 Modules Complete Flow', () => {
     await page.waitForURL(/\/$/, { timeout: 5000 })
   })
 
-  test('analysis-workbench full flow: new -> upload -> run -> result -> history', async ({ page }) => {
-    const analysisName = `Ext Smoke 分析 ${suffix}`
+  test('analysis-workbench full flow: new -> upload -> run -> result', async ({ page }) => {
     await page.goto('/modules/analysis-workbench/new')
-    await expect(page.getByText('新建分析任务')).toBeVisible()
-    await page.getByLabel('分析名称').fill(analysisName)
-    await page.getByLabel('描述').fill('扩展冒烟测试')
-    await page.getByRole('button', { name: '创建任务' }).click()
-    await expect(page.getByText('当前任务 ID：')).toBeVisible()
+    await expect(page.getByText('上传资料', { exact: true })).toBeVisible()
 
     // 上传文件
     await page.locator('input[type="file"]').setInputFiles({
@@ -98,30 +93,26 @@ test.describe('Extended Smoke - All 7 Modules Complete Flow', () => {
     await expect(page.getByText(`ext-analysis-${suffix}.txt`).first()).toBeVisible()
 
     // 发起分析
-    await page.getByRole('button', { name: '发起分析' }).click()
-    await page.waitForURL(/\/history$/, { timeout: 5000 })
-    await expect(page.getByRole('button', { name: analysisName }).first()).toBeVisible()
-
-    // 查看结果
-    await page.getByRole('button', { name: analysisName }).first().click()
+    await page.getByRole('button', { name: '发起分析', exact: true }).click()
+    await page.waitForURL(/\/results\//, { timeout: 5000 })
     await expect(page.getByText('分析结果')).toBeVisible()
   })
 
   test('schedule-workbench: create task -> verify in list', async ({ page }) => {
     const scheduleName = `Ext Smoke 调度 ${suffix}`
     await page.goto('/modules/schedule-workbench')
-    await page.getByPlaceholder('例如：每日分析同步').fill(scheduleName)
-    await page.getByPlaceholder('说明该任务的用途').fill('扩展冒烟测试')
+    await page.getByPlaceholder('例如：每日风险分析').fill(scheduleName)
+    await page.getByPlaceholder('说明该任务的用途，例如：每天自动分析前一天的申报数据').fill('扩展冒烟测试')
     await page.getByPlaceholder('例如：0 9 * * *').fill('30 10 * * *')
-    await page.getByPlaceholder('例如：analysis / backup').fill('analysis')
-    await page.getByRole('button', { name: '创建任务' }).click()
+    await page.getByPlaceholder('例如：analysis、backup、data-import').fill('analysis')
+    await page.getByRole('button', { name: '创建定时任务' }).click()
     await expect(page.getByText(scheduleName)).toBeVisible()
   })
 
   test('record-operations: create object -> verify in list', async ({ page }) => {
     const objName = `Ext Smoke 对象 ${suffix}`
     await page.goto('/modules/record-operations/list')
-    await expect(page.getByRole('tab', { name: '对象列表' })).toBeVisible()
+    await expect(page.getByRole('tab', { name: '辅助记录列表' })).toBeVisible()
     await page.getByRole('button', { name: '新建对象' }).click()
     await page.waitForTimeout(500)
 
@@ -133,20 +124,18 @@ test.describe('Extended Smoke - All 7 Modules Complete Flow', () => {
     }
   })
 
-  test('info-query: page loads with taxpayer stats', async ({ page }) => {
+  test('info-query: page loads taxpayer assignment list', async ({ page }) => {
     await page.goto('/modules/info-query')
-    await expect(page.getByText('纳税人总数')).toBeVisible()
-    const importBtn = page.getByRole('button', { name: /导入.*CSV|导入纳税人|批量导入/ }).first()
-    if (await importBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await importBtn.click()
-      await page.waitForTimeout(300)
-    }
+    await expect(page.getByRole('heading', { name: '管户分配' })).toBeVisible()
+    await expect(page.getByPlaceholder('企业名称、税号、法人、管理员')).toBeVisible()
+    await expect(page.getByRole('button', { name: '导出当前结果' })).toBeVisible()
+    await expect(page.getByRole('columnheader', { name: '纳税人名称' })).toBeVisible()
   })
 
-  test('risk-ledger: single record tab visible', async ({ page }) => {
+  test('risk-ledger: taxpayer record list visible', async ({ page }) => {
     await page.goto('/modules/risk-ledger')
-    await expect(page.getByRole('tab', { name: '单户记录' })).toBeVisible()
-    await page.getByRole('tab', { name: '单户记录' }).click()
+    await expect(page.getByRole('heading', { name: '管户记录' })).toBeVisible()
+    await expect(page.getByPlaceholder('税号/名称/法人/管理员')).toBeVisible()
     await page.waitForTimeout(300)
   })
 

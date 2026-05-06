@@ -1,7 +1,7 @@
 // 系统设置 - 含备份中心 + 角色管理
-import { Card, Tabs, Typography, Form, Input, Button, Space, List, Tag, Checkbox, Spin, Descriptions, Divider, Result } from 'antd'
+import { Alert, Card, Tabs, Typography, Form, Input, Button, Space, List, Tag, Checkbox, Spin, Descriptions, Divider, Result } from 'antd'
 import { useState, useEffect } from 'react'
-import { backupApi, BackupRecord, rolesApi, RoleRecord } from '../../services/api'
+import { authApi, backupApi, BackupRecord, platformSettingsApi, rolesApi, RoleRecord } from '../../services/api'
 import { useAuthStore } from '../../stores/auth'
 import { useAppMessage } from '../../hooks/useAppMessage'
 
@@ -22,32 +22,32 @@ function formatSize(bytes: number) {
 
 // 权限分组展示
 const PERMISSION_GROUPS: Record<string, string[]> = {
-  '分析工作模块': [
+  '案头分析': [
     'module:analysis-workbench:view',
     'module:analysis-workbench:operate',
     'module:analysis-workbench:export',
   ],
-  '对象管理模块': [
+  '辅助数据管理': [
     'module:record-operations:view',
     'module:record-operations:operate',
   ],
-  '学习训练模块': [
+  '学习训练': [
     'module:learning-lab:view',
     'module:learning-lab:operate',
   ],
-  '平台任务': [
+  '运行记录': [
     'platform:task:view',
     'platform:task:operate',
   ],
-  '平台文件': [
+  '资料留存': [
     'platform:file:view',
     'platform:file:operate',
   ],
-  '平台日志': [
+  '操作记录': [
     'platform:log:view',
     'platform:log:export',
   ],
-  '平台备份': [
+  '备份恢复': [
     'platform:backup:create',
     'platform:backup:restore',
   ],
@@ -90,6 +90,7 @@ function PermissionGroupEditor({ permissions, value, onChange }: { permissions: 
 export default function Settings() {
   const [form] = Form.useForm()
   const [backupForm] = Form.useForm()
+  const [documentForm] = Form.useForm()
   const message = useAppMessage()
   const [backups, setBackups] = useState<BackupRecord[]>([])
   const [loading, setLoading] = useState(true)
@@ -103,6 +104,8 @@ export default function Settings() {
   const [editingRole, setEditingRole] = useState<string | null>(null)
   const [editPerms, setEditPerms] = useState<string[]>([])
   const [roleLoading, setRoleLoading] = useState(false)
+  const [documentSaving, setDocumentSaving] = useState(false)
+  const [passwordSaving, setPasswordSaving] = useState(false)
 
   const loadBackups = () => {
     setLoading(true)
@@ -124,6 +127,11 @@ export default function Settings() {
 
   useEffect(() => { loadBackups() }, [])
   useEffect(() => { loadRoles() }, [isAdmin])
+  useEffect(() => {
+    platformSettingsApi.getDocumentDefaults().then((data) => {
+      documentForm.setFieldsValue(data)
+    }).catch(() => {})
+  }, [])
 
   const handleCreateBackup = async (values: { name: string; note?: string }) => {
     setCreating(true)
@@ -135,7 +143,7 @@ export default function Settings() {
         loadBackups()
       }
     } catch {
-      message.error('发起备份失败')
+      message.error('发起备份失败，请确认当前账号有备份权限')
     } finally {
       setCreating(false)
     }
@@ -155,28 +163,59 @@ export default function Settings() {
       setEditingRole(null)
       loadRoles()
     } catch {
-      message.error('更新失败')
+      message.error('角色权限更新失败，请确认当前账号仍有管理员权限')
+    }
+  }
+
+  const handleSaveDocumentDefaults = async (values: any) => {
+    setDocumentSaving(true)
+    try {
+      await platformSettingsApi.updateDocumentDefaults(values)
+      message.success('文书默认信息已保存')
+    } catch {
+      message.error('保存文书默认信息失败')
+    } finally {
+      setDocumentSaving(false)
+    }
+  }
+
+  const handleChangePassword = async (values: any) => {
+    if (values.new_password !== values.confirm_password) {
+      message.error('两次输入的新密码不一致')
+      return
+    }
+    setPasswordSaving(true)
+    try {
+      await authApi.changePassword(values.current_password, values.new_password)
+      message.success('密码已修改，请重新登录')
+      await useAuthStore.getState().logout()
+    } catch {
+      message.error('密码修改失败，请确认当前密码正确且新密码至少 8 位')
+    } finally {
+      setPasswordSaving(false)
     }
   }
 
   const accountTab = (
-    <Form layout="vertical" form={form} style={{ maxWidth: 480 }}>
-      <Form.Item label="用户名" name="username" initialValue={user?.username}>
-        <Input disabled />
-      </Form.Item>
-      <Form.Item label="角色" name="role" initialValue={user?.role}>
-        <Input disabled />
-      </Form.Item>
-      <Form.Item label="昵称" name="nickname" initialValue={user?.nickname}>
-        <Input placeholder="请输入昵称" />
-      </Form.Item>
-      <Form.Item label="邮箱" name="email">
-        <Input placeholder="请输入邮箱" />
-      </Form.Item>
-      <Form.Item>
-        <Button type="primary">保存</Button>
-      </Form.Item>
-    </Form>
+    <Space direction="vertical" style={{ width: '100%', maxWidth: 520 }}>
+      <Alert
+        type="info"
+        showIcon
+        message="账号基础信息暂由管理员统一维护"
+        description="当前页面用于查看自己的账号和角色。昵称、联系方式和密码修改后续接入账号管理后再开放，避免前端显示可保存但实际未落库。"
+      />
+      <Form layout="vertical" form={form}>
+        <Form.Item label="用户名" name="username" initialValue={user?.username}>
+          <Input disabled />
+        </Form.Item>
+        <Form.Item label="角色" name="role" initialValue={user?.role}>
+          <Input disabled />
+        </Form.Item>
+        <Form.Item label="昵称" name="nickname" initialValue={user?.nickname}>
+          <Input disabled placeholder="由管理员维护" />
+        </Form.Item>
+      </Form>
+    </Space>
   )
 
   const backupTab = (
@@ -227,7 +266,7 @@ export default function Settings() {
           2. 停止后端服务<br />
           3. 解压备份文件，用 <code>python3 cli.py db restore &lt;backup_id&gt;</code> 恢复数据库<br />
           4. 重启后端服务<br />
-          <Text type="secondary">⚠️ 恢复会覆盖当前数据，请在恢复前确认备份完整性。</Text>
+          <Text type="secondary">恢复会覆盖当前数据，请在恢复前确认备份完整性。</Text>
         </Paragraph>
       </Card>
     </Space>
@@ -266,9 +305,9 @@ export default function Settings() {
 
       <Card size="small" type="inner" title="角色说明" style={{ background: '#f0f5ff' }}>
         <Descriptions size="small" column={1}>
-          <Descriptions.Item label="管理员">拥有全部权限，可管理其他用户角色</Descriptions.Item>
-          <Descriptions.Item label="普通用户">可正常使用平台所有功能，不能管理角色和权限</Descriptions.Item>
-          <Descriptions.Item label="访客">仅可查看平台内容，不能执行任何操作</Descriptions.Item>
+          <Descriptions.Item label="管理员">拥有全部权限，可管理用户角色、备份恢复和系统设置</Descriptions.Item>
+          <Descriptions.Item label="普通用户">可正常使用查户、案头分析、风险台账、文书报告等业务功能</Descriptions.Item>
+          <Descriptions.Item label="访客">仅可查看，不能新增、编辑、导入、导出或批量处理</Descriptions.Item>
         </Descriptions>
       </Card>
     </Space>
@@ -276,6 +315,32 @@ export default function Settings() {
 
   const tabItems = [
     { key: 'account', label: '账号信息', children: accountTab },
+    {
+      key: 'documents',
+      label: '文书默认信息',
+      children: (
+        <Card size="small" title="通知书和核实报告默认信息">
+          <Paragraph type="secondary" style={{ fontSize: 13 }}>
+            这里填写后，案头分析报告导出页会自动带出；正式生成前仍可临时修改。
+          </Paragraph>
+          <Form form={documentForm} layout="vertical" onFinish={handleSaveDocumentDefaults} style={{ maxWidth: 640 }}>
+            <Form.Item label="税务机关名称" name="agency_name">
+              <Input placeholder="例如：国家税务总局XX市XX区税务局" />
+            </Form.Item>
+            <Form.Item label="联系人" name="contact_person">
+              <Input placeholder="经办税务人员姓名" />
+            </Form.Item>
+            <Form.Item label="联系电话" name="contact_phone">
+              <Input placeholder="联系电话" />
+            </Form.Item>
+            <Form.Item label="默认整改期限" name="rectification_deadline">
+              <Input placeholder="例如：收到通知后 5 个工作日内" />
+            </Form.Item>
+            <Button type="primary" htmlType="submit" loading={documentSaving}>保存文书默认信息</Button>
+          </Form>
+        </Card>
+      ),
+    },
     ...(isAdmin ? [{ key: 'roles', label: '角色管理', children: roleTab }] : []),
     { key: 'backup', label: '备份中心', children: backupTab },
     {
@@ -283,11 +348,24 @@ export default function Settings() {
       label: '安全设置',
       children: (
         <Space direction="vertical" size="middle" style={{ maxWidth: 480 }}>
+          <Alert
+            type="info"
+            showIcon
+            message="修改密码后需要重新登录"
+            description="系统会校验当前密码，修改成功后自动使现有登录状态失效，并写入操作记录。"
+          />
           <Card size="small" title="修改密码">
-            <Form layout="vertical">
-              <Form.Item label="当前密码"><Input.Password /></Form.Item>
-              <Form.Item label="新密码"><Input.Password /></Form.Item>
-              <Form.Item><Button type="primary">修改密码</Button></Form.Item>
+            <Form layout="vertical" onFinish={handleChangePassword}>
+              <Form.Item label="当前密码" name="current_password" rules={[{ required: true, message: '请输入当前密码' }]}>
+                <Input.Password />
+              </Form.Item>
+              <Form.Item label="新密码" name="new_password" rules={[{ required: true, min: 8, message: '新密码至少 8 位' }]}>
+                <Input.Password />
+              </Form.Item>
+              <Form.Item label="确认新密码" name="confirm_password" rules={[{ required: true, message: '请再次输入新密码' }]}>
+                <Input.Password />
+              </Form.Item>
+              <Form.Item><Button type="primary" htmlType="submit" loading={passwordSaving}>修改密码并重新登录</Button></Form.Item>
             </Form>
           </Card>
         </Space>

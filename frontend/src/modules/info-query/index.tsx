@@ -59,13 +59,13 @@ export default function InfoQueryModule() {
     setSavingAssignment(true)
     try {
       const result = await infoQueryApi.updateAssignment(taxpayerIds, proposedOfficer)
-      setRows(prev => prev.map(row => taxpayerIds.includes(row.taxpayer_id) ? { ...row, proposed_tax_officer: result.proposed_tax_officer } : row))
+      setRows(prev => prev.map(row => taxpayerIds.includes(row.taxpayer_id) ? { ...row, tax_officer: result.tax_officer, proposed_tax_officer: result.proposed_tax_officer } : row))
       setAssignmentDrafts(prev => {
         const next = { ...prev }
         taxpayerIds.forEach(id => { next[id] = result.proposed_tax_officer })
         return next
       })
-      message.success(`已设置 ${result.updated} 户拟分配管理员`)
+      message.success(`已分配 ${result.updated} 户税收管理员`)
     } catch {
       message.error('拟分配管理员保存失败，请稍后重试')
     } finally {
@@ -90,7 +90,7 @@ export default function InfoQueryModule() {
     { title: '登记状态', dataIndex: 'registration_status', key: 'registration_status', width: 110 },
     { title: '税收管理员', dataIndex: 'tax_officer', key: 'tax_officer', width: 120 },
     {
-      title: '拟分配管理员',
+      title: '分配管理员',
       dataIndex: 'proposed_tax_officer',
       key: 'proposed_tax_officer',
       width: 260,
@@ -164,7 +164,7 @@ export default function InfoQueryModule() {
             <Select
               showSearch
               allowClear
-              placeholder="批量拟分配管理员"
+              placeholder="批量分配管理员"
               value={batchOfficer || undefined}
               onChange={value => setBatchOfficer(value || '')}
               onSearch={setBatchOfficer}
@@ -177,7 +177,7 @@ export default function InfoQueryModule() {
               loading={savingAssignment}
               onClick={() => saveAssignment(selectedRowKeys.map(String), batchOfficer)}
             >
-              批量设置{selectedRowKeys.length ? `（${selectedRowKeys.length}户）` : ''}
+              批量分配{selectedRowKeys.length ? `（${selectedRowKeys.length}户）` : ''}
             </Button>
           </Space>
           <Table

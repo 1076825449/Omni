@@ -631,10 +631,10 @@ export const infoQueryApi = {
     URL.revokeObjectURL(url)
   },
   get: (taxpayerId: string) => request<TaxpayerProfile>('/api/modules/info-query/taxpayers/' + encodeURIComponent(taxpayerId)),
-  updateAssignment: (taxpayer_ids: string[], proposed_tax_officer: string) =>
-    request<{ success: boolean; updated: number; proposed_tax_officer: string }>('/api/modules/info-query/taxpayers/assignment', {
+  updateAssignment: (taxpayer_ids: string[], tax_officer: string) =>
+    request<{ success: boolean; updated: number; tax_officer: string; proposed_tax_officer: string }>('/api/modules/info-query/taxpayers/assignment', {
       method: 'POST',
-      body: JSON.stringify({ taxpayer_ids, proposed_tax_officer }),
+      body: JSON.stringify({ taxpayer_ids, tax_officer }),
     }),
   assignmentStats: () => request<{ by_officer: Record<string, number>; by_department: Record<string, number>; by_risk_level: Record<string, number>; by_industry_tag: Record<string, number>; by_address_tag: Record<string, number>; total: number }>('/api/modules/info-query/assignment-stats'),
 }

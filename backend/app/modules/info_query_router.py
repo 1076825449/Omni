@@ -214,12 +214,14 @@ class AssignmentStatsResponse(BaseModel):
 
 class TaxpayerAssignmentRequest(BaseModel):
     taxpayer_ids: list[str]
+    tax_officer: str = ""
     proposed_tax_officer: str = ""
 
 
 class TaxpayerAssignmentResponse(BaseModel):
     success: bool
     updated: int
+    tax_officer: str
     proposed_tax_officer: str
 
 
@@ -741,13 +743,14 @@ def update_taxpayer_assignment(
         TaxpayerInfo.owner_id == current_user.id,
         TaxpayerInfo.taxpayer_id.in_(taxpayer_ids),
     ).all()
-    proposed = body.proposed_tax_officer.strip()
+    assigned = (body.tax_officer or body.proposed_tax_officer).strip()
     for row in rows:
-        row.proposed_tax_officer = proposed
+        row.tax_officer = assigned
+        row.proposed_tax_officer = assigned
     if rows:
-        log_action(db, "propose_assignment", ",".join(taxpayer_ids[:20]), current_user.id, f"拟分配管理员：{proposed or '清空'}，户数 {len(rows)}")
+        log_action(db, "assign_tax_officer", ",".join(taxpayer_ids[:20]), current_user.id, f"分配税收管理员：{assigned or '清空'}，户数 {len(rows)}")
     db.commit()
-    return TaxpayerAssignmentResponse(success=True, updated=len(rows), proposed_tax_officer=proposed)
+    return TaxpayerAssignmentResponse(success=True, updated=len(rows), tax_officer=assigned, proposed_tax_officer=assigned)
 
 
 @router.get("/taxpayers/{taxpayer_id}", response_model=TaxpayerInfoSchema)

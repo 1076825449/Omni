@@ -507,17 +507,21 @@ def test_info_query_import_assignment_stats_and_analysis_profile(auth_client):
 
     assignment_resp = auth_client.post(
         "/api/modules/info-query/taxpayers/assignment",
-        json={"taxpayer_ids": ["91310000INFO0001", "91310000INFO0002"], "proposed_tax_officer": "拟分配员"},
+        json={"taxpayer_ids": ["91310000INFO0001", "91310000INFO0002"], "tax_officer": "拟分配员"},
     )
     assert assignment_resp.status_code == 200
     assert assignment_resp.json()["updated"] == 2
     assignment_list_resp = auth_client.get("/api/modules/info-query/taxpayers?q=信息企业A")
     assert assignment_list_resp.status_code == 200
+    assert assignment_list_resp.json()["taxpayers"][0]["tax_officer"] == "拟分配员"
     assert assignment_list_resp.json()["taxpayers"][0]["proposed_tax_officer"] == "拟分配员"
 
     officer_search_resp = auth_client.get("/api/modules/info-query/taxpayers?q=张税官")
     assert officer_search_resp.status_code == 200
-    assert officer_search_resp.json()["total"] == 1
+    assert officer_search_resp.json()["total"] == 0
+    new_officer_search_resp = auth_client.get("/api/modules/info-query/taxpayers?q=拟分配员")
+    assert new_officer_search_resp.status_code == 200
+    assert new_officer_search_resp.json()["total"] == 2
 
     tag_filter_resp = auth_client.get("/api/modules/info-query/taxpayers?address_tag=柳江大道1号")
     assert tag_filter_resp.status_code == 200
@@ -528,7 +532,7 @@ def test_info_query_import_assignment_stats_and_analysis_profile(auth_client):
     assert stats_resp.status_code == 200
     stats = stats_resp.json()
     assert stats["total"] == 2
-    assert stats["by_officer"]["张税官"] == 1
+    assert stats["by_officer"]["拟分配员"] == 2
     assert stats["by_department"]["一分局"] == 1
     assert stats["by_risk_level"]["高"] == 1
     assert stats["by_industry_tag"]["制造业"] == 1
@@ -613,7 +617,7 @@ def test_info_query_import_assignment_stats_and_analysis_profile(auth_client):
     assert detail_resp.status_code == 200
     profile = detail_resp.json()["taxpayer_profile"]
     assert profile["company_name"] == "信息企业A"
-    assert profile["tax_officer"] == "张税官"
+    assert profile["tax_officer"] == "拟分配员"
     assert profile["manager_department"] == "一分局"
 
     workbench_resp = auth_client.get("/api/workbench/taxpayer/91310000INFO0001")

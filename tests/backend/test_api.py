@@ -483,6 +483,11 @@ def test_info_query_import_assignment_stats_and_analysis_profile(auth_client):
     assert derive_industry_tag("", "柳州某某木材加工厂", "木制品加工") == "木材加工"
     assert derive_industry_tag("其他科技推广服务业", "柳州某某食品科技有限公司", "食品生产；粮食加工食品生产") == "食品生产"
     assert derive_industry_tag("其他未列明批发业", "柳州某某商贸有限公司", "日用品批发零售") == "贸易"
+    assert derive_industry_tag("普通货物道路运输", "柳州某某货运有限公司", "二手车经销；汽车新车销售") == "交通运输"
+    assert derive_industry_tag("建材批发", "柳州某某建材经营部", "建筑工程机械租赁") == "建材五金"
+    assert derive_industry_tag("理发及美容服务", "柳州某某美容店", "健康咨询服务") == "美容养生"
+    assert derive_industry_tag("其他机械设备及电子产品批发", "柳州某某设备贸易有限公司", "机械设备销售") == "贸易"
+    assert derive_industry_tag("服饰制造", "广西某某服饰有限公司", "建筑材料销售") == "加工制造"
 
     csv_content = (
         "企业名称,纳税人识别号,法定代表人,行业,经营范围,注册地址,经营地址,属地,主管税务机关,管理分局,税收管理员,风险等级,纳税信用等级\n"

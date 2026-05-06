@@ -18,6 +18,7 @@ class TaxpayerInfo(Base):
     tax_bureau = Column(String(200), default="")
     manager_department = Column(String(200), index=True, default="")
     tax_officer = Column(String(100), index=True, default="")
+    proposed_tax_officer = Column(String(100), index=True, default="")
     credit_rating = Column(String(50), default="")
     risk_level = Column(String(50), index=True, default="")
     address = Column(String(500), default="")

@@ -82,6 +82,7 @@ def ensure_lightweight_migrations():
                 "industry_tag": "ALTER TABLE taxpayer_infos ADD COLUMN industry_tag VARCHAR(120) DEFAULT ''",
                 "address_tag": "ALTER TABLE taxpayer_infos ADD COLUMN address_tag VARCHAR(120) DEFAULT ''",
                 "last_used_at": "ALTER TABLE taxpayer_infos ADD COLUMN last_used_at DATETIME",
+                "proposed_tax_officer": "ALTER TABLE taxpayer_infos ADD COLUMN proposed_tax_officer VARCHAR(100) DEFAULT ''",
             }
             for column, sql in taxpayer_migrations.items():
                 if column not in taxpayer_columns:
@@ -96,6 +97,7 @@ def ensure_lightweight_migrations():
             conn.execute(text("ALTER TABLE taxpayer_infos ADD COLUMN IF NOT EXISTS industry_tag VARCHAR(120) DEFAULT ''"))
             conn.execute(text("ALTER TABLE taxpayer_infos ADD COLUMN IF NOT EXISTS address_tag VARCHAR(120) DEFAULT ''"))
             conn.execute(text("ALTER TABLE taxpayer_infos ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMP"))
+            conn.execute(text("ALTER TABLE taxpayer_infos ADD COLUMN IF NOT EXISTS proposed_tax_officer VARCHAR(100) DEFAULT ''"))
 
 
 @asynccontextmanager

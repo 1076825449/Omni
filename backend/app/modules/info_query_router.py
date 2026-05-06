@@ -141,6 +141,7 @@ class TaxpayerInfoSchema(BaseModel):
     tax_bureau: str
     manager_department: str
     tax_officer: str
+    proposed_tax_officer: str = ""
     credit_rating: str
     risk_level: str
     address: str
@@ -209,6 +210,17 @@ class AssignmentStatsResponse(BaseModel):
     by_industry_tag: dict[str, int]
     by_address_tag: dict[str, int]
     total: int
+
+
+class TaxpayerAssignmentRequest(BaseModel):
+    taxpayer_ids: list[str]
+    proposed_tax_officer: str = ""
+
+
+class TaxpayerAssignmentResponse(BaseModel):
+    success: bool
+    updated: int
+    proposed_tax_officer: str
 
 
 def canonical_header(value: str) -> str:
@@ -714,6 +726,28 @@ def export_taxpayers(
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"},
     )
+
+
+@router.post("/taxpayers/assignment", response_model=TaxpayerAssignmentResponse)
+def update_taxpayer_assignment(
+    body: TaxpayerAssignmentRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    taxpayer_ids = [item.strip() for item in body.taxpayer_ids if item.strip()]
+    if not taxpayer_ids:
+        raise HTTPException(status_code=400, detail="请选择需要分配的纳税人")
+    rows = db.query(TaxpayerInfo).filter(
+        TaxpayerInfo.owner_id == current_user.id,
+        TaxpayerInfo.taxpayer_id.in_(taxpayer_ids),
+    ).all()
+    proposed = body.proposed_tax_officer.strip()
+    for row in rows:
+        row.proposed_tax_officer = proposed
+    if rows:
+        log_action(db, "propose_assignment", ",".join(taxpayer_ids[:20]), current_user.id, f"拟分配管理员：{proposed or '清空'}，户数 {len(rows)}")
+    db.commit()
+    return TaxpayerAssignmentResponse(success=True, updated=len(rows), proposed_tax_officer=proposed)
 
 
 @router.get("/taxpayers/{taxpayer_id}", response_model=TaxpayerInfoSchema)

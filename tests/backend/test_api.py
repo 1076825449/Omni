@@ -500,9 +500,20 @@ def test_info_query_import_assignment_stats_and_analysis_profile(auth_client):
     listed = list_resp.json()
     assert listed["total"] == 1
     assert listed["taxpayers"][0]["tax_officer"] == "张税官"
+    assert listed["taxpayers"][0]["proposed_tax_officer"] == ""
     assert listed["taxpayers"][0]["address"] == "广西柳州市柳江区拉堡镇柳堡路56号"
     assert listed["taxpayers"][0]["address_tag"] == "柳堡路"
     assert listed["taxpayers"][0]["industry_tag"] == "制造业"
+
+    assignment_resp = auth_client.post(
+        "/api/modules/info-query/taxpayers/assignment",
+        json={"taxpayer_ids": ["91310000INFO0001", "91310000INFO0002"], "proposed_tax_officer": "拟分配员"},
+    )
+    assert assignment_resp.status_code == 200
+    assert assignment_resp.json()["updated"] == 2
+    assignment_list_resp = auth_client.get("/api/modules/info-query/taxpayers?q=信息企业A")
+    assert assignment_list_resp.status_code == 200
+    assert assignment_list_resp.json()["taxpayers"][0]["proposed_tax_officer"] == "拟分配员"
 
     officer_search_resp = auth_client.get("/api/modules/info-query/taxpayers?q=张税官")
     assert officer_search_resp.status_code == 200

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import type { Key } from 'react'
 import { Button, Card, Descriptions, Input, Modal, Select, Space, Table, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import PlatformLayout from '../../components/Layout'
@@ -14,6 +15,10 @@ export default function InfoQueryModule() {
   const [filters, setFilters] = useState<{ tax_officer?: string; manager_department?: string; industry_tag?: string; address_tag?: string; registration_status?: string }>({})
   const [loading, setLoading] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [savingAssignment, setSavingAssignment] = useState(false)
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([])
+  const [assignmentDrafts, setAssignmentDrafts] = useState<Record<string, string>>({})
+  const [batchOfficer, setBatchOfficer] = useState('')
   const [stats, setStats] = useState<{ by_officer: Record<string, number>; by_department: Record<string, number>; by_risk_level: Record<string, number>; by_industry_tag: Record<string, number>; by_address_tag: Record<string, number>; total: number } | null>(null)
   const [selected, setSelected] = useState<TaxpayerProfile | null>(null)
   const message = useAppMessage()
@@ -27,6 +32,7 @@ export default function InfoQueryModule() {
       setRows(list.taxpayers)
       setTotal(list.total)
       setStats(stat)
+      setAssignmentDrafts(Object.fromEntries(list.taxpayers.map(row => [row.taxpayer_id, row.proposed_tax_officer || ''])))
       setLoading(false)
     }).catch(() => setLoading(false))
   }
@@ -42,6 +48,28 @@ export default function InfoQueryModule() {
       message.error('导出失败，请稍后重试')
     } finally {
       setExporting(false)
+    }
+  }
+
+  const officerOptions = Object.keys(stats?.by_officer || {})
+    .filter(value => value && value !== '未分配')
+    .map(value => ({ value, label: value }))
+
+  const saveAssignment = async (taxpayerIds: string[], proposedOfficer: string) => {
+    setSavingAssignment(true)
+    try {
+      const result = await infoQueryApi.updateAssignment(taxpayerIds, proposedOfficer)
+      setRows(prev => prev.map(row => taxpayerIds.includes(row.taxpayer_id) ? { ...row, proposed_tax_officer: result.proposed_tax_officer } : row))
+      setAssignmentDrafts(prev => {
+        const next = { ...prev }
+        taxpayerIds.forEach(id => { next[id] = result.proposed_tax_officer })
+        return next
+      })
+      message.success(`已设置 ${result.updated} 户拟分配管理员`)
+    } catch {
+      message.error('拟分配管理员保存失败，请稍后重试')
+    } finally {
+      setSavingAssignment(false)
     }
   }
 
@@ -61,6 +89,32 @@ export default function InfoQueryModule() {
     { title: '纳税人识别号', dataIndex: 'taxpayer_id', key: 'taxpayer_id', width: 210 },
     { title: '登记状态', dataIndex: 'registration_status', key: 'registration_status', width: 110 },
     { title: '税收管理员', dataIndex: 'tax_officer', key: 'tax_officer', width: 120 },
+    {
+      title: '拟分配管理员',
+      dataIndex: 'proposed_tax_officer',
+      key: 'proposed_tax_officer',
+      width: 260,
+      render: (_, record) => (
+        <Space.Compact>
+          <Select
+            showSearch
+            allowClear
+            placeholder="选择或输入"
+            value={assignmentDrafts[record.taxpayer_id] || undefined}
+            onChange={value => setAssignmentDrafts(prev => ({ ...prev, [record.taxpayer_id]: value || '' }))}
+            onSearch={value => setAssignmentDrafts(prev => ({ ...prev, [record.taxpayer_id]: value }))}
+            options={officerOptions}
+            style={{ width: 150 }}
+          />
+          <Button
+            loading={savingAssignment}
+            onClick={() => saveAssignment([record.taxpayer_id], assignmentDrafts[record.taxpayer_id] || '')}
+          >
+            保存
+          </Button>
+        </Space.Compact>
+      ),
+    },
     { title: '管户部门', dataIndex: 'manager_department', key: 'manager_department', width: 260 },
     { title: '行业标签', dataIndex: 'industry_tag', key: 'industry_tag', width: 180, render: v => v ? <Tag color="blue" style={{ whiteSpace: 'normal' }}>{v}</Tag> : <Text type="secondary">未分类</Text> },
     { title: '地址标签', dataIndex: 'address_tag', key: 'address_tag', width: 180, render: v => v ? <Tag style={{ whiteSpace: 'normal' }}>{v}</Tag> : <Text type="secondary">未识别</Text> },
@@ -107,14 +161,36 @@ export default function InfoQueryModule() {
             <Select placeholder="地址标签" allowClear style={{ width: 180 }} value={filters.address_tag} onChange={value => setFilters(prev => ({ ...prev, address_tag: value }))} options={Object.keys(stats?.by_address_tag || {}).filter(value => value !== '未识别地址').map(value => ({ value, label: value }))} />
             <Select placeholder="登记状态" allowClear style={{ width: 150 }} value={filters.registration_status} onChange={value => setFilters(prev => ({ ...prev, registration_status: value }))} options={[...new Set(rows.map(row => row.registration_status).filter(Boolean))].map(value => ({ value, label: value }))} />
             <Button onClick={() => setFilters({})}>清空筛选</Button>
+            <Select
+              showSearch
+              allowClear
+              placeholder="批量拟分配管理员"
+              value={batchOfficer || undefined}
+              onChange={value => setBatchOfficer(value || '')}
+              onSearch={setBatchOfficer}
+              options={officerOptions}
+              style={{ width: 190 }}
+            />
+            <Button
+              type="primary"
+              disabled={selectedRowKeys.length === 0}
+              loading={savingAssignment}
+              onClick={() => saveAssignment(selectedRowKeys.map(String), batchOfficer)}
+            >
+              批量设置{selectedRowKeys.length ? `（${selectedRowKeys.length}户）` : ''}
+            </Button>
           </Space>
           <Table
             columns={columns}
             dataSource={rows}
             rowKey="taxpayer_id"
+            rowSelection={{
+              selectedRowKeys,
+              onChange: setSelectedRowKeys,
+            }}
             loading={loading}
             size="small"
-            scroll={{ x: 1700, y: 'calc(100vh - 300px)' }}
+            scroll={{ x: 1960, y: 'calc(100vh - 300px)' }}
             pagination={{ total, pageSize: 50, showTotal: value => `共 ${value} 户` }}
             locale={{
               emptyText: q ? '没有匹配的纳税人，请换用税号、企业简称或清空筛选' : '暂无纳税人信息，请先在首页导入税务登记信息查询表',

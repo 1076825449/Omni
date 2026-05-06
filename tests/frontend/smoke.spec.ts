@@ -71,8 +71,7 @@ test('login and open key platform pages', async ({ page }) => {
 
   await page.goto('/modules/risk-ledger')
   await expect(page.getByRole('heading', { name: '管户记录' })).toBeVisible()
-  await expect(page.getByRole('tab', { name: '单户补充' })).toBeVisible()
-  await expect(page.getByRole('tab', { name: '批量记录' })).toBeVisible()
+  await expect(page.getByPlaceholder('税号/名称/法人/管理员')).toBeVisible()
 
   await page.goto('/taxpayer-workbench')
   await expect(page.getByRole('heading', { name: '信息查询' })).toBeVisible()

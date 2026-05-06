@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
 import {
-  Alert, Button, Card, Col, DatePicker, Descriptions, Form, Input, List, Modal, Row,
-  Select, Skeleton, Space, Table, Tabs, Tag, Timeline, Typography, Upload,
+  Button, Card, Col, DatePicker, Descriptions, Input, List, Modal, Row,
+  Select, Skeleton, Space, Tag, Timeline, Typography,
 } from 'antd'
-import { UploadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useSearchParams } from 'react-router-dom'
 import PlatformLayout from '../../components/Layout'
@@ -20,10 +19,7 @@ const statusColor: Record<string, string> = {
 }
 
 export default function RiskLedgerModule() {
-  const [form] = Form.useForm()
-  const [batchForm] = Form.useForm()
   const [searchParams] = useSearchParams()
-  const [activeTab, setActiveTab] = useState('single')
   const [rows, setRows] = useState<RiskDossier[]>([])
   const [total, setTotal] = useState(0)
   const [stats, setStats] = useState<any>(null)
@@ -34,7 +30,6 @@ export default function RiskLedgerModule() {
   const [hasLoaded, setHasLoaded] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
   const [detail, setDetail] = useState<any>(null)
-  const [failures, setFailures] = useState<Array<Record<string, string>>>([])
   const message = useAppMessage()
 
   const load = (q = query) => {
@@ -59,8 +54,6 @@ export default function RiskLedgerModule() {
   useEffect(() => {
     const taxpayerId = searchParams.get('taxpayer_id')
     if (!taxpayerId) return
-    setActiveTab('single')
-    form.setFieldsValue({ taxpayer_id: taxpayerId, recorded_at: dayjs(), entry_status: '待核实' })
     setQuery(taxpayerId)
     load(taxpayerId)
   }, [searchParams])
@@ -71,21 +64,6 @@ export default function RiskLedgerModule() {
       setDetailOpen(true)
     } catch {
       void message.error('加载档案详情失败')
-    }
-  }
-
-  const handleCreate = async (values: any) => {
-    try {
-      await riskLedgerApi.createEntry({
-        ...values,
-        recorded_at: values.recorded_at.format('YYYY-MM-DD HH:mm:ss'),
-        rectification_deadline: values.rectification_deadline?.format('YYYY-MM-DD HH:mm:ss'),
-      })
-      void message.success('记录已保存')
-      form.resetFields()
-      load()
-    } catch {
-      void message.error('保存失败：若信息查询表未命中该税号，请填写纳税人名称后创建临时档案')
     }
   }
 
@@ -120,61 +98,6 @@ export default function RiskLedgerModule() {
     } catch {
       void message.error('保存失败，请检查记录内容、整改期限和联系人')
     }
-  }
-
-  const handleBatchText = async (values: any) => {
-    const taxpayerIds = String(values.taxpayer_ids || '')
-      .split(/[\s,，;；]+/)
-      .map((item) => item.trim())
-      .filter(Boolean)
-    try {
-      const result = await riskLedgerApi.batchText({
-        taxpayer_ids: taxpayerIds,
-        recorded_at: values.recorded_at.format('YYYY-MM-DD HH:mm:ss'),
-        rectification_deadline: values.rectification_deadline?.format('YYYY-MM-DD HH:mm:ss'),
-        content: values.content,
-        entry_status: values.entry_status,
-        contact_person: values.contact_person,
-        contact_phone: values.contact_phone,
-        note: values.note,
-      })
-      setFailures(result.failures)
-      void message.success(result.message)
-      batchForm.resetFields()
-      load()
-    } catch {
-      void message.error('批量记录失败：请检查税号是否为空、记录内容是否填写，整改中记录需补充整改期限和联系人')
-    }
-  }
-
-  const handleUpload = async (file: File) => {
-    try {
-      const result = await riskLedgerApi.importFile(file)
-      setFailures(result.failures)
-      void message.success(result.message)
-      load()
-    } catch {
-      void message.error('导入失败：请检查表头是否包含“纳税人识别号、记录时间、记录内容”')
-    }
-    return false
-  }
-
-  const downloadFailures = () => {
-    const header = ['行号', '纳税人识别号', '失败原因', '建议处理方式']
-    const rowsText = failures.map((item) => [
-      item.row || '',
-      item.taxpayer_id || '',
-      item.reason || JSON.stringify(item),
-      item.reason?.includes('未找到') ? '补充纳税人名称后创建临时档案，或先导入完整信息查询表' : '按失败原因修正后重新导入',
-    ])
-    const csv = [header, ...rowsText].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n')
-    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = '风险台账导入失败清单.csv'
-    link.click()
-    URL.revokeObjectURL(url)
   }
 
   const renderRecordCard = (record: RiskDossier) => {
@@ -320,112 +243,6 @@ export default function RiskLedgerModule() {
             />
           )}
         </Card>
-
-        {hasLoaded && <Tabs
-          activeKey={activeTab}
-          onChange={setActiveTab}
-          items={[
-            {
-              key: 'single',
-              label: '单户补充',
-              children: (
-                <Card>
-                  <Alert
-                    type="info"
-                    showIcon
-                    style={{ marginBottom: 16 }}
-                    message="一户只建一个档案，可以连续追加多条风险和整改记录"
-                    description="如果税号已在完整信息查询表中，系统会自动带出名称、登记状态、管理员和地址；未命中时填写纳税人名称即可建立临时档案。"
-                  />
-                  <Form form={form} layout="vertical" onFinish={handleCreate} initialValues={{ entry_status: '待核实', recorded_at: dayjs() }}>
-                    <Row gutter={12}>
-                      <Col xs={24} md={8}><Form.Item label="纳税人识别号" name="taxpayer_id" rules={[{ required: true }]}><Input /></Form.Item></Col>
-                      <Col xs={24} md={8}><Form.Item label="纳税人名称（未命中时必填）" name="company_name"><Input /></Form.Item></Col>
-                      <Col xs={24} md={8}><Form.Item label="记录时间" name="recorded_at" rules={[{ required: true }]}><DatePicker showTime style={{ width: '100%' }} /></Form.Item></Col>
-                      <Col xs={24} md={8}><Form.Item label="事项状态" name="entry_status" rules={[{ required: true }]}><Select options={statuses.map(s => ({ value: s, label: s }))} /></Form.Item></Col>
-                      <Col xs={24} md={8}><Form.Item label="整改期限" name="rectification_deadline"><DatePicker showTime style={{ width: '100%' }} /></Form.Item></Col>
-                      <Col xs={24} md={8}><Form.Item label="联系人" name="contact_person"><Input /></Form.Item></Col>
-                      <Col xs={24} md={8}><Form.Item label="联系电话" name="contact_phone"><Input /></Form.Item></Col>
-                      <Col xs={24} md={8}><Form.Item label="登记状态" name="registration_status"><Input /></Form.Item></Col>
-                      <Col xs={24} md={8}><Form.Item label="管理员" name="tax_officer"><Input /></Form.Item></Col>
-                      <Col span={24}><Form.Item label="地址" name="address"><Input /></Form.Item></Col>
-                      <Col span={24}><Form.Item label="记录内容" name="content" rules={[{ required: true }]}><Input.TextArea rows={3} /></Form.Item></Col>
-                      <Col span={24}><Form.Item label="备注" name="note"><Input.TextArea rows={2} /></Form.Item></Col>
-                    </Row>
-                    <Button type="primary" htmlType="submit">保存记录</Button>
-                  </Form>
-                </Card>
-              ),
-            },
-            {
-              key: 'batch',
-              label: '批量记录',
-              children: (
-                <Row gutter={[16, 16]}>
-                  <Col xs={24} lg={12}>
-                    <Card title="粘贴税号批量记录">
-                      <Alert
-                        type="warning"
-                        showIcon
-                        style={{ marginBottom: 12 }}
-                        message="批量记录适合同一风险、同一处理口径"
-                        description="如果每户风险内容不同，请使用右侧表格逐行导入。标记整改中时建议填写整改期限和联系人，便于首页催办。"
-                      />
-                      <Form form={batchForm} layout="vertical" onFinish={handleBatchText} initialValues={{ entry_status: '待核实', recorded_at: dayjs() }}>
-                        <Form.Item label="纳税人识别号（换行、逗号或空格分隔）" name="taxpayer_ids" rules={[{ required: true }]}><Input.TextArea rows={5} /></Form.Item>
-                        <Form.Item label="记录时间" name="recorded_at" rules={[{ required: true }]}><DatePicker showTime style={{ width: '100%' }} /></Form.Item>
-                        <Form.Item label="事项状态" name="entry_status" rules={[{ required: true }]}><Select options={statuses.map(s => ({ value: s, label: s }))} /></Form.Item>
-                        <Form.Item label="整改期限" name="rectification_deadline"><DatePicker showTime style={{ width: '100%' }} /></Form.Item>
-                        <Form.Item label="联系人" name="contact_person"><Input /></Form.Item>
-                        <Form.Item label="联系电话" name="contact_phone"><Input /></Form.Item>
-                        <Form.Item label="统一记录内容" name="content" rules={[{ required: true }]}><Input.TextArea rows={3} /></Form.Item>
-                        <Form.Item label="备注" name="note"><Input.TextArea rows={2} /></Form.Item>
-                        <Button type="primary" htmlType="submit">批量保存</Button>
-                      </Form>
-                    </Card>
-                  </Col>
-                  <Col xs={24} lg={12}>
-                    <Card title="上传表格逐行记录">
-                      <Paragraph type="secondary">
-                        支持 CSV、XLS、XLSX。必填表头：纳税人识别号、记录时间、记录内容；可选：纳税人名称、状态、管理员、地址、事项状态、整改期限、联系人、联系电话、备注。
-                      </Paragraph>
-                      <Upload.Dragger accept=".csv,.xls,.xlsx" customRequest={({ file }) => handleUpload(file as File)}>
-                        <p><UploadOutlined style={{ fontSize: 28 }} /></p>
-                        <p>点击或拖拽上传风险记录表</p>
-                      </Upload.Dragger>
-                    </Card>
-                  </Col>
-                </Row>
-              ),
-            },
-          ]}
-        />}
-
-        {failures.length > 0 && (
-          <Alert
-            type="warning"
-            showIcon
-            style={{ marginBottom: 16 }}
-            message={`有 ${failures.length} 条记录未成功`}
-            description={
-              <Space direction="vertical" style={{ width: '100%' }}>
-                <Table
-                  size="small"
-                  rowKey={(item, index) => `${item.taxpayer_id || 'row'}-${index}`}
-                  pagination={false}
-                  dataSource={failures.slice(0, 8)}
-                  columns={[
-                    { title: '行号', dataIndex: 'row', width: 80, render: v => v || '—' },
-                    { title: '纳税人识别号', dataIndex: 'taxpayer_id', width: 180, render: v => v || '—' },
-                    { title: '失败原因', dataIndex: 'reason', render: v => v || '请检查表头和必填字段' },
-                    { title: '建议处理方式', render: (_, item) => item.reason?.includes('未找到') ? '补充纳税人名称后创建临时档案，或先导入完整信息查询表' : '按失败原因修正后重新导入' },
-                  ]}
-                />
-                <Button size="small" onClick={downloadFailures}>下载失败清单</Button>
-              </Space>
-            }
-          />
-        )}
 
         <Modal title="纳税人风险档案" open={detailOpen} onCancel={() => setDetailOpen(false)} footer={null} width={860}>
           {detail && (

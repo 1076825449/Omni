@@ -636,6 +636,11 @@ export const infoQueryApi = {
       method: 'POST',
       body: JSON.stringify({ taxpayer_ids, tax_officer }),
     }),
+  updateTags: (taxpayer_ids: string[], body: { industry_tag?: string; address_tag?: string }) =>
+    request<{ success: boolean; updated: number; industry_tag: string; address_tag: string }>('/api/modules/info-query/taxpayers/tags', {
+      method: 'POST',
+      body: JSON.stringify({ taxpayer_ids, ...body }),
+    }),
   assignmentStats: () => request<{ by_officer: Record<string, number>; by_department: Record<string, number>; by_risk_level: Record<string, number>; by_industry_tag: Record<string, number>; by_address_tag: Record<string, number>; total: number }>('/api/modules/info-query/assignment-stats'),
 }
 

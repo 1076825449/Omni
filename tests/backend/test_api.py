@@ -547,6 +547,17 @@ def test_info_query_import_assignment_stats_and_analysis_profile(auth_client):
     assert stats["by_industry_tag"]["加工制造"] == 1
     assert stats["by_address_tag"]["柳堡路"] == 1
 
+    tag_update_resp = auth_client.post(
+        "/api/modules/info-query/taxpayers/tags",
+        json={"taxpayer_ids": ["91310000INFO0001"], "industry_tag": "重点行业", "address_tag": "柳堡路片区"},
+    )
+    assert tag_update_resp.status_code == 200
+    assert tag_update_resp.json()["updated"] == 1
+    tagged_resp = auth_client.get("/api/modules/info-query/taxpayers?q=信息企业A")
+    assert tagged_resp.status_code == 200
+    assert tagged_resp.json()["taxpayers"][0]["industry_tag"] == "重点行业"
+    assert tagged_resp.json()["taxpayers"][0]["address_tag"] == "柳堡路片区"
+
     history_resp = auth_client.get("/api/modules/info-query/import-history")
     assert history_resp.status_code == 200
     history = history_resp.json()["items"]
@@ -631,7 +642,7 @@ def test_info_query_import_assignment_stats_and_analysis_profile(auth_client):
 
     workbench_resp = auth_client.get("/api/workbench/taxpayer/91310000INFO0001")
     assert workbench_resp.status_code == 200
-    assert workbench_resp.json()["taxpayer"]["address_tag"] == "柳堡路"
+    assert workbench_resp.json()["taxpayer"]["address_tag"] == "柳堡路片区"
     name_as_taxpayer_id_resp = auth_client.get("/api/workbench/taxpayer/信息企业A")
     assert name_as_taxpayer_id_resp.status_code == 404
     name_search_resp = auth_client.get("/api/workbench/taxpayers/search?q=信息企业A")

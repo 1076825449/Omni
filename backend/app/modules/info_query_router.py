@@ -226,6 +226,19 @@ class TaxpayerAssignmentResponse(BaseModel):
     proposed_tax_officer: str
 
 
+class TaxpayerTagUpdateRequest(BaseModel):
+    taxpayer_ids: list[str]
+    industry_tag: str = ""
+    address_tag: str = ""
+
+
+class TaxpayerTagUpdateResponse(BaseModel):
+    success: bool
+    updated: int
+    industry_tag: str = ""
+    address_tag: str = ""
+
+
 def canonical_header(value: str) -> str:
     text = str(value or "").strip()
     lower = text.lower()
@@ -830,6 +843,39 @@ def update_taxpayer_assignment(
         log_action(db, "assign_tax_officer", ",".join(taxpayer_ids[:20]), current_user.id, f"分配税收管理员：{assigned or '清空'}，户数 {len(rows)}")
     db.commit()
     return TaxpayerAssignmentResponse(success=True, updated=len(rows), tax_officer=assigned, proposed_tax_officer=assigned)
+
+
+@router.post("/taxpayers/tags", response_model=TaxpayerTagUpdateResponse)
+def update_taxpayer_tags(
+    body: TaxpayerTagUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    taxpayer_ids = [item.strip() for item in body.taxpayer_ids if item.strip()]
+    if not taxpayer_ids:
+        raise HTTPException(status_code=400, detail="请选择需要修改标签的纳税人")
+    industry_tag = body.industry_tag.strip()
+    address_tag = body.address_tag.strip()
+    if not industry_tag and not address_tag:
+        raise HTTPException(status_code=400, detail="请填写需要修改的行业标签或地址标签")
+    rows = db.query(TaxpayerInfo).filter(
+        TaxpayerInfo.owner_id == current_user.id,
+        TaxpayerInfo.taxpayer_id.in_(taxpayer_ids),
+    ).all()
+    for row in rows:
+        if industry_tag:
+            row.industry_tag = industry_tag
+        if address_tag:
+            row.address_tag = address_tag
+    if rows:
+        changed = []
+        if industry_tag:
+            changed.append(f"行业标签：{industry_tag}")
+        if address_tag:
+            changed.append(f"地址标签：{address_tag}")
+        log_action(db, "update_taxpayer_tags", ",".join(taxpayer_ids[:20]), current_user.id, f"批量修改标签：{'，'.join(changed)}，户数 {len(rows)}")
+    db.commit()
+    return TaxpayerTagUpdateResponse(success=True, updated=len(rows), industry_tag=industry_tag, address_tag=address_tag)
 
 
 @router.get("/taxpayers/{taxpayer_id}", response_model=TaxpayerInfoSchema)

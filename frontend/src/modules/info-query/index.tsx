@@ -16,9 +16,11 @@ export default function InfoQueryModule() {
   const [loading, setLoading] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [savingAssignment, setSavingAssignment] = useState(false)
+  const [savingTags, setSavingTags] = useState(false)
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([])
-  const [assignmentDrafts, setAssignmentDrafts] = useState<Record<string, string>>({})
   const [batchOfficer, setBatchOfficer] = useState('')
+  const [batchIndustryTag, setBatchIndustryTag] = useState('')
+  const [batchAddressTag, setBatchAddressTag] = useState('')
   const [stats, setStats] = useState<{ by_officer: Record<string, number>; by_department: Record<string, number>; by_risk_level: Record<string, number>; by_industry_tag: Record<string, number>; by_address_tag: Record<string, number>; total: number } | null>(null)
   const [selected, setSelected] = useState<TaxpayerProfile | null>(null)
   const message = useAppMessage()
@@ -32,7 +34,6 @@ export default function InfoQueryModule() {
       setRows(list.taxpayers)
       setTotal(list.total)
       setStats(stat)
-      setAssignmentDrafts(Object.fromEntries(list.taxpayers.map(row => [row.taxpayer_id, row.proposed_tax_officer || ''])))
       setLoading(false)
     }).catch(() => setLoading(false))
   }
@@ -60,16 +61,38 @@ export default function InfoQueryModule() {
     try {
       const result = await infoQueryApi.updateAssignment(taxpayerIds, proposedOfficer)
       setRows(prev => prev.map(row => taxpayerIds.includes(row.taxpayer_id) ? { ...row, tax_officer: result.tax_officer, proposed_tax_officer: result.proposed_tax_officer } : row))
-      setAssignmentDrafts(prev => {
-        const next = { ...prev }
-        taxpayerIds.forEach(id => { next[id] = result.proposed_tax_officer })
-        return next
-      })
       message.success(`已分配 ${result.updated} 户税收管理员`)
     } catch {
       message.error('拟分配管理员保存失败，请稍后重试')
     } finally {
       setSavingAssignment(false)
+    }
+  }
+
+  const saveTags = async (tagType: 'industry' | 'address') => {
+    const taxpayerIds = selectedRowKeys.map(String)
+    const nextTag = tagType === 'industry' ? batchIndustryTag.trim() : batchAddressTag.trim()
+    if (!taxpayerIds.length) {
+      message.warning('请先选择需要修改的纳税人')
+      return
+    }
+    if (!nextTag) {
+      message.warning(tagType === 'industry' ? '请填写行业标签' : '请填写地址标签')
+      return
+    }
+    setSavingTags(true)
+    try {
+      const result = await infoQueryApi.updateTags(taxpayerIds, tagType === 'industry' ? { industry_tag: nextTag } : { address_tag: nextTag })
+      setRows(prev => prev.map(row => taxpayerIds.includes(row.taxpayer_id)
+        ? { ...row, industry_tag: result.industry_tag || row.industry_tag, address_tag: result.address_tag || row.address_tag }
+        : row))
+      const stat = await infoQueryApi.assignmentStats()
+      setStats(stat)
+      message.success(`已修改 ${result.updated} 户${tagType === 'industry' ? '行业标签' : '地址标签'}`)
+    } catch {
+      message.error('批量修改标签失败，请稍后重试')
+    } finally {
+      setSavingTags(false)
     }
   }
 
@@ -89,32 +112,6 @@ export default function InfoQueryModule() {
     { title: '纳税人识别号', dataIndex: 'taxpayer_id', key: 'taxpayer_id', width: 210 },
     { title: '登记状态', dataIndex: 'registration_status', key: 'registration_status', width: 110 },
     { title: '税收管理员', dataIndex: 'tax_officer', key: 'tax_officer', width: 120 },
-    {
-      title: '分配管理员',
-      dataIndex: 'proposed_tax_officer',
-      key: 'proposed_tax_officer',
-      width: 260,
-      render: (_, record) => (
-        <Space.Compact>
-          <Select
-            showSearch
-            allowClear
-            placeholder="选择或输入"
-            value={assignmentDrafts[record.taxpayer_id] || undefined}
-            onChange={value => setAssignmentDrafts(prev => ({ ...prev, [record.taxpayer_id]: value || '' }))}
-            onSearch={value => setAssignmentDrafts(prev => ({ ...prev, [record.taxpayer_id]: value }))}
-            options={officerOptions}
-            style={{ width: 150 }}
-          />
-          <Button
-            loading={savingAssignment}
-            onClick={() => saveAssignment([record.taxpayer_id], assignmentDrafts[record.taxpayer_id] || '')}
-          >
-            保存
-          </Button>
-        </Space.Compact>
-      ),
-    },
     { title: '管户部门', dataIndex: 'manager_department', key: 'manager_department', width: 260 },
     { title: '行业标签', dataIndex: 'industry_tag', key: 'industry_tag', width: 180, render: v => v ? <Tag color="blue" style={{ whiteSpace: 'normal' }}>{v}</Tag> : <Text type="secondary">未分类</Text> },
     { title: '地址标签', dataIndex: 'address_tag', key: 'address_tag', width: 180, render: v => v ? <Tag style={{ whiteSpace: 'normal' }}>{v}</Tag> : <Text type="secondary">未识别</Text> },
@@ -179,6 +176,40 @@ export default function InfoQueryModule() {
             >
               批量分配{selectedRowKeys.length ? `（${selectedRowKeys.length}户）` : ''}
             </Button>
+            <Select
+              showSearch
+              allowClear
+              placeholder="批量修改行业标签"
+              value={batchIndustryTag || undefined}
+              onChange={value => setBatchIndustryTag(value || '')}
+              onSearch={setBatchIndustryTag}
+              options={Object.keys(stats?.by_industry_tag || {}).filter(Boolean).map(value => ({ value, label: value }))}
+              style={{ width: 190 }}
+            />
+            <Button
+              disabled={selectedRowKeys.length === 0}
+              loading={savingTags}
+              onClick={() => saveTags('industry')}
+            >
+              改行业标签{selectedRowKeys.length ? `（${selectedRowKeys.length}户）` : ''}
+            </Button>
+            <Select
+              showSearch
+              allowClear
+              placeholder="批量修改地址标签"
+              value={batchAddressTag || undefined}
+              onChange={value => setBatchAddressTag(value || '')}
+              onSearch={setBatchAddressTag}
+              options={Object.keys(stats?.by_address_tag || {}).filter(value => value !== '未识别地址').map(value => ({ value, label: value }))}
+              style={{ width: 190 }}
+            />
+            <Button
+              disabled={selectedRowKeys.length === 0}
+              loading={savingTags}
+              onClick={() => saveTags('address')}
+            >
+              改地址标签{selectedRowKeys.length ? `（${selectedRowKeys.length}户）` : ''}
+            </Button>
           </Space>
           <Table
             columns={columns}
@@ -190,7 +221,7 @@ export default function InfoQueryModule() {
             }}
             loading={loading}
             size="small"
-            scroll={{ x: 1960, y: 'calc(100vh - 300px)' }}
+            scroll={{ x: 1700, y: 'calc(100vh - 300px)' }}
             pagination={{ total, pageSize: 50, showTotal: value => `共 ${value} 户` }}
             locale={{
               emptyText: q ? '没有匹配的纳税人，请换用税号、企业简称或清空筛选' : '暂无纳税人信息，请先在首页导入税务登记信息查询表',

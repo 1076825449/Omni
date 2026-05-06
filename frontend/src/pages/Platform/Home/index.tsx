@@ -29,16 +29,32 @@ export default function Home() {
   const { user } = useAuthStore()
 
   useEffect(() => {
-    Promise.all([
-      platformStatsApi.overview(),
-      taxOfficerWorkbenchApi.taxpayerRecords({ limit: 1 }),
-      infoQueryApi.importHistory(1),
-    ]).then(([statsData, riskData, historyData]) => {
-      setStats(statsData)
-      setRiskSummary(riskData.summary)
-      setLastImportResult(historyData.items[0] || null)
+    let cancelled = false
+    const loadHomeData = async () => {
+      const [statsResult, riskResult, historyResult] = await Promise.allSettled([
+        platformStatsApi.overview(),
+        taxOfficerWorkbenchApi.taxpayerRecords({ limit: 1 }),
+        infoQueryApi.importHistory(1),
+      ])
+      if (cancelled) return
+      if (statsResult.status === 'fulfilled') {
+        setStats(statsResult.value)
+      }
+      if (riskResult.status === 'fulfilled') {
+        setRiskSummary(riskResult.value.summary)
+      }
+      if (historyResult.status === 'fulfilled') {
+        setLastImportResult(historyResult.value.items[0] || null)
+      }
+      if ([statsResult, riskResult, historyResult].some(result => result.status === 'rejected')) {
+        message.warning('部分首页数据暂时未加载，请刷新页面或稍后重试')
+      }
       setLoading(false)
-    }).catch(() => setLoading(false))
+    }
+    void loadHomeData()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {

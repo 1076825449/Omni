@@ -51,15 +51,19 @@ export default function InfoQueryModule() {
       dataIndex: 'company_name',
       key: 'company_name',
       fixed: 'left',
-      width: 260,
-      render: (value, record) => <Button type="link" onClick={() => setSelected(record)}>{value}</Button>,
+      width: 320,
+      render: (value, record) => (
+        <Button type="link" style={{ padding: 0, height: 'auto', whiteSpace: 'normal', textAlign: 'left' }} onClick={() => setSelected(record)}>
+          {value}
+        </Button>
+      ),
     },
-    { title: '纳税人识别号', dataIndex: 'taxpayer_id', key: 'taxpayer_id', width: 190 },
+    { title: '纳税人识别号', dataIndex: 'taxpayer_id', key: 'taxpayer_id', width: 210 },
     { title: '登记状态', dataIndex: 'registration_status', key: 'registration_status', width: 110 },
     { title: '税收管理员', dataIndex: 'tax_officer', key: 'tax_officer', width: 120 },
-    { title: '管户部门', dataIndex: 'manager_department', key: 'manager_department', width: 220 },
-    { title: '行业标签', dataIndex: 'industry_tag', key: 'industry_tag', width: 140, render: v => v ? <Tag color="blue">{v}</Tag> : <Text type="secondary">未分类</Text> },
-    { title: '地址标签', dataIndex: 'address_tag', key: 'address_tag', width: 140, render: v => v ? <Tag>{v}</Tag> : <Text type="secondary">未识别</Text> },
+    { title: '管户部门', dataIndex: 'manager_department', key: 'manager_department', width: 260 },
+    { title: '行业标签', dataIndex: 'industry_tag', key: 'industry_tag', width: 180, render: v => v ? <Tag color="blue" style={{ whiteSpace: 'normal' }}>{v}</Tag> : <Text type="secondary">未分类</Text> },
+    { title: '地址标签', dataIndex: 'address_tag', key: 'address_tag', width: 180, render: v => v ? <Tag style={{ whiteSpace: 'normal' }}>{v}</Tag> : <Text type="secondary">未识别</Text> },
     { title: '行业', dataIndex: 'industry', key: 'industry', width: 180 },
     {
       title: '风险等级',
@@ -72,12 +76,15 @@ export default function InfoQueryModule() {
 
   return (
     <PlatformLayout>
-      <div className="omni-page">
-        <Card style={{ marginBottom: 16 }}>
-          <Space style={{ width: '100%', justifyContent: 'space-between' }} align="start" wrap>
-            <Space direction="vertical" size={4}>
+      <div style={{ padding: 16 }}>
+        <Card
+          styles={{ body: { padding: 16 } }}
+          style={{ width: '100%' }}
+        >
+          <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 12 }} align="center" wrap>
+            <Space direction="vertical" size={0}>
               <Title level={4} style={{ margin: 0 }}>管户分配</Title>
-              <Text type="secondary">共 {stats?.total ?? total} 户。按管理员、管户部门、行业标签和地址标签筛选管户。</Text>
+              <Text type="secondary">共 {stats?.total ?? total} 户</Text>
             </Space>
             <Space wrap>
               <Input.Search
@@ -86,15 +93,13 @@ export default function InfoQueryModule() {
                 value={q}
                 onChange={(event) => setQ(event.target.value)}
                 onSearch={(value) => load(value)}
-                style={{ width: 280 }}
+                style={{ width: 340 }}
               />
               <Button onClick={handleExport} loading={exporting}>导出当前结果</Button>
               <Button onClick={() => load(q)}>刷新</Button>
             </Space>
           </Space>
-        </Card>
 
-        <Card>
           <Space wrap style={{ marginBottom: 12 }}>
             <Select placeholder="管理员" allowClear style={{ width: 160 }} value={filters.tax_officer} onChange={value => setFilters(prev => ({ ...prev, tax_officer: value }))} options={Object.keys(stats?.by_officer || {}).map(value => ({ value: value === '未分配' ? '' : value, label: value }))} />
             <Select placeholder="管户部门" allowClear style={{ width: 220 }} value={filters.manager_department} onChange={value => setFilters(prev => ({ ...prev, manager_department: value }))} options={Object.keys(stats?.by_department || {}).map(value => ({ value: value === '未分配' ? '' : value, label: value }))} />
@@ -109,7 +114,7 @@ export default function InfoQueryModule() {
             rowKey="taxpayer_id"
             loading={loading}
             size="small"
-            scroll={{ x: 1500 }}
+            scroll={{ x: 1700, y: 'calc(100vh - 300px)' }}
             pagination={{ total, pageSize: 50, showTotal: value => `共 ${value} 户` }}
             locale={{
               emptyText: q ? '没有匹配的纳税人，请换用税号、企业简称或清空筛选' : '暂无纳税人信息，请先在首页导入税务登记信息查询表',

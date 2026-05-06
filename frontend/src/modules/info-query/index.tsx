@@ -16,6 +16,7 @@ export default function InfoQueryModule() {
   const [filters, setFilters] = useState<{ tax_officer?: string; manager_department?: string; industry_tag?: string; address_tag?: string; registration_status?: string }>({})
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [stats, setStats] = useState<{ by_officer: Record<string, number>; by_department: Record<string, number>; by_risk_level: Record<string, number>; by_industry_tag: Record<string, number>; by_address_tag: Record<string, number>; total: number } | null>(null)
   const [selected, setSelected] = useState<TaxpayerProfile | null>(null)
   const message = useAppMessage()
@@ -47,6 +48,18 @@ export default function InfoQueryModule() {
       setUploading(false)
     }
     return false
+  }
+
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      await infoQueryApi.exportFile({ q, ...filters })
+      message.success('已开始导出，字段与税务登记信息查询模板一致')
+    } catch {
+      message.error('导出失败，请稍后重试')
+    } finally {
+      setExporting(false)
+    }
   }
 
   const columns: ColumnsType<TaxpayerProfile> = [
@@ -110,6 +123,9 @@ export default function InfoQueryModule() {
                 onSearch={(value) => load(value)}
                 style={{ width: 260 }}
               />
+              <Button onClick={handleExport} loading={exporting}>
+                导出当前结果
+              </Button>
               <Button onClick={() => load(q)}>刷新</Button>
             </Space>
           }

@@ -2,6 +2,7 @@
 Omni 平台后端 API 冒烟测试
 覆盖真实 Cookie 登录态，避免鉴权回归。
 """
+import csv
 import io
 import hashlib
 import time
@@ -530,6 +531,22 @@ def test_info_query_import_assignment_stats_and_analysis_profile(auth_client):
     assert history[0]["updated"] == 0
     assert history[0]["skipped"] == 0
     assert history[0]["total_processed"] == 2
+
+    export_resp = auth_client.get("/api/modules/info-query/taxpayers/export?q=信息企业A")
+    assert export_resp.status_code == 200
+    export_rows = list(csv.reader(io.StringIO(export_resp.content.decode("utf-8-sig"))))
+    assert export_rows[0][:5] == [
+        "登记表单展示",
+        "纳税人联系信息（有独立查询功能）",
+        "社会信用代码（纳税人识别号）",
+        "纳税人名称",
+        "纳税人状态",
+    ]
+    assert len(export_rows[0]) == 75
+    assert export_rows[1][2] == "91310000INFO0001"
+    assert export_rows[1][3] == "信息企业A"
+    assert export_rows[1][17] == "机械加工"
+    assert export_rows[1][39] == "广西柳州市柳江区拉堡镇柳堡路56号"
 
     job_csv = (
         "企业名称,纳税人识别号,法定代表人,行业,经营地址,税收管理员\n"

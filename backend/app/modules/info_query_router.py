@@ -7,8 +7,9 @@ import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import quote
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -24,6 +25,84 @@ router = APIRouter(prefix="/api/modules/info-query", tags=["信息查询表"])
 
 IMPORT_JOBS: dict[str, dict[str, Any]] = {}
 IMPORT_JOBS_LOCK = threading.Lock()
+
+TAXPAYER_EXPORT_HEADERS = [
+    "登记表单展示",
+    "纳税人联系信息（有独立查询功能）",
+    "社会信用代码（纳税人识别号）",
+    "纳税人名称",
+    "纳税人状态",
+    "课征主体登记类型",
+    "登记注册类型",
+    "组织机构代码",
+    "单位隶属关系",
+    "批准设立机关",
+    "证照名称",
+    "证照编号",
+    "开业设立日期",
+    "从业人数",
+    "固定工人数",
+    "组织机构类型",
+    "会计制度（准则）",
+    "经营范围",
+    "行业",
+    "登记机关",
+    "登记日期",
+    "主管税务机关",
+    "主管税务所（科、分局）",
+    "税收管理员",
+    "街道乡镇",
+    "国有控股类型",
+    "国有投资比例",
+    "自然人投资比例",
+    "外资投资比例",
+    "注册资本",
+    "投资总额",
+    "营改增纳税人类型",
+    "办证方式",
+    "核算方式",
+    "非居民企业标志",
+    "跨区财产税主体登记标志",
+    "有效标志",
+    "注册地址",
+    "注册地联系电话",
+    "经营地址",
+    "经营地联系电话",
+    "法定代表人（负责人、业主）姓名",
+    "法定代表人（负责人、业主）身份证件名称",
+    "法定代表人（负责人、业主）身份证件号码",
+    "法定代表人（负责人、业主）固定电话",
+    "法定代表人（负责人、业主）移动电话",
+    "财务负责人姓名",
+    "财务负责人身份证件号码",
+    "财务负责人固定电话",
+    "财务负责人移动电话",
+    "办税人姓名",
+    "办税人身份证件号码",
+    "办税人固定电话",
+    "办税人移动电话",
+    "录入人",
+    "录入日期",
+    "修改人",
+    "修改日期",
+    "纳税人编号",
+    "税收档案编号",
+    "社会信用代码",
+    "原纳税人识别号",
+    "评估机关",
+    "工商注销日期",
+    "是否三证合一或两证整合纳税人",
+    "受理信息",
+    "总分机构类型",
+    "总机构信息",
+    "分支机构信息",
+    "跨区域涉税事项报验管理编号",
+    "纳税人主体类型",
+    "登记户自定义类别",
+    "民营企业",
+    "市监市场主体类型",
+    "市监登记行业",
+]
 
 
 FIELD_ALIASES = {
@@ -280,6 +359,77 @@ def log_action(db: Session, action: str, target_id: str, operator_id: int, detai
     ))
 
 
+def taxpayer_query(
+    db: Session,
+    owner_id: int,
+    q: Optional[str] = None,
+    tax_officer: Optional[str] = None,
+    manager_department: Optional[str] = None,
+    industry: Optional[str] = None,
+    industry_tag: Optional[str] = None,
+    address_tag: Optional[str] = None,
+    registration_status: Optional[str] = None,
+    region: Optional[str] = None,
+    risk_level: Optional[str] = None,
+):
+    query = db.query(TaxpayerInfo).filter(TaxpayerInfo.owner_id == owner_id)
+    if q:
+        like = f"%{q}%"
+        query = query.filter(or_(
+            TaxpayerInfo.company_name.like(like),
+            TaxpayerInfo.taxpayer_id.like(like),
+            TaxpayerInfo.legal_person.like(like),
+            TaxpayerInfo.tax_officer.like(like),
+        ))
+    if tax_officer:
+        query = query.filter(TaxpayerInfo.tax_officer.like(f"%{tax_officer}%"))
+    if manager_department:
+        query = query.filter(TaxpayerInfo.manager_department.like(f"%{manager_department}%"))
+    if industry:
+        query = query.filter(TaxpayerInfo.industry.like(f"%{industry}%"))
+    if industry_tag:
+        query = query.filter(TaxpayerInfo.industry_tag == industry_tag)
+    if address_tag:
+        query = query.filter(TaxpayerInfo.address_tag == address_tag)
+    if registration_status:
+        query = query.filter(TaxpayerInfo.registration_status == registration_status)
+    if region:
+        query = query.filter(TaxpayerInfo.region.like(f"%{region}%"))
+    if risk_level:
+        query = query.filter(TaxpayerInfo.risk_level == risk_level)
+    return query
+
+
+def taxpayer_export_value(row: TaxpayerInfo, header: str) -> str:
+    try:
+        raw = json.loads(row.raw_json or "{}")
+    except Exception:
+        raw = {}
+    canonical = canonical_header(header)
+    value = raw.get(header, raw.get(canonical, ""))
+    if value:
+        return str(value)
+    fallback = {
+        "taxpayer_id": row.taxpayer_id,
+        "company_name": row.company_name,
+        "legal_person": row.legal_person,
+        "taxpayer_type": row.taxpayer_type,
+        "registration_status": row.registration_status,
+        "industry": row.industry,
+        "region": row.region,
+        "tax_bureau": row.tax_bureau,
+        "manager_department": row.manager_department,
+        "tax_officer": row.tax_officer,
+        "credit_rating": row.credit_rating,
+        "risk_level": row.risk_level,
+        "address": row.address,
+        "business_address": row.address,
+        "phone": row.phone,
+        "business_scope": row.business_scope,
+    }
+    return str(fallback.get(canonical, ""))
+
+
 def job_payload(job: dict[str, Any]) -> ImportJobResponse:
     payload = {key: value for key, value in job.items() if key != "owner_id"}
     return ImportJobResponse(**payload)
@@ -507,34 +657,63 @@ def list_taxpayers(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = db.query(TaxpayerInfo).filter(TaxpayerInfo.owner_id == current_user.id)
-    if q:
-        like = f"%{q}%"
-        query = query.filter(or_(
-            TaxpayerInfo.company_name.like(like),
-            TaxpayerInfo.taxpayer_id.like(like),
-            TaxpayerInfo.legal_person.like(like),
-            TaxpayerInfo.tax_officer.like(like),
-        ))
-    if tax_officer:
-        query = query.filter(TaxpayerInfo.tax_officer.like(f"%{tax_officer}%"))
-    if manager_department:
-        query = query.filter(TaxpayerInfo.manager_department.like(f"%{manager_department}%"))
-    if industry:
-        query = query.filter(TaxpayerInfo.industry.like(f"%{industry}%"))
-    if industry_tag:
-        query = query.filter(TaxpayerInfo.industry_tag == industry_tag)
-    if address_tag:
-        query = query.filter(TaxpayerInfo.address_tag == address_tag)
-    if registration_status:
-        query = query.filter(TaxpayerInfo.registration_status == registration_status)
-    if region:
-        query = query.filter(TaxpayerInfo.region.like(f"%{region}%"))
-    if risk_level:
-        query = query.filter(TaxpayerInfo.risk_level == risk_level)
+    query = taxpayer_query(
+        db,
+        current_user.id,
+        q,
+        tax_officer,
+        manager_department,
+        industry,
+        industry_tag,
+        address_tag,
+        registration_status,
+        region,
+        risk_level,
+    )
     total = query.count()
     taxpayers = query.order_by(TaxpayerInfo.updated_at.desc()).offset(offset).limit(limit).all()
     return TaxpayerListResponse(taxpayers=taxpayers, total=total)
+
+
+@router.get("/taxpayers/export")
+def export_taxpayers(
+    q: Optional[str] = Query(None),
+    tax_officer: Optional[str] = Query(None),
+    manager_department: Optional[str] = Query(None),
+    industry: Optional[str] = Query(None),
+    industry_tag: Optional[str] = Query(None),
+    address_tag: Optional[str] = Query(None),
+    registration_status: Optional[str] = Query(None),
+    region: Optional[str] = Query(None),
+    risk_level: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    query = taxpayer_query(
+        db,
+        current_user.id,
+        q,
+        tax_officer,
+        manager_department,
+        industry,
+        industry_tag,
+        address_tag,
+        registration_status,
+        region,
+        risk_level,
+    )
+    rows = query.order_by(TaxpayerInfo.updated_at.desc()).all()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(TAXPAYER_EXPORT_HEADERS)
+    for row in rows:
+        writer.writerow([taxpayer_export_value(row, header) for header in TAXPAYER_EXPORT_HEADERS])
+    filename = quote(f"税务登记信息查询导出_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+    return Response(
+        content="\ufeff" + output.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"},
+    )
 
 
 @router.get("/taxpayers/{taxpayer_id}", response_model=TaxpayerInfoSchema)

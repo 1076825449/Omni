@@ -601,6 +601,34 @@ export const infoQueryApi = {
     if (params?.offset) sp.set('offset', String(params.offset))
     return request<{ taxpayers: TaxpayerProfile[]; total: number }>('/api/modules/info-query/taxpayers?' + sp)
   },
+  exportFile: async (params?: { q?: string; tax_officer?: string; manager_department?: string; industry?: string; industry_tag?: string; address_tag?: string; registration_status?: string; region?: string; risk_level?: string }) => {
+    const sp = new URLSearchParams()
+    if (params?.q) sp.set('q', params.q)
+    if (params?.tax_officer) sp.set('tax_officer', params.tax_officer)
+    if (params?.manager_department) sp.set('manager_department', params.manager_department)
+    if (params?.industry) sp.set('industry', params.industry)
+    if (params?.industry_tag) sp.set('industry_tag', params.industry_tag)
+    if (params?.address_tag) sp.set('address_tag', params.address_tag)
+    if (params?.registration_status) sp.set('registration_status', params.registration_status)
+    if (params?.region) sp.set('region', params.region)
+    if (params?.risk_level) sp.set('risk_level', params.risk_level)
+    const res = await fetch(API_BASE + '/api/modules/info-query/taxpayers/export?' + sp, {
+      credentials: 'include',
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const blob = await res.blob()
+    const disposition = res.headers.get('Content-Disposition') || ''
+    const match = disposition.match(/filename\\*=UTF-8''([^;]+)/)
+    const filename = match ? decodeURIComponent(match[1]) : '税务登记信息查询导出.csv'
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  },
   get: (taxpayerId: string) => request<TaxpayerProfile>('/api/modules/info-query/taxpayers/' + encodeURIComponent(taxpayerId)),
   assignmentStats: () => request<{ by_officer: Record<string, number>; by_department: Record<string, number>; by_risk_level: Record<string, number>; by_industry_tag: Record<string, number>; by_address_tag: Record<string, number>; total: number }>('/api/modules/info-query/assignment-stats'),
 }

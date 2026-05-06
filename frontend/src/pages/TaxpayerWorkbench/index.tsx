@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Alert, Button, Card, Descriptions, Empty, Input, List, Row, Col, Space, Statistic, Tag, Timeline, Typography } from 'antd'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import dayjs from 'dayjs'
-import { taxOfficerWorkbenchApi, TaxpayerWorkbenchData } from '../../services/api'
+import { infoQueryApi, taxOfficerWorkbenchApi, TaxpayerWorkbenchData } from '../../services/api'
 import { useAppMessage } from '../../hooks/useAppMessage'
 
 const { Title, Text, Paragraph } = Typography
@@ -17,6 +17,7 @@ export default function TaxpayerWorkbench() {
   const [recentSearches, setRecentSearches] = useState<TaxpayerWorkbenchData['taxpayer'][]>([])
   const [recentOps, setRecentOps] = useState<TaxpayerWorkbenchData['taxpayer'][]>([])
   const [loading, setLoading] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const navigate = useNavigate()
   const message = useAppMessage()
 
@@ -77,6 +78,18 @@ export default function TaxpayerWorkbench() {
     }
   }
 
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      await infoQueryApi.exportFile({ q: taxpayerId.trim() || undefined })
+      message.success(taxpayerId.trim() ? '已按当前关键词导出信息查询表' : '已导出全部信息查询表')
+    } catch {
+      message.error('导出失败，请稍后重试')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   useEffect(() => {
     const stored = localStorage.getItem('tax_recent_searches')
     if (stored) {
@@ -111,7 +124,13 @@ export default function TaxpayerWorkbench() {
             onSearch={load}
             enterButton="查询该户"
           />
+          <Button loading={exporting} onClick={handleExport}>
+            导出
+          </Button>
         </Space.Compact>
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          导出字段与税务登记信息查询表一致；输入关键词后导出匹配结果，未输入则导出全部。
+        </Text>
       </Card>
 
       {!data ? (

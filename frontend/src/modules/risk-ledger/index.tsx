@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   Alert, Button, Card, Col, DatePicker, Descriptions, Form, Input, List, Modal, Row,
-  Select, Space, Table, Tabs, Tag, Timeline, Typography, Upload,
+  Select, Skeleton, Space, Table, Tabs, Tag, Timeline, Typography, Upload,
 } from 'antd'
 import { UploadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
@@ -30,7 +30,8 @@ export default function RiskLedgerModule() {
   const [query, setQuery] = useState('')
   const [entryStatus, setEntryStatus] = useState<string | undefined>()
   const [rowDrafts, setRowDrafts] = useState<Record<string, any>>({})
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [hasLoaded, setHasLoaded] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
   const [detail, setDetail] = useState<any>(null)
   const [failures, setFailures] = useState<Array<Record<string, string>>>([])
@@ -45,10 +46,11 @@ export default function RiskLedgerModule() {
       setRows(list.items)
       setTotal(list.total)
       setStats(stat)
-      setLoading(false)
     }).catch(() => {
       void message.error('加载风险台账失败')
+    }).finally(() => {
       setLoading(false)
+      setHasLoaded(true)
     })
   }
 
@@ -272,13 +274,17 @@ export default function RiskLedgerModule() {
             <Space direction="vertical" size={4}>
               <Typography.Title level={4} style={{ margin: 0 }}>管户记录</Typography.Title>
               <Text type="secondary">按户记录风险、核实结论和整改进展</Text>
-              <Space wrap style={{ marginTop: 8 }}>
-                <Tag>企业 {total} 户</Tag>
-                <Tag color="orange">待核实 {stats?.pending_count || 0}</Tag>
-                <Tag color="blue">整改中 {stats?.rectifying_count || 0}</Tag>
-                <Tag color="green">已排除 {stats?.excluded_count || 0}</Tag>
-                <Tag color="purple">已整改 {stats?.rectified_count || 0}</Tag>
-              </Space>
+              {hasLoaded ? (
+                <Space wrap style={{ marginTop: 8 }}>
+                  <Tag>企业 {total} 户</Tag>
+                  <Tag color="orange">待核实 {stats?.pending_count || 0}</Tag>
+                  <Tag color="blue">整改中 {stats?.rectifying_count || 0}</Tag>
+                  <Tag color="green">已排除 {stats?.excluded_count || 0}</Tag>
+                  <Tag color="purple">已整改 {stats?.rectified_count || 0}</Tag>
+                </Space>
+              ) : (
+                <Text type="secondary" style={{ marginTop: 8 }}>正在加载管户记录...</Text>
+              )}
             </Space>
             <Space>
               <Input.Search placeholder="税号/名称/法人/管理员" allowClear value={query} onChange={event => setQuery(event.target.value)} onSearch={(value) => { setQuery(value); load(value) }} style={{ width: 260 }} />
@@ -292,23 +298,30 @@ export default function RiskLedgerModule() {
           style={{ marginBottom: 16 }}
           styles={{ body: { padding: 16 } }}
         >
-          <List
-            loading={loading}
-            dataSource={rows}
-            rowKey="taxpayer_id"
-            renderItem={(item) => (
-              <List.Item style={{ padding: '8px 0', borderBlockEnd: 'none' }}>
-                {renderRecordCard(item)}
-              </List.Item>
-            )}
-            pagination={total > 50 ? { total, pageSize: 50, showSizeChanger: false } : false}
-            locale={{
-              emptyText: query || entryStatus ? '没有符合当前筛选条件的企业' : '暂无企业数据。请先在首页导入税务登记信息查询数据源。',
-            }}
-          />
+          {!hasLoaded ? (
+            <Space direction="vertical" size={16} style={{ width: '100%' }}>
+              <Skeleton active paragraph={{ rows: 3 }} />
+              <Skeleton active paragraph={{ rows: 3 }} />
+            </Space>
+          ) : (
+            <List
+              loading={loading}
+              dataSource={rows}
+              rowKey="taxpayer_id"
+              renderItem={(item) => (
+                <List.Item style={{ padding: '8px 0', borderBlockEnd: 'none' }}>
+                  {renderRecordCard(item)}
+                </List.Item>
+              )}
+              pagination={total > 50 ? { total, pageSize: 50, showSizeChanger: false } : false}
+              locale={{
+                emptyText: query || entryStatus ? '没有符合当前筛选条件的企业' : '暂无企业数据。请先在首页导入税务登记信息查询数据源。',
+              }}
+            />
+          )}
         </Card>
 
-        <Tabs
+        {hasLoaded && <Tabs
           activeKey={activeTab}
           onChange={setActiveTab}
           items={[
@@ -386,7 +399,7 @@ export default function RiskLedgerModule() {
               ),
             },
           ]}
-        />
+        />}
 
         {failures.length > 0 && (
           <Alert

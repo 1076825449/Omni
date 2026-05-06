@@ -55,6 +55,12 @@ export default function InfoQueryModule() {
   const officerOptions = Object.keys(stats?.by_officer || {})
     .filter(value => value && value !== '未分配')
     .map(value => ({ value, label: value }))
+  const searchableSelectProps = {
+    showSearch: true,
+    optionFilterProp: 'label' as const,
+    filterOption: (input: string, option?: { label?: unknown }) =>
+      String(option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+  }
 
   const saveAssignment = async (taxpayerIds: string[], proposedOfficer: string) => {
     setSavingAssignment(true)
@@ -152,11 +158,11 @@ export default function InfoQueryModule() {
           </Space>
 
           <Space wrap style={{ marginBottom: 12 }}>
-            <Select placeholder="管理员" allowClear style={{ width: 160 }} value={filters.tax_officer} onChange={value => setFilters(prev => ({ ...prev, tax_officer: value }))} options={Object.keys(stats?.by_officer || {}).map(value => ({ value: value === '未分配' ? '' : value, label: value }))} />
-            <Select placeholder="管户部门" allowClear style={{ width: 220 }} value={filters.manager_department} onChange={value => setFilters(prev => ({ ...prev, manager_department: value }))} options={Object.keys(stats?.by_department || {}).map(value => ({ value: value === '未分配' ? '' : value, label: value }))} />
-            <Select placeholder="行业标签" allowClear style={{ width: 180 }} value={filters.industry_tag} onChange={value => setFilters(prev => ({ ...prev, industry_tag: value }))} options={Object.keys(stats?.by_industry_tag || {}).map(value => ({ value: value === '未分类' ? '' : value, label: value }))} />
-            <Select placeholder="地址标签" allowClear style={{ width: 180 }} value={filters.address_tag} onChange={value => setFilters(prev => ({ ...prev, address_tag: value }))} options={Object.keys(stats?.by_address_tag || {}).filter(value => value !== '未识别地址').map(value => ({ value, label: value }))} />
-            <Select placeholder="登记状态" allowClear style={{ width: 150 }} value={filters.registration_status} onChange={value => setFilters(prev => ({ ...prev, registration_status: value }))} options={[...new Set(rows.map(row => row.registration_status).filter(Boolean))].map(value => ({ value, label: value }))} />
+            <Select {...searchableSelectProps} placeholder="管理员" allowClear style={{ width: 160 }} value={filters.tax_officer} onChange={value => setFilters(prev => ({ ...prev, tax_officer: value }))} options={Object.keys(stats?.by_officer || {}).map(value => ({ value: value === '未分配' ? '' : value, label: value }))} />
+            <Select {...searchableSelectProps} placeholder="管户部门" allowClear style={{ width: 220 }} value={filters.manager_department} onChange={value => setFilters(prev => ({ ...prev, manager_department: value }))} options={Object.keys(stats?.by_department || {}).map(value => ({ value: value === '未分配' ? '' : value, label: value }))} />
+            <Select {...searchableSelectProps} placeholder="行业标签" allowClear style={{ width: 180 }} value={filters.industry_tag} onChange={value => setFilters(prev => ({ ...prev, industry_tag: value }))} options={Object.keys(stats?.by_industry_tag || {}).map(value => ({ value: value === '未分类' ? '' : value, label: value }))} />
+            <Select {...searchableSelectProps} placeholder="地址标签" allowClear style={{ width: 180 }} value={filters.address_tag} onChange={value => setFilters(prev => ({ ...prev, address_tag: value }))} options={Object.keys(stats?.by_address_tag || {}).filter(value => value !== '未识别地址').map(value => ({ value, label: value }))} />
+            <Select {...searchableSelectProps} placeholder="登记状态" allowClear style={{ width: 150 }} value={filters.registration_status} onChange={value => setFilters(prev => ({ ...prev, registration_status: value }))} options={[...new Set(rows.map(row => row.registration_status).filter(Boolean))].map(value => ({ value, label: value }))} />
             <Button onClick={() => setFilters({})}>清空筛选</Button>
             <Select
               showSearch

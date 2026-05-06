@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
 import {
   Alert, Button, Card, Col, DatePicker, Descriptions, Form, Input, List, Modal, Row,
-  Select, Space, Statistic, Table, Tabs, Tag, Timeline, Typography, Upload,
+  Select, Space, Table, Tabs, Tag, Timeline, Typography, Upload,
 } from 'antd'
-import type { ColumnsType } from 'antd/es/table'
 import { UploadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useSearchParams } from 'react-router-dom'
@@ -177,47 +176,91 @@ export default function RiskLedgerModule() {
     URL.revokeObjectURL(url)
   }
 
-  const columns: ColumnsType<RiskDossier> = [
-    {
-      title: '纳税人',
-      dataIndex: 'company_name',
-      key: 'company_name',
-      render: (value, record) => <Button type="link" onClick={() => showDetail(record.taxpayer_id)}>{value}</Button>,
-    },
-    { title: '识别号', dataIndex: 'taxpayer_id', key: 'taxpayer_id', width: 180 },
-    { title: '登记状态', dataIndex: 'registration_status', key: 'registration_status', width: 100, render: v => v || <Text type="secondary">—</Text> },
-    { title: '管理员', dataIndex: 'tax_officer', key: 'tax_officer', width: 110, render: v => v || <Text type="secondary">—</Text> },
-    { title: '行业标签', dataIndex: 'industry_tag', key: 'industry_tag', width: 100, render: v => v ? <Tag color="blue">{v}</Tag> : <Text type="secondary">—</Text> },
-    { title: '地址标签', dataIndex: 'address_tag', key: 'address_tag', width: 110, render: v => v ? <Tag>{v}</Tag> : <Text type="secondary">—</Text> },
-    {
-      title: '最新事项',
-      dataIndex: 'latest_entry_status',
-      key: 'latest_entry_status',
-      width: 100,
-      render: v => v ? <Tag color={statusColor[v]}>{v}</Tag> : <Text type="secondary">—</Text>,
-    },
-    { title: '记录时间', dataIndex: 'latest_recorded_at', key: 'latest_recorded_at', width: 160, render: v => v ? dayjs(v).format('YYYY-MM-DD HH:mm') : <Text type="secondary">—</Text> },
-    { title: '整改期限', dataIndex: 'latest_rectification_deadline', key: 'latest_rectification_deadline', width: 120, render: (v, record) => v ? <Tag color={record.is_overdue ? 'red' : 'blue'}>{dayjs(v).format('YYYY-MM-DD')}</Tag> : <Text type="secondary">—</Text> },
-    { title: '记录内容', dataIndex: 'latest_content', key: 'latest_content', ellipsis: true, render: v => v || <Text type="secondary">—</Text> },
-    {
-      title: '本次记录',
-      key: 'inline_record',
-      width: 560,
-      render: (_, record) => {
-        const draft = rowDrafts[record.taxpayer_id] || {}
-        return (
-          <Space.Compact style={{ width: '100%' }}>
-            <DatePicker value={draft.recorded_at || dayjs()} onChange={value => updateDraft(record.taxpayer_id, { recorded_at: value })} style={{ width: 130 }} />
-            <Select value={draft.entry_status || '待核实'} onChange={value => updateDraft(record.taxpayer_id, { entry_status: value })} options={statuses.map(s => ({ value: s, label: s }))} style={{ width: 100 }} />
-            <Input value={draft.content} onChange={event => updateDraft(record.taxpayer_id, { content: event.target.value })} placeholder="记录内容" style={{ width: 200 }} />
-            <Input value={draft.contact_person} onChange={event => updateDraft(record.taxpayer_id, { contact_person: event.target.value })} placeholder="联系人" style={{ width: 90 }} />
-            <Button type="primary" onClick={() => handleInlineSave(record)}>保存</Button>
-          </Space.Compact>
-        )
-      },
-    },
-    { title: '次数', dataIndex: 'entry_count', key: 'entry_count', width: 70 },
-  ]
+  const renderRecordCard = (record: RiskDossier) => {
+    const draft = rowDrafts[record.taxpayer_id] || {}
+    return (
+      <Card
+        size="small"
+        styles={{ body: { padding: 16 } }}
+        style={{ width: '100%', borderColor: record.is_overdue ? '#ffccc7' : '#eef1f5' }}
+      >
+        <Row gutter={[16, 12]} align="top">
+          <Col xs={24} xl={9}>
+            <Space direction="vertical" size={8} style={{ width: '100%' }}>
+              <Space wrap size={6}>
+                <Button type="link" style={{ padding: 0, height: 'auto', fontWeight: 600, whiteSpace: 'normal', textAlign: 'left' }} onClick={() => showDetail(record.taxpayer_id)}>
+                  {record.company_name || '未命名纳税人'}
+                </Button>
+                {record.latest_entry_status && <Tag color={statusColor[record.latest_entry_status]}>{record.latest_entry_status}</Tag>}
+                {record.is_overdue && <Tag color="red">逾期</Tag>}
+              </Space>
+              <Space wrap size={[8, 4]}>
+                <Text type="secondary">税号：{record.taxpayer_id}</Text>
+                <Text type="secondary">登记状态：{record.registration_status || '—'}</Text>
+                <Text type="secondary">管理员：{record.tax_officer || '—'}</Text>
+              </Space>
+              <Space wrap size={[4, 4]}>
+                {record.industry_tag ? <Tag color="blue">{record.industry_tag}</Tag> : <Tag>未分类行业</Tag>}
+                {record.address_tag ? <Tag>{record.address_tag}</Tag> : <Tag>未识别地址</Tag>}
+                <Tag>记录 {record.entry_count || 0} 次</Tag>
+              </Space>
+            </Space>
+          </Col>
+
+          <Col xs={24} xl={6}>
+            <Space direction="vertical" size={4} style={{ width: '100%' }}>
+              <Text strong>最近记录</Text>
+              <Text type="secondary">
+                {record.latest_recorded_at ? dayjs(record.latest_recorded_at).format('YYYY-MM-DD HH:mm') : '暂无记录'}
+              </Text>
+              <Paragraph ellipsis={{ rows: 2 }} style={{ marginBottom: 0 }}>
+                {record.latest_content || '还没有风险、排除或整改记录'}
+              </Paragraph>
+              {record.latest_rectification_deadline && (
+                <Text type={record.is_overdue ? 'danger' : 'secondary'}>
+                  整改期限：{dayjs(record.latest_rectification_deadline).format('YYYY-MM-DD')}
+                </Text>
+              )}
+            </Space>
+          </Col>
+
+          <Col xs={24} xl={9}>
+            <Space direction="vertical" size={8} style={{ width: '100%' }}>
+              <Text strong>本次记录</Text>
+              <Row gutter={[8, 8]}>
+                <Col xs={24} md={8}>
+                  <DatePicker value={draft.recorded_at || dayjs()} onChange={value => updateDraft(record.taxpayer_id, { recorded_at: value })} style={{ width: '100%' }} />
+                </Col>
+                <Col xs={24} md={8}>
+                  <Select value={draft.entry_status || '待核实'} onChange={value => updateDraft(record.taxpayer_id, { entry_status: value })} options={statuses.map(s => ({ value: s, label: s }))} style={{ width: '100%' }} />
+                </Col>
+                <Col xs={24} md={8}>
+                  <DatePicker placeholder="整改期限" value={draft.rectification_deadline} onChange={value => updateDraft(record.taxpayer_id, { rectification_deadline: value })} style={{ width: '100%' }} />
+                </Col>
+                <Col xs={24}>
+                  <Input.TextArea
+                    autoSize={{ minRows: 2, maxRows: 4 }}
+                    value={draft.content}
+                    onChange={event => updateDraft(record.taxpayer_id, { content: event.target.value })}
+                    placeholder="记录风险、核实情况、排除理由或整改进展"
+                  />
+                </Col>
+                <Col xs={24} md={8}>
+                  <Input value={draft.contact_person} onChange={event => updateDraft(record.taxpayer_id, { contact_person: event.target.value })} placeholder="联系人" />
+                </Col>
+                <Col xs={24} md={8}>
+                  <Input value={draft.contact_phone} onChange={event => updateDraft(record.taxpayer_id, { contact_phone: event.target.value })} placeholder="联系电话" />
+                </Col>
+                <Col xs={24} md={8}>
+                  <Button type="primary" block onClick={() => handleInlineSave(record)}>保存本次记录</Button>
+                </Col>
+              </Row>
+            </Space>
+          </Col>
+        </Row>
+      </Card>
+    )
+  }
 
   return (
     <PlatformLayout>
@@ -226,34 +269,34 @@ export default function RiskLedgerModule() {
         moduleDesc="企业列表内直接记录风险、排除和整改情况"
         items={[{ key: 'index', label: '管户记录', path: '/modules/risk-ledger' }]}
       >
-        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-          <Col xs={12} md={4}><Card size="small"><Statistic title="档案数" value={stats?.dossier_total || 0} /></Card></Col>
-          <Col xs={12} md={4}><Card size="small"><Statistic title="记录数" value={stats?.entry_total || 0} /></Card></Col>
-          <Col xs={12} md={4}><Card size="small"><Statistic title="待核实" value={stats?.pending_count || 0} /></Card></Col>
-          <Col xs={12} md={4}><Card size="small"><Statistic title="整改中" value={stats?.rectifying_count || 0} /></Card></Col>
-          <Col xs={12} md={4}><Card size="small"><Statistic title="已整改" value={stats?.rectified_count || 0} /></Card></Col>
-          <Col xs={12} md={4}><Card size="small"><Statistic title="临时档案" value={stats?.temporary_count || 0} /></Card></Col>
-        </Row>
-
         <Card
           title="管户记录列表"
           style={{ marginBottom: 16 }}
           extra={
             <Space>
-              <Input.Search placeholder="税号/名称/法人/管理员/地址" allowClear onSearch={(value) => { setQuery(value); load(value) }} style={{ width: 260 }} />
+              <Input.Search placeholder="税号/名称/法人/管理员" allowClear value={query} onChange={event => setQuery(event.target.value)} onSearch={(value) => { setQuery(value); load(value) }} style={{ width: 260 }} />
               <Select placeholder="事项状态" allowClear value={entryStatus} onChange={setEntryStatus} style={{ width: 130 }} options={statuses.map(s => ({ value: s, label: s }))} />
               <Button onClick={() => load()}>刷新</Button>
             </Space>
           }
         >
-          <Table
-            columns={columns}
+          <Space wrap style={{ marginBottom: 16 }}>
+            <Tag>企业 {total} 户</Tag>
+            <Tag color="orange">待核实 {stats?.pending_count || 0}</Tag>
+            <Tag color="blue">整改中 {stats?.rectifying_count || 0}</Tag>
+            <Tag color="green">已排除 {stats?.excluded_count || 0}</Tag>
+            <Tag color="purple">已整改 {stats?.rectified_count || 0}</Tag>
+          </Space>
+          <List
+            loading={loading}
             dataSource={rows}
             rowKey="taxpayer_id"
-            loading={loading}
-            size="small"
-            scroll={{ x: 1500 }}
-            pagination={{ total, pageSize: 50, hideOnSinglePage: true }}
+            renderItem={(item) => (
+              <List.Item style={{ padding: '8px 0', borderBlockEnd: 'none' }}>
+                {renderRecordCard(item)}
+              </List.Item>
+            )}
+            pagination={total > 50 ? { total, pageSize: 50, showSizeChanger: false } : false}
             locale={{
               emptyText: query || entryStatus ? '没有符合当前筛选条件的企业' : '暂无企业数据。请先在首页导入税务登记信息查询数据源。',
             }}

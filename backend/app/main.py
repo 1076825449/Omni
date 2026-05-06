@@ -28,6 +28,8 @@ from app.routers.webhooks import router as webhooks_router
 from app.routers.ws import websocket_endpoint
 from app.routers.data_ops import router as data_ops_router
 from app.models.permission import Role, ROLE_PERMISSIONS
+from app.models.settings import SystemSetting
+from app.models.taxpayer import TaxpayerInfo
 
 
 def seed_roles():
@@ -100,11 +102,40 @@ def ensure_lightweight_migrations():
             conn.execute(text("ALTER TABLE taxpayer_infos ADD COLUMN IF NOT EXISTS proposed_tax_officer VARCHAR(100) DEFAULT ''"))
 
 
+def ensure_taxpayer_industry_tags():
+    from app.modules.info_query_router import INDUSTRY_TAG_RULE_VERSION, rebuild_industry_tags
+
+    db = SessionLocal()
+    try:
+        owner_ids = [row[0] for row in db.query(TaxpayerInfo.owner_id).distinct().all()]
+        for owner_id in owner_ids:
+            setting = db.query(SystemSetting).filter(
+                SystemSetting.owner_id == owner_id,
+                SystemSetting.key == "taxpayer_industry_tag_rule_version",
+            ).first()
+            if setting and (setting.value or {}).get("version") == INDUSTRY_TAG_RULE_VERSION:
+                continue
+            changed = rebuild_industry_tags(db, owner_id)
+            value = {"version": INDUSTRY_TAG_RULE_VERSION, "changed": changed}
+            if setting:
+                setting.value = value
+            else:
+                db.add(SystemSetting(
+                    owner_id=owner_id,
+                    key="taxpayer_industry_tag_rule_version",
+                    value=value,
+                ))
+        db.commit()
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     ensure_lightweight_migrations()
     seed_roles()
+    ensure_taxpayer_industry_tags()
     # 加载插件
     from app.plugins import get_plugin_manager
     pm = get_plugin_manager()

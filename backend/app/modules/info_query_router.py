@@ -25,6 +25,7 @@ router = APIRouter(prefix="/api/modules/info-query", tags=["信息查询表"])
 
 IMPORT_JOBS: dict[str, dict[str, Any]] = {}
 IMPORT_JOBS_LOCK = threading.Lock()
+INDUSTRY_TAG_RULE_VERSION = "business-v2"
 
 TAXPAYER_EXPORT_HEADERS = [
     "登记表单展示",
@@ -249,26 +250,42 @@ def compact_text(value: str) -> str:
 
 
 def derive_industry_tag(industry: str, company_name: str, business_scope: str) -> str:
-    source = compact_text(industry)
-    if source:
-        return source[:30]
-    haystack = compact_text(f"{company_name}{business_scope}")
+    haystack = compact_text(f"{industry}{company_name}{business_scope}")
     keyword_groups = [
-        ("餐饮食品", ["餐饮", "饭店", "餐馆", "小吃", "食品", "奶茶", "烧烤"]),
-        ("建材五金", ["建材", "装饰", "五金", "钢材", "水泥", "砂石", "陶瓷"]),
-        ("交通运输", ["运输", "物流", "货运", "快递", "汽车租赁"]),
-        ("农林牧渔", ["农业", "种植", "养殖", "农资", "苗圃", "水产"]),
-        ("批发零售", ["批发", "零售", "商贸", "超市", "便利店", "销售"]),
+        ("汽车销售及维修", ["汽车", "汽配", "机动车", "二手车", "轮胎", "洗车", "电动车", "汽车零配件", "汽车修理", "汽车维修", "修理与维护"]),
+        ("木材加工", ["木材", "木业", "木制", "板材", "胶合板", "木片", "锯材", "单板", "竹木", "木质家具"]),
+        ("食品生产", ["食品生产", "粮食加工", "农副食品加工", "食品制造", "糕点制造", "饮料制造", "肉制品", "豆制品", "调味品", "茶叶加工", "屠宰", "酿酒", "酒类生产"]),
+        ("餐饮", ["餐饮", "饭店", "餐馆", "小吃", "正餐", "快餐", "奶茶", "烧烤", "饮品", "饮料及冷饮服务"]),
+        ("建筑工程", ["建筑", "工程", "施工", "安装", "装饰", "装修", "土木", "市政", "园林绿化", "工程劳务", "建筑劳务"]),
+        ("建材五金", ["建材", "五金", "钢材", "水泥", "砂石", "陶瓷", "消防器材", "电线电缆", "室内装饰材料"]),
+        ("交通运输", ["运输", "物流", "货运", "快递", "道路运输", "搬运", "仓储"]),
+        ("农林牧渔", ["农业", "种植", "养殖", "畜牧", "水产", "农资", "苗圃", "林业", "果蔬", "农产品", "农副产品"]),
+        ("医药健康", ["医药", "药店", "诊所", "医院", "医疗", "西药", "中药", "药品", "医疗器械"]),
+        ("美容养生", ["理发", "美容", "美发", "养生", "保健", "按摩", "足浴"]),
+        ("居民服务", ["照相", "复印", "打印", "家政", "洗染", "摄影", "居民服务", "日用品修理"]),
         ("房产物业", ["房地产", "物业", "置业", "不动产", "房屋租赁"]),
-        ("制造加工", ["制造", "加工", "机械", "配件", "设备", "工厂"]),
-        ("医药健康", ["医药", "药店", "诊所", "医院", "医疗", "健康"]),
         ("教育培训", ["教育", "培训", "学校", "托管", "文化艺术"]),
-        ("商务服务", ["咨询", "广告", "传媒", "服务", "管理"]),
+        ("商务服务", ["咨询", "广告", "传媒", "会议", "会展", "代理", "商务服务", "企业管理", "劳务派遣", "信息服务"]),
+        ("加工制造", ["制造", "加工", "机械", "设备", "配件", "工厂", "生产", "制品", "电子元件", "金属制品", "塑料制品"]),
+        ("贸易", ["批发", "零售", "商贸", "贸易", "超市", "便利店", "销售", "经营部", "网店", "电子商务", "百货"]),
     ]
     for tag, keywords in keyword_groups:
         if any(keyword in haystack for keyword in keywords):
             return tag
-    return "未分类"
+    return "其他"
+
+
+def rebuild_industry_tags(db: Session, owner_id: Optional[int] = None) -> int:
+    query = db.query(TaxpayerInfo)
+    if owner_id is not None:
+        query = query.filter(TaxpayerInfo.owner_id == owner_id)
+    changed = 0
+    for item in query.yield_per(500):
+        next_tag = derive_industry_tag(item.industry or "", item.company_name or "", item.business_scope or "")
+        if item.industry_tag != next_tag:
+            item.industry_tag = next_tag
+            changed += 1
+    return changed
 
 
 def derive_address_tag(address: str) -> str:

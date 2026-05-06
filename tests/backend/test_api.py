@@ -479,6 +479,10 @@ def test_info_query_import_assignment_stats_and_analysis_profile(auth_client):
     assert derive_address_tag("柳江县柳南高速公路新兴服务区下线") == "柳南高速公路"
     assert derive_address_tag("广西柳州市柳江区拉堡镇") == ""
     assert derive_industry_tag("", "柳州某某建材经营部", "销售水泥、五金") == "建材五金"
+    assert derive_industry_tag("汽车修理与维护", "柳州某某汽车服务有限公司", "汽车维修") == "汽车销售及维修"
+    assert derive_industry_tag("", "柳州某某木材加工厂", "木制品加工") == "木材加工"
+    assert derive_industry_tag("其他科技推广服务业", "柳州某某食品科技有限公司", "食品生产；粮食加工食品生产") == "食品生产"
+    assert derive_industry_tag("其他未列明批发业", "柳州某某商贸有限公司", "日用品批发零售") == "贸易"
 
     csv_content = (
         "企业名称,纳税人识别号,法定代表人,行业,经营范围,注册地址,经营地址,属地,主管税务机关,管理分局,税收管理员,风险等级,纳税信用等级\n"
@@ -503,7 +507,7 @@ def test_info_query_import_assignment_stats_and_analysis_profile(auth_client):
     assert listed["taxpayers"][0]["proposed_tax_officer"] == ""
     assert listed["taxpayers"][0]["address"] == "广西柳州市柳江区拉堡镇柳堡路56号"
     assert listed["taxpayers"][0]["address_tag"] == "柳堡路"
-    assert listed["taxpayers"][0]["industry_tag"] == "制造业"
+    assert listed["taxpayers"][0]["industry_tag"] == "加工制造"
 
     assignment_resp = auth_client.post(
         "/api/modules/info-query/taxpayers/assignment",
@@ -535,7 +539,7 @@ def test_info_query_import_assignment_stats_and_analysis_profile(auth_client):
     assert stats["by_officer"]["拟分配员"] == 2
     assert stats["by_department"]["一分局"] == 1
     assert stats["by_risk_level"]["高"] == 1
-    assert stats["by_industry_tag"]["制造业"] == 1
+    assert stats["by_industry_tag"]["加工制造"] == 1
     assert stats["by_address_tag"]["柳堡路"] == 1
 
     history_resp = auth_client.get("/api/modules/info-query/import-history")

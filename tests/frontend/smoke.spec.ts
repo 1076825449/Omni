@@ -3,7 +3,6 @@ import { expect, test } from '@playwright/test'
 test('login and open key platform pages', async ({ page }) => {
   const suffix = Date.now().toString().slice(-6)
   const scheduleName = `Smoke 调度任务 ${suffix}`
-  const analysisName = `Smoke 分析任务 ${suffix}`
 
   await page.goto('/login')
 
@@ -36,11 +35,7 @@ test('login and open key platform pages', async ({ page }) => {
   await expect(page.getByText(scheduleName)).toBeVisible()
 
   await page.goto('/modules/analysis-workbench/new')
-  await expect(page.getByText('分析对象', { exact: true })).toBeVisible()
-  await expect(page.getByText('上传资料')).toBeVisible()
-  await page.getByLabel('分析名称').fill(analysisName)
-  await page.getByLabel('分析重点').fill('Playwright 自动创建的分析任务')
-  await page.getByRole('button', { name: '保存分析对象' }).click()
+  await expect(page.getByText('上传资料', { exact: true })).toBeVisible()
   await page.locator('input[type="file"]').setInputFiles({
     name: `purchase_invoices-${suffix}.csv`,
     mimeType: 'text/csv',

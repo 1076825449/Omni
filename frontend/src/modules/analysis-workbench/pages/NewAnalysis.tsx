@@ -29,7 +29,6 @@ type UploadedFile = {
 }
 
 export default function NewAnalysis() {
-  const [form] = Form.useForm()
   const [manualForm] = Form.useForm()
   const [fileList, setFileList] = useState<UploadedFile[]>([])
   const [uploading, setUploading] = useState(false)
@@ -47,9 +46,8 @@ export default function NewAnalysis() {
 
   const ensureTask = async () => {
     if (taskId) return taskId
-    const values = form.getFieldsValue()
-    const name = values.name || (taxpayerContext.company_name ? `${taxpayerContext.company_name}案头分析` : `案头分析_${new Date().toLocaleDateString('zh-CN')}`)
-    const description = values.description || (taxpayerContext.taxpayer_id ? `针对纳税人识别号 ${taxpayerContext.taxpayer_id} 开展案头分析` : '上传或补录资料后开展案头分析')
+    const name = taxpayerContext.company_name ? `${taxpayerContext.company_name}案头分析` : `案头分析_${new Date().toLocaleDateString('zh-CN')}`
+    const description = taxpayerContext.taxpayer_id ? `针对纳税人识别号 ${taxpayerContext.taxpayer_id} 开展案头分析` : '上传或补录资料后开展案头分析'
     const res = await analysisApi.createTask(name, description, taxpayerContext)
     setTaskId(res.task_id)
     return res.task_id
@@ -72,26 +70,6 @@ export default function NewAnalysis() {
       setUploading(false)
     }
     return false
-  }
-
-  const handleCreate = async (values: { name: string; description: string }) => {
-    if (isViewer) {
-      message.warning('只读用户不能建立分析事项')
-      return
-    }
-    try {
-      const taxpayer = {
-        taxpayer_id: searchParams.get('taxpayer_id') || '',
-        company_name: searchParams.get('company_name') || '',
-      }
-      const res = await analysisApi.createTask(values.name, values.description, taxpayer)
-      if (res.success) {
-        setTaskId(res.task_id)
-        message.success('分析事项已建立，可以上传资料了')
-      }
-    } catch {
-      message.error('分析事项建立失败，请检查名称后重试')
-    }
   }
 
   const handleRun = async () => {
@@ -128,7 +106,7 @@ export default function NewAnalysis() {
         <Space style={{ width: '100%', justifyContent: 'space-between' }} align="start" wrap>
           <Space direction="vertical" size={4}>
             <Typography.Title level={4} style={{ margin: 0 }}>案头分析</Typography.Title>
-            <Text type="secondary">上传申报、发票、财报等资料，识别疑点并生成文书</Text>
+            <Text type="secondary">直接上传资料或补录关键数据，系统自动建立本次分析并识别疑点</Text>
             {taxpayerContext.taxpayer_id && (
               <Space wrap style={{ marginTop: 8 }}>
                 <Tag color="blue">已带入企业</Tag>
@@ -143,38 +121,10 @@ export default function NewAnalysis() {
           <Alert
             type="warning"
             showIcon
-            message="只读用户不能建立分析事项、上传资料或发起分析"
+            message="只读用户不能上传资料、补录数据或发起分析"
             style={{ marginTop: 16 }}
           />
         )}
-      </Card>
-
-      <Card title="分析对象" style={{ marginBottom: 16 }}>
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={handleCreate}
-          initialValues={{
-            name: taxpayerContext.company_name ? `${taxpayerContext.company_name}案头分析` : undefined,
-            description: taxpayerContext.taxpayer_id ? `针对纳税人识别号 ${taxpayerContext.taxpayer_id} 开展案头分析` : undefined,
-          }}
-        >
-          <Row gutter={12}>
-            <Col xs={24} md={10}>
-              <Form.Item label="分析名称" name="name" rules={[{ required: true, message: '请输入分析名称' }]}>
-                <Input placeholder="如：某企业近三年税务风险案头分析" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={14}>
-              <Form.Item label="分析重点" name="description">
-                <Input placeholder="例如：核查 2023-01 至 2026-03 有进无销、白条入账、隐瞒收入等风险" />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Button type="primary" htmlType="submit" disabled={!!taskId}>
-            {taskId ? '分析对象已保存' : '保存分析对象'}
-          </Button>
-        </Form>
       </Card>
 
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>

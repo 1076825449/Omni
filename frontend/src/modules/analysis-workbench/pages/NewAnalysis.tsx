@@ -124,64 +124,63 @@ export default function NewAnalysis() {
 
   return (
     <div>
-      <Card title={taxpayerContext.taxpayer_id ? '为该户开展案头分析' : '发起税务风险分析'} style={{ marginBottom: 16 }}>
-        {taxpayerContext.taxpayer_id && (
-          <Alert
-            type="info"
-            showIcon
-            message="已从一户式工作台带入纳税人信息"
-            description={`纳税人：${taxpayerContext.company_name || '未填写名称'}；识别号：${taxpayerContext.taxpayer_id}`}
-            style={{ marginTop: 12 }}
-          />
-        )}
+      <Card style={{ marginBottom: 16 }} styles={{ body: { padding: 20 } }}>
+        <Space style={{ width: '100%', justifyContent: 'space-between' }} align="start" wrap>
+          <Space direction="vertical" size={4}>
+            <Typography.Title level={4} style={{ margin: 0 }}>案头分析</Typography.Title>
+            <Text type="secondary">上传申报、发票、财报等资料，识别疑点并生成文书</Text>
+            {taxpayerContext.taxpayer_id && (
+              <Space wrap style={{ marginTop: 8 }}>
+                <Tag color="blue">已带入企业</Tag>
+                <Text>{taxpayerContext.company_name || '未填写名称'}</Text>
+                <Text type="secondary">{taxpayerContext.taxpayer_id}</Text>
+              </Space>
+            )}
+          </Space>
+          <Button type="primary" disabled={isViewer} onClick={handleRun}>开始识别疑点</Button>
+        </Space>
         {isViewer && (
           <Alert
             type="warning"
             showIcon
-            message="您当前是只读用户（访客账号）"
-            description="只读用户不能建立分析事项、上传资料或发起分析。您可以查看历史分析结果，但不能进行任何修改操作。"
-            style={{ marginTop: 12 }}
+            message="只读用户不能建立分析事项、上传资料或发起分析"
+            style={{ marginTop: 16 }}
           />
         )}
       </Card>
 
-      <Card title="分析事项" style={{ marginBottom: 16 }}>
+      <Card title="分析对象" style={{ marginBottom: 16 }}>
         <Form
           form={form}
           layout="vertical"
           onFinish={handleCreate}
-          style={{ maxWidth: 600 }}
           initialValues={{
             name: taxpayerContext.company_name ? `${taxpayerContext.company_name}案头分析` : undefined,
             description: taxpayerContext.taxpayer_id ? `针对纳税人识别号 ${taxpayerContext.taxpayer_id} 开展案头分析` : undefined,
           }}
         >
-          <Form.Item label="分析名称" name="name" rules={[{ required: true, message: '请输入分析名称' }]}>
-            <Input placeholder="如：2026年3月某企业税务专项案头分析" />
-          </Form.Item>
-
-          <Form.Item label="描述" name="description">
-            <Input.TextArea placeholder="写明企业、期间、分析重点，例如：核查某企业 2026-01 至 2026-03 是否存在有进无销、白条入账等风险" rows={3} />
-          </Form.Item>
-
-          <Form.Item>
-            <Button type="primary" htmlType="submit">
-              {taskId ? '已建立，可继续上传' : '保存分析事项'}
-            </Button>
-            {taskId && (
-              <Button style={{ marginLeft: 8 }} onClick={handleRun}>
-                立即分析
-              </Button>
-            )}
-          </Form.Item>
+          <Row gutter={12}>
+            <Col xs={24} md={10}>
+              <Form.Item label="分析名称" name="name" rules={[{ required: true, message: '请输入分析名称' }]}>
+                <Input placeholder="如：某企业近三年税务风险案头分析" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={14}>
+              <Form.Item label="分析重点" name="description">
+                <Input placeholder="例如：核查 2023-01 至 2026-03 有进无销、白条入账、隐瞒收入等风险" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Button type="primary" htmlType="submit" disabled={!!taskId}>
+            {taskId ? '分析对象已保存' : '保存分析对象'}
+          </Button>
         </Form>
       </Card>
 
-      <Card title="上传分析资料" style={{ marginBottom: 16 }}>
-          <Space style={{ width: '100%' }} direction="vertical">
-            <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-              可一次上传任意期间的发票、增值税、企业所得税、个人所得税、财务报表、费用明细等资料；期间不限制为单个年度。
-            </Paragraph>
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        <Col xs={24} xl={12}>
+          <Card title="上传资料" style={{ height: '100%' }}>
+            <Space style={{ width: '100%' }} direction="vertical" size={12}>
             <Upload.Dragger
               accept=".csv,.xls,.xlsx,.json,.txt,.png,.jpg,.jpeg,.webp,.pdf"
               customRequest={({ file }) => handleUpload(file as File)}
@@ -191,19 +190,14 @@ export default function NewAnalysis() {
             >
               <p><UploadOutlined /></p>
               <p>点击或拖拽上传文件</p>
-              <Text type="secondary" style={{ fontSize: 12 }}>支持 CSV、XLS、XLSX、JSON、TXT、图片和 PDF</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>支持发票、增值税、所得税、财报、费用明细、图片和 PDF，不限制分析年度</Text>
             </Upload.Dragger>
-          </Space>
-        </Card>
+            </Space>
+          </Card>
+        </Col>
 
-      <Card title="手工填写关键数据" style={{ marginBottom: 16 }}>
-          <Alert
-            type="warning"
-            showIcon
-            style={{ marginBottom: 16 }}
-            message="现实资料不完整时不要中断分析"
-            description="如果没有申报表格，甚至没有截图，可以把税务人员掌握的关键指标先补录进来；系统会把补录数据当作结构化资料参与风险识别。"
-          />
+        <Col xs={24} xl={12}>
+          <Card title="手工补录关键数据" style={{ height: '100%' }}>
           <Form
             form={manualForm}
             layout="vertical"
@@ -273,10 +267,12 @@ export default function NewAnalysis() {
             </Form.Item>
             <Button type="primary" htmlType="submit">保存补录数据</Button>
           </Form>
-        </Card>
+          </Card>
+        </Col>
+      </Row>
 
       {taskId && fileList.length > 0 && (
-        <Card title="已上传文件确认（第3步）" style={{ marginBottom: 16 }}>
+        <Card title="已纳入本次分析的资料" style={{ marginBottom: 16 }}>
           <List
             size="small"
             dataSource={fileList}

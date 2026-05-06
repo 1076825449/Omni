@@ -36,11 +36,11 @@ test('login and open key platform pages', async ({ page }) => {
   await expect(page.getByText(scheduleName)).toBeVisible()
 
   await page.goto('/modules/analysis-workbench/new')
-  await expect(page.getByText('分析事项', { exact: true })).toBeVisible()
-  await expect(page.getByText('上传分析资料')).toBeVisible()
+  await expect(page.getByText('分析对象', { exact: true })).toBeVisible()
+  await expect(page.getByText('上传资料')).toBeVisible()
   await page.getByLabel('分析名称').fill(analysisName)
-  await page.getByLabel('描述').fill('Playwright 自动创建的分析任务')
-  await page.getByRole('button', { name: '保存分析事项' }).click()
+  await page.getByLabel('分析重点').fill('Playwright 自动创建的分析任务')
+  await page.getByRole('button', { name: '保存分析对象' }).click()
   await page.locator('input[type="file"]').setInputFiles({
     name: `purchase_invoices-${suffix}.csv`,
     mimeType: 'text/csv',

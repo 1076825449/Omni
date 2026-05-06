@@ -83,11 +83,11 @@ test.describe('Extended Smoke - All 7 Modules Complete Flow', () => {
   test('analysis-workbench full flow: new -> upload -> run -> result', async ({ page }) => {
     const analysisName = `Ext Smoke 分析 ${suffix}`
     await page.goto('/modules/analysis-workbench/new')
-    await expect(page.getByText('分析事项', { exact: true })).toBeVisible()
+    await expect(page.getByText('分析对象', { exact: true })).toBeVisible()
     await page.getByLabel('分析名称').fill(analysisName)
-    await page.getByLabel('描述').fill('扩展冒烟测试')
-    await page.getByRole('button', { name: '保存分析事项' }).click()
-    await expect(page.getByText('上传分析资料')).toBeVisible()
+    await page.getByLabel('分析重点').fill('扩展冒烟测试')
+    await page.getByRole('button', { name: '保存分析对象' }).click()
+    await expect(page.getByText('上传资料')).toBeVisible()
 
     // 上传文件
     await page.locator('input[type="file"]').setInputFiles({

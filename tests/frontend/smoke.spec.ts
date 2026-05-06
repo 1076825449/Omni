@@ -75,7 +75,7 @@ test('login and open key platform pages', async ({ page }) => {
   await expect(page.getByRole('button', { name: '新建对象' })).toBeVisible()
 
   await page.goto('/modules/risk-ledger')
-  await expect(page.getByText('管户记录列表').first()).toBeVisible()
+  await expect(page.getByRole('heading', { name: '管户记录' })).toBeVisible()
   await expect(page.getByRole('tab', { name: '单户补充' })).toBeVisible()
   await expect(page.getByRole('tab', { name: '批量记录' })).toBeVisible()
 
@@ -84,7 +84,7 @@ test('login and open key platform pages', async ({ page }) => {
   await expect(page.getByPlaceholder('输入税号、企业名称、法定代表人或税收管理员')).toBeVisible()
 
   await page.goto('/my-risk-list')
-  await expect(page.getByText('管户记录列表').first()).toBeVisible()
+  await expect(page.getByRole('heading', { name: '管户记录' })).toBeVisible()
 
   await page.goto('/modules/info-query')
   await expect(page.getByRole('heading', { name: '管户分配' })).toBeVisible()

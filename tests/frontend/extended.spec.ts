@@ -139,7 +139,7 @@ test.describe('Extended Smoke - All 7 Modules Complete Flow', () => {
 
   test('risk-ledger: taxpayer record list visible', async ({ page }) => {
     await page.goto('/modules/risk-ledger')
-    await expect(page.getByText('管户记录列表').first()).toBeVisible()
+    await expect(page.getByRole('heading', { name: '管户记录' })).toBeVisible()
     await expect(page.getByRole('tab', { name: '单户补充' })).toBeVisible()
     await page.waitForTimeout(300)
   })

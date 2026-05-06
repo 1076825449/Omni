@@ -7,7 +7,6 @@ import { UploadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useSearchParams } from 'react-router-dom'
 import PlatformLayout from '../../components/Layout'
-import ModuleLayout from '../../components/Layout/ModuleLayout'
 import { RiskDossier, riskLedgerApi, taxOfficerWorkbenchApi } from '../../services/api'
 import { useAppMessage } from '../../hooks/useAppMessage'
 
@@ -264,29 +263,35 @@ export default function RiskLedgerModule() {
 
   return (
     <PlatformLayout>
-      <ModuleLayout
-        moduleName="管户记录"
-        moduleDesc="企业列表内直接记录风险、排除和整改情况"
-        items={[{ key: 'index', label: '管户记录', path: '/modules/risk-ledger' }]}
-      >
+      <div style={{ minHeight: '100vh', background: '#f5f7fb', padding: 24 }}>
         <Card
-          title="管户记录列表"
           style={{ marginBottom: 16 }}
-          extra={
+          styles={{ body: { padding: 16 } }}
+        >
+          <Space style={{ width: '100%', justifyContent: 'space-between' }} align="start" wrap>
+            <Space direction="vertical" size={4}>
+              <Typography.Title level={4} style={{ margin: 0 }}>管户记录</Typography.Title>
+              <Text type="secondary">按户记录风险、核实结论和整改进展</Text>
+              <Space wrap style={{ marginTop: 8 }}>
+                <Tag>企业 {total} 户</Tag>
+                <Tag color="orange">待核实 {stats?.pending_count || 0}</Tag>
+                <Tag color="blue">整改中 {stats?.rectifying_count || 0}</Tag>
+                <Tag color="green">已排除 {stats?.excluded_count || 0}</Tag>
+                <Tag color="purple">已整改 {stats?.rectified_count || 0}</Tag>
+              </Space>
+            </Space>
             <Space>
               <Input.Search placeholder="税号/名称/法人/管理员" allowClear value={query} onChange={event => setQuery(event.target.value)} onSearch={(value) => { setQuery(value); load(value) }} style={{ width: 260 }} />
               <Select placeholder="事项状态" allowClear value={entryStatus} onChange={setEntryStatus} style={{ width: 130 }} options={statuses.map(s => ({ value: s, label: s }))} />
               <Button onClick={() => load()}>刷新</Button>
             </Space>
-          }
-        >
-          <Space wrap style={{ marginBottom: 16 }}>
-            <Tag>企业 {total} 户</Tag>
-            <Tag color="orange">待核实 {stats?.pending_count || 0}</Tag>
-            <Tag color="blue">整改中 {stats?.rectifying_count || 0}</Tag>
-            <Tag color="green">已排除 {stats?.excluded_count || 0}</Tag>
-            <Tag color="purple">已整改 {stats?.rectified_count || 0}</Tag>
           </Space>
+        </Card>
+
+        <Card
+          style={{ marginBottom: 16 }}
+          styles={{ body: { padding: 16 } }}
+        >
           <List
             loading={loading}
             dataSource={rows}
@@ -438,7 +443,7 @@ export default function RiskLedgerModule() {
             </Space>
           )}
         </Modal>
-      </ModuleLayout>
+      </div>
     </PlatformLayout>
   )
 }

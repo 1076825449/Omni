@@ -60,10 +60,6 @@ export default function NewAnalysis() {
     const item = taxpayerOptions.find(option => option.taxpayer_id === taxpayerId)
     if (!item) return
     setSelectedTaxpayer(item)
-    manualForm.setFieldsValue({
-      company_name: item.company_name,
-      taxpayer_id: item.taxpayer_id,
-    })
   }
 
   const ensureTask = async () => {
@@ -178,7 +174,7 @@ export default function NewAnalysis() {
             form={manualForm}
             layout="vertical"
             onFinish={handleManualSubmit}
-            initialValues={{ data_kind: 'vat_return', company_name: taxpayerContext.company_name, taxpayer_id: taxpayerContext.taxpayer_id }}
+            initialValues={{ data_kind: 'vat_return' }}
           >
             <Row gutter={12}>
               <Col xs={24}>
@@ -211,16 +207,6 @@ export default function NewAnalysis() {
               <Col xs={24} md={8}>
                 <Form.Item label="期间" name="period" rules={[{ required: true, message: '请输入期间' }]}>
                   <Input placeholder="例如：2026-03、2024-2026、2024年至2026年" />
-                </Form.Item>
-              </Col>
-              <Col xs={24} md={8}>
-                <Form.Item label="企业名称" name="company_name">
-                  <Input placeholder="可选，但建议填写" />
-                </Form.Item>
-              </Col>
-              <Col xs={24} md={8}>
-                <Form.Item label="纳税人识别号" name="taxpayer_id">
-                  <Input placeholder="可选" />
                 </Form.Item>
               </Col>
             </Row>

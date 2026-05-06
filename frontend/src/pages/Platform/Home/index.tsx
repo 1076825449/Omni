@@ -3,8 +3,8 @@ import { UploadOutlined } from '@ant-design/icons'
 import { Link } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '../../../stores/auth'
-import type { ImportHistoryItem, ImportJob, Module, PlatformStatsOverview } from '../../../services/api'
-import { infoQueryApi, modulesApi, platformStatsApi, taxOfficerWorkbenchApi } from '../../../services/api'
+import type { ImportHistoryItem, ImportJob, PlatformStatsOverview } from '../../../services/api'
+import { infoQueryApi, platformStatsApi, taxOfficerWorkbenchApi } from '../../../services/api'
 import { useAppMessage } from '../../../hooks/useAppMessage'
 
 const { Title, Text, Paragraph } = Typography
@@ -16,7 +16,6 @@ const roleLabels: Record<string, string> = {
 }
 
 export default function Home() {
-  const [modules, setModules] = useState<Module[]>([])
   const [stats, setStats] = useState<PlatformStatsOverview | null>(null)
   const [riskSummary, setRiskSummary] = useState<Record<string, number>>({})
   const [importing, setImporting] = useState(false)
@@ -31,12 +30,10 @@ export default function Home() {
 
   useEffect(() => {
     Promise.all([
-      modulesApi.list(),
       platformStatsApi.overview(),
       taxOfficerWorkbenchApi.taxpayerRecords({ limit: 1 }),
       infoQueryApi.importHistory(1),
-    ]).then(([moduleData, statsData, riskData, historyData]) => {
-      setModules(moduleData.modules.filter((m: Module) => m.status === 'active'))
+    ]).then(([statsData, riskData, historyData]) => {
       setStats(statsData)
       setRiskSummary(riskData.summary)
       setLastImportResult(historyData.items[0] || null)
@@ -104,7 +101,7 @@ export default function Home() {
     { path: '/modules/analysis-workbench', key: 'analysis-workbench', title: '案头分析', desc: '上传资料，识别疑点并生成文书', color: '#cf1322' },
     { path: '/document-reports', key: 'document-reports', title: '文书报告', desc: '查看和下载通知书、核实报告', color: '#722ed1' },
     { path: '/modules/learning-lab', key: 'learning-lab', title: '刷题程序', desc: '业务题库练习和错题复盘', color: '#389e0d' },
-  ].filter(action => action.key === 'taxpayer-workbench' || action.key === 'document-reports' || modules.some(module => module.key === action.key))
+  ]
 
   return (
     <div className="omni-page">

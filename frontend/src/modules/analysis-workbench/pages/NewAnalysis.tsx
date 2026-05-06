@@ -151,24 +151,6 @@ export default function NewAnalysis() {
 
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         <Col xs={24} xl={12}>
-          <Card title="上传资料" style={{ height: '100%' }}>
-            <Space style={{ width: '100%' }} direction="vertical" size={12}>
-            <Upload.Dragger
-              accept=".csv,.xls,.xlsx,.json,.txt,.png,.jpg,.jpeg,.webp,.pdf"
-              customRequest={({ file }) => handleUpload(file as File)}
-              fileList={fileList.map((item) => ({ uid: item.name, name: item.name, status: item.status }))}
-              onRemove={() => false}
-              disabled={uploading}
-            >
-              <p><UploadOutlined /></p>
-              <p>点击或拖拽上传文件</p>
-              <Text type="secondary" style={{ fontSize: 12 }}>支持发票、增值税、所得税、财报、费用明细、图片和 PDF，不限制分析年度</Text>
-            </Upload.Dragger>
-            </Space>
-          </Card>
-        </Col>
-
-        <Col xs={24} xl={12}>
           <Card title="手工补录关键数据" style={{ height: '100%' }}>
           <Form
             form={manualForm}
@@ -245,6 +227,24 @@ export default function NewAnalysis() {
             </Form.Item>
             <Button type="primary" htmlType="submit">保存补录数据</Button>
           </Form>
+          </Card>
+        </Col>
+
+        <Col xs={24} xl={12}>
+          <Card title="上传资料" style={{ height: '100%' }}>
+            <Space style={{ width: '100%' }} direction="vertical" size={12}>
+            <Upload.Dragger
+              accept=".csv,.xls,.xlsx,.json,.txt,.png,.jpg,.jpeg,.webp,.pdf"
+              customRequest={({ file }) => handleUpload(file as File)}
+              fileList={fileList.map((item) => ({ uid: item.name, name: item.name, status: item.status }))}
+              onRemove={() => false}
+              disabled={uploading}
+            >
+              <p><UploadOutlined /></p>
+              <p>点击或拖拽上传文件</p>
+              <Text type="secondary" style={{ fontSize: 12 }}>支持发票、增值税、所得税、财报、费用明细、图片和 PDF，不限制分析年度</Text>
+            </Upload.Dragger>
+            </Space>
           </Card>
         </Col>
       </Row>

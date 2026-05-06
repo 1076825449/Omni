@@ -87,10 +87,9 @@ test('login and open key platform pages', async ({ page }) => {
   await expect(page.getByText('管户记录列表').first()).toBeVisible()
 
   await page.goto('/modules/info-query')
-  await expect(page.getByText('管户分配').first()).toBeVisible()
-  // Wait for stats to load
-  await page.waitForTimeout(1000)
-  await expect(page.getByText('纳税人总数')).toBeVisible({ timeout: 5000 })
+  await expect(page.getByRole('heading', { name: '管户分配' })).toBeVisible()
+  await expect(page.getByPlaceholder('企业名称、税号、法人、管理员')).toBeVisible()
+  await expect(page.getByRole('button', { name: '导出当前结果' })).toBeVisible()
 
   await page.goto('/settings')
   await expect(page.getByRole('heading', { name: '系统设置' })).toBeVisible()

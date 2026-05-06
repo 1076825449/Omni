@@ -129,14 +129,12 @@ test.describe('Extended Smoke - All 7 Modules Complete Flow', () => {
     }
   })
 
-  test('info-query: page loads with taxpayer stats', async ({ page }) => {
+  test('info-query: page loads taxpayer assignment list', async ({ page }) => {
     await page.goto('/modules/info-query')
-    await expect(page.getByText('纳税人总数')).toBeVisible()
-    const importBtn = page.getByRole('button', { name: /导入.*CSV|导入纳税人|批量导入/ }).first()
-    if (await importBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await importBtn.click()
-      await page.waitForTimeout(300)
-    }
+    await expect(page.getByRole('heading', { name: '管户分配' })).toBeVisible()
+    await expect(page.getByPlaceholder('企业名称、税号、法人、管理员')).toBeVisible()
+    await expect(page.getByRole('button', { name: '导出当前结果' })).toBeVisible()
+    await expect(page.getByRole('columnheader', { name: '纳税人名称' })).toBeVisible()
   })
 
   test('risk-ledger: taxpayer record list visible', async ({ page }) => {

@@ -3,7 +3,7 @@ import { Card, Form, Input, Button, Upload, Typography, Space, List, Row, Col, A
 import { UploadOutlined, FileOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { analysisApi, UploadProfile } from '../../../services/api'
+import { analysisApi, taxOfficerWorkbenchApi, TaxpayerProfile, UploadProfile } from '../../../services/api'
 import { useAppMessage } from '../../../hooks/useAppMessage'
 import { useAuthStore } from '../../../stores/auth'
 
@@ -33,6 +33,8 @@ export default function NewAnalysis() {
   const [fileList, setFileList] = useState<UploadedFile[]>([])
   const [uploading, setUploading] = useState(false)
   const [taskId, setTaskId] = useState<string | null>(null)
+  const [taxpayerOptions, setTaxpayerOptions] = useState<TaxpayerProfile[]>([])
+  const [selectedTaxpayer, setSelectedTaxpayer] = useState<TaxpayerProfile | null>(null)
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const message = useAppMessage()
@@ -40,8 +42,28 @@ export default function NewAnalysis() {
   const isViewer = user?.role === 'viewer'
 
   const taxpayerContext = {
-    taxpayer_id: searchParams.get('taxpayer_id') || '',
-    company_name: searchParams.get('company_name') || '',
+    taxpayer_id: selectedTaxpayer?.taxpayer_id || searchParams.get('taxpayer_id') || '',
+    company_name: selectedTaxpayer?.company_name || searchParams.get('company_name') || '',
+  }
+
+  const searchTaxpayers = async (keyword: string) => {
+    if (!keyword.trim()) return
+    try {
+      const result = await taxOfficerWorkbenchApi.searchTaxpayers(keyword)
+      setTaxpayerOptions(result.items)
+    } catch {
+      setTaxpayerOptions([])
+    }
+  }
+
+  const chooseTaxpayer = (taxpayerId: string) => {
+    const item = taxpayerOptions.find(option => option.taxpayer_id === taxpayerId)
+    if (!item) return
+    setSelectedTaxpayer(item)
+    manualForm.setFieldsValue({
+      company_name: item.company_name,
+      taxpayer_id: item.taxpayer_id,
+    })
   }
 
   const ensureTask = async () => {
@@ -91,7 +113,11 @@ export default function NewAnalysis() {
     const dataKind = values.data_kind as 'vat_return' | 'cit_return' | 'pit_return'
     try {
       const currentTaskId = await ensureTask()
-      const result = await analysisApi.addManualData(currentTaskId, dataKind, values)
+      const result = await analysisApi.addManualData(currentTaskId, dataKind, {
+        ...values,
+        company_name: values.company_name || taxpayerContext.company_name,
+        taxpayer_id: values.taxpayer_id || taxpayerContext.taxpayer_id,
+      })
       setFileList(prev => [...prev, { name: `手工补录-${kindLabel[dataKind]}`, status: 'done', profile: result.profile }])
       manualForm.resetFields(['sales_declared', 'output_declared', 'input_declared', 'revenue', 'cost', 'profit', 'taxable_income', 'salary_amount', 'employee_count', 'pit_tax_amount'])
       message.success('补录数据已纳入本次分析')
@@ -155,6 +181,22 @@ export default function NewAnalysis() {
             initialValues={{ data_kind: 'vat_return', company_name: taxpayerContext.company_name, taxpayer_id: taxpayerContext.taxpayer_id }}
           >
             <Row gutter={12}>
+              <Col xs={24}>
+                <Form.Item label="选择企业">
+                  <Select
+                    showSearch
+                    allowClear
+                    placeholder="输入企业名称、税号、法人或管理员，选择后自动带出全称和识别号"
+                    filterOption={false}
+                    onSearch={searchTaxpayers}
+                    onChange={value => value ? chooseTaxpayer(value) : setSelectedTaxpayer(null)}
+                    options={taxpayerOptions.map(item => ({
+                      value: item.taxpayer_id,
+                      label: `${item.company_name}（${item.taxpayer_id}）`,
+                    }))}
+                  />
+                </Form.Item>
+              </Col>
               <Col xs={24} md={8}>
                 <Form.Item label="资料类型" name="data_kind" rules={[{ required: true }]}>
                   <Select
@@ -168,7 +210,7 @@ export default function NewAnalysis() {
               </Col>
               <Col xs={24} md={8}>
                 <Form.Item label="期间" name="period" rules={[{ required: true, message: '请输入期间' }]}>
-                  <Input placeholder="例如：2026-03" />
+                  <Input placeholder="例如：2026-03、2024-2026、2024年至2026年" />
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>

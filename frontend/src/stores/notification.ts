@@ -17,6 +17,10 @@ export const useNotificationStore = create<NotificationState>((set) => ({
 
   fetch: async () => {
     try {
+      const state = useNotificationStore.getState()
+      if (state.lastFetched && Date.now() - state.lastFetched < 15000) {
+        return
+      }
       const data = await notificationsApi.list()
       set({
         unreadCount: data.unread_count,

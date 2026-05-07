@@ -1,7 +1,7 @@
 // 系统设置 - 含备份中心 + 角色管理
-import { Alert, Card, Tabs, Typography, Form, Input, Button, Space, List, Tag, Checkbox, Spin, Descriptions, Divider, Result } from 'antd'
+import { Alert, Card, Tabs, Typography, Form, Input, Button, Space, List, Tag, Checkbox, Spin, Descriptions, Divider, Result, Select, Table, Popconfirm } from 'antd'
 import { useState, useEffect } from 'react'
-import { authApi, backupApi, BackupRecord, platformSettingsApi, rolesApi, RoleRecord } from '../../services/api'
+import { authApi, auditApi, AuditLogRecord, backupApi, BackupRecord, healthApi, HealthStatus, infoQueryApi, platformMaintenanceApi, platformSettingsApi, rolesApi, RoleRecord, TagStats, UserRecord, usersApi } from '../../services/api'
 import { useAuthStore } from '../../stores/auth'
 import { useAppMessage } from '../../hooks/useAppMessage'
 
@@ -35,6 +35,12 @@ const PERMISSION_GROUPS: Record<string, string[]> = {
     'module:learning-lab:view',
     'module:learning-lab:operate',
   ],
+  '信息查询与管户分配': [
+    'module:info-query:view',
+    'module:info-query:import',
+    'module:info-query:assign',
+    'module:info-query:tag-manage',
+  ],
   '运行记录': [
     'platform:task:view',
     'platform:task:operate',
@@ -54,6 +60,9 @@ const PERMISSION_GROUPS: Record<string, string[]> = {
   '系统管理': [
     'platform:settings:manage',
     'platform:role:manage',
+    'platform:user:manage',
+    'platform:audit:view',
+    'platform:maintenance:operate',
   ],
 }
 
@@ -91,6 +100,8 @@ export default function Settings() {
   const [form] = Form.useForm()
   const [backupForm] = Form.useForm()
   const [documentForm] = Form.useForm()
+  const [createUserForm] = Form.useForm()
+  const [resetPasswordForms] = Form.useForm()
   const message = useAppMessage()
   const [backups, setBackups] = useState<BackupRecord[]>([])
   const [loading, setLoading] = useState(true)
@@ -100,12 +111,23 @@ export default function Settings() {
 
   // 角色管理
   const [roles, setRoles] = useState<RoleRecord[]>([])
+  const [users, setUsers] = useState<UserRecord[]>([])
   const [allPerms, setAllPerms] = useState<string[]>([])
   const [editingRole, setEditingRole] = useState<string | null>(null)
   const [editPerms, setEditPerms] = useState<string[]>([])
   const [roleLoading, setRoleLoading] = useState(false)
+  const [userLoading, setUserLoading] = useState(false)
+  const [creatingUser, setCreatingUser] = useState(false)
   const [documentSaving, setDocumentSaving] = useState(false)
   const [passwordSaving, setPasswordSaving] = useState(false)
+  const [health, setHealth] = useState<HealthStatus | null>(null)
+  const [healthLoading, setHealthLoading] = useState(false)
+  const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([])
+  const [auditLoading, setAuditLoading] = useState(false)
+  const [auditTotal, setAuditTotal] = useState(0)
+  const [tagStats, setTagStats] = useState<TagStats | null>(null)
+  const [tagStatsLoading, setTagStatsLoading] = useState(false)
+  const [maintenanceLoading, setMaintenanceLoading] = useState(false)
 
   const loadBackups = () => {
     setLoading(true)
@@ -125,13 +147,58 @@ export default function Settings() {
     }).catch(() => setRoleLoading(false))
   }
 
+  const loadUsers = () => {
+    if (!isAdmin) return
+    setUserLoading(true)
+    usersApi.list().then(({ users: data }) => {
+      setUsers(data)
+      setUserLoading(false)
+    }).catch(() => setUserLoading(false))
+  }
+
   useEffect(() => { loadBackups() }, [])
   useEffect(() => { loadRoles() }, [isAdmin])
+  useEffect(() => { loadUsers() }, [isAdmin])
   useEffect(() => {
     platformSettingsApi.getDocumentDefaults().then((data) => {
       documentForm.setFieldsValue(data)
     }).catch(() => {})
   }, [])
+
+  const loadHealth = () => {
+    if (!isAdmin) return
+    setHealthLoading(true)
+    healthApi.get().then(setHealth).catch(() => message.error('健康检查读取失败')).finally(() => setHealthLoading(false))
+  }
+
+  const loadAuditLogs = () => {
+    if (!isAdmin) return
+    setAuditLoading(true)
+    auditApi.list({ limit: 50 }).then((data) => {
+      setAuditLogs(data.logs)
+      setAuditTotal(data.total)
+    }).catch(() => message.error('全局操作记录读取失败')).finally(() => setAuditLoading(false))
+  }
+
+  const loadTagStats = () => {
+    if (!isAdmin) return
+    setTagStatsLoading(true)
+    infoQueryApi.tagStats().then(setTagStats).catch(() => message.error('标签统计读取失败')).finally(() => setTagStatsLoading(false))
+  }
+
+  const handleConsolidateGlobalData = async () => {
+    setMaintenanceLoading(true)
+    try {
+      const result = await platformMaintenanceApi.consolidateGlobalData()
+      message.success(`归并完成，自动备份编号：${result.backup_id}`)
+      loadHealth()
+      loadAuditLogs()
+    } catch {
+      message.error('归并失败，请先确认当前账号有系统维护权限并检查后端日志')
+    } finally {
+      setMaintenanceLoading(false)
+    }
+  }
 
   const handleCreateBackup = async (values: { name: string; note?: string }) => {
     setCreating(true)
@@ -164,6 +231,41 @@ export default function Settings() {
       loadRoles()
     } catch {
       message.error('角色权限更新失败，请确认当前账号仍有管理员权限')
+    }
+  }
+
+  const handleCreateUser = async (values: any) => {
+    setCreatingUser(true)
+    try {
+      await usersApi.create(values)
+      message.success('账号已创建')
+      createUserForm.resetFields()
+      loadUsers()
+    } catch {
+      message.error('创建账号失败，请确认用户名未重复且密码至少 8 位')
+    } finally {
+      setCreatingUser(false)
+    }
+  }
+
+  const handleUpdateUser = async (target: UserRecord, patch: { nickname?: string; role?: string; is_active?: boolean }) => {
+    try {
+      await usersApi.update(target.id, patch)
+      message.success('账号已更新')
+      loadUsers()
+    } catch {
+      message.error('账号更新失败，请确认当前账号有管理员权限')
+    }
+  }
+
+  const handleResetPassword = async (target: UserRecord) => {
+    const value = resetPasswordForms.getFieldValue(`password_${target.id}`)
+    try {
+      await usersApi.resetPassword(target.id, value)
+      message.success('密码已重置，该用户需要重新登录')
+      resetPasswordForms.setFieldValue(`password_${target.id}`, '')
+    } catch {
+      message.error('重置失败，新密码至少 8 位')
     }
   }
 
@@ -313,11 +415,197 @@ export default function Settings() {
     </Space>
   )
 
+  const roleOptions = roles.map(role => ({ value: role.name, label: role.display_name || role.name }))
+
+  const userManageTab = !isAdmin ? (
+    <Result status="403" title="权限不足" subTitle="只有管理员可以管理账号" />
+  ) : (
+    <Space style={{ width: '100%' }} direction="vertical" size="middle">
+      <Card size="small" title="新建账号">
+        <Form layout="inline" form={createUserForm} onFinish={handleCreateUser}>
+          <Form.Item name="username" rules={[{ required: true, message: '请输入用户名' }]}>
+            <Input placeholder="用户名" />
+          </Form.Item>
+          <Form.Item name="nickname">
+            <Input placeholder="姓名/昵称" />
+          </Form.Item>
+          <Form.Item name="password" rules={[{ required: true, min: 8, message: '密码至少 8 位' }]}>
+            <Input.Password placeholder="初始密码" />
+          </Form.Item>
+          <Form.Item name="role" initialValue="user" rules={[{ required: true, message: '请选择角色' }]}>
+            <Select style={{ width: 130 }} options={roleOptions.length ? roleOptions : [
+              { value: 'user', label: '普通用户' },
+              { value: 'viewer', label: '访客' },
+              { value: 'admin', label: '管理员' },
+            ]} />
+          </Form.Item>
+          <Form.Item>
+            <Button type="primary" htmlType="submit" loading={creatingUser}>创建账号</Button>
+          </Form.Item>
+        </Form>
+      </Card>
+
+      <Card size="small" title="账号列表">
+        {userLoading ? <div style={{ textAlign: 'center', padding: 24 }}><Spin /></div>
+         : (
+          <Form form={resetPasswordForms}>
+            <List size="small" dataSource={users} renderItem={(item: UserRecord) => (
+              <List.Item>
+                <Space style={{ width: '100%', justifyContent: 'space-between' }} align="center" wrap>
+                  <Space direction="vertical" size={2}>
+                    <Space wrap>
+                      <Text strong>{item.nickname || item.username}</Text>
+                      <Tag>{item.username}</Tag>
+                      <Tag color={item.is_active ? 'green' : 'default'}>{item.is_active ? '启用' : '停用'}</Tag>
+                      {item.must_change_password && <Tag color="orange">需改密码</Tag>}
+                    </Space>
+                    <Text type="secondary" style={{ fontSize: 12 }}>创建时间：{new Date(item.created_at).toLocaleString('zh-CN')}</Text>
+                  </Space>
+                  <Space wrap>
+                    <Select
+                      size="small"
+                      value={item.role}
+                      style={{ width: 130 }}
+                      options={roleOptions}
+                      onChange={(role) => handleUpdateUser(item, { role })}
+                    />
+                    <Button size="small" onClick={() => handleUpdateUser(item, { is_active: !item.is_active })}>
+                      {item.is_active ? '停用' : '启用'}
+                    </Button>
+                    <Form.Item name={`password_${item.id}`} style={{ margin: 0 }}>
+                      <Input.Password size="small" placeholder="新密码" style={{ width: 160 }} />
+                    </Form.Item>
+                    <Button size="small" onClick={() => handleResetPassword(item)}>重置密码</Button>
+                  </Space>
+                </Space>
+              </List.Item>
+            )} />
+          </Form>
+        )}
+      </Card>
+    </Space>
+  )
+
+  const maintenanceTab = !isAdmin ? (
+    <Result status="403" title="权限不足" subTitle="只有管理员可以维护全局数据" />
+  ) : (
+    <Space direction="vertical" style={{ width: '100%' }} size="middle">
+      <Card
+        size="small"
+        title="系统健康检查"
+        extra={<Button size="small" onClick={loadHealth} loading={healthLoading}>刷新</Button>}
+      >
+        {!health ? <Text type="secondary">点击“刷新”查看数据库、上传目录、备份和当前数据源状态。</Text> : (
+          <Descriptions size="small" bordered column={2}>
+            <Descriptions.Item label="整体状态"><Tag color={health.status === 'ok' ? 'green' : 'orange'}>{health.status === 'ok' ? '正常' : '需关注'}</Tag></Descriptions.Item>
+            <Descriptions.Item label="数据库">{health.database?.ok ? '可读写' : '异常'}</Descriptions.Item>
+            <Descriptions.Item label="数据库大小">{formatSize(Number(health.database?.size || 0))}</Descriptions.Item>
+            <Descriptions.Item label="上传文件数">{health.uploads?.file_count ?? 0}</Descriptions.Item>
+            <Descriptions.Item label="最近备份">{health.backups?.latest_backup_id || '暂无'}</Descriptions.Item>
+            <Descriptions.Item label="备份状态">{health.backups?.latest_status || '—'}</Descriptions.Item>
+            <Descriptions.Item label="当前数据源批次">{health.data_source?.latest_batch || '暂无'}</Descriptions.Item>
+            <Descriptions.Item label="纳税人总数">{health.data_source?.taxpayer_total ?? 0}</Descriptions.Item>
+          </Descriptions>
+        )}
+      </Card>
+
+      <Card size="small" title="历史业务数据归并">
+        <Alert
+          type="warning"
+          showIcon
+          message="该操作用于把早期个人账号下的业务数据归并到全局共享空间"
+          description="执行前系统会自动生成备份；归并会保留真实操作人和人工调整过的行业/地址标签。一般只需在内网正式启用前执行一次。"
+          style={{ marginBottom: 12 }}
+        />
+        <Popconfirm
+          title="确认执行全局数据归并？"
+          description="系统会先生成备份，再归并历史个人业务数据。"
+          onConfirm={handleConsolidateGlobalData}
+        >
+          <Button danger loading={maintenanceLoading}>执行全局数据归并</Button>
+        </Popconfirm>
+      </Card>
+
+      <Card
+        size="small"
+        title="标签统计"
+        extra={<Button size="small" onClick={loadTagStats} loading={tagStatsLoading}>刷新</Button>}
+      >
+        {!tagStats ? <Text type="secondary">点击“刷新”查看行业标签、地址标签户数和人工锁定数量。</Text> : (
+          <Space align="start" style={{ width: '100%' }} wrap>
+            <Table
+              size="small"
+              rowKey="tag"
+              title={() => `行业标签（共 ${tagStats.total} 户）`}
+              dataSource={tagStats.industry_tags.slice(0, 50)}
+              pagination={false}
+              style={{ minWidth: 360 }}
+              columns={[
+                { title: '标签', dataIndex: 'tag' },
+                { title: '户数', dataIndex: 'count', width: 80 },
+                { title: '人工调整', dataIndex: 'manual_count', width: 90 },
+              ]}
+            />
+            <Table
+              size="small"
+              rowKey="tag"
+              title={() => '地址标签'}
+              dataSource={tagStats.address_tags.slice(0, 50)}
+              pagination={false}
+              style={{ minWidth: 360 }}
+              columns={[
+                { title: '标签', dataIndex: 'tag' },
+                { title: '户数', dataIndex: 'count', width: 80 },
+                { title: '人工调整', dataIndex: 'manual_count', width: 90 },
+              ]}
+            />
+          </Space>
+        )}
+      </Card>
+    </Space>
+  )
+
+  const auditTab = !isAdmin ? (
+    <Result status="403" title="权限不足" subTitle="只有管理员可以查看全局操作记录" />
+  ) : (
+    <Card
+      size="small"
+      title="全局操作记录"
+      extra={<Button size="small" onClick={loadAuditLogs} loading={auditLoading}>刷新</Button>}
+    >
+      <Table
+        size="small"
+        rowKey="id"
+        loading={auditLoading}
+        dataSource={auditLogs}
+        pagination={{ total: auditTotal, pageSize: 50, showSizeChanger: false }}
+        columns={[
+          { title: '时间', dataIndex: 'created_at', width: 170, render: value => new Date(value).toLocaleString('zh-CN') },
+          { title: '操作人', dataIndex: 'operator_name', width: 120 },
+          { title: '模块', dataIndex: 'module', width: 120 },
+          { title: '动作', dataIndex: 'action', width: 150 },
+          { title: '结果', dataIndex: 'result', width: 90, render: value => <Tag color={value === 'success' ? 'green' : 'red'}>{value === 'success' ? '成功' : '失败'}</Tag> },
+          { title: '详情', dataIndex: 'detail', ellipsis: true },
+        ]}
+      />
+    </Card>
+  )
+
+  const accountAndPermissionTab = (
+    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+      {accountTab}
+      {isAdmin && userManageTab}
+      {isAdmin && roleTab}
+    </Space>
+  )
+
   const tabItems = [
-    { key: 'account', label: '账号信息', children: accountTab },
+    { key: 'account', label: '账号与权限', children: accountAndPermissionTab },
+    ...(isAdmin ? [{ key: 'maintenance', label: '数据维护', children: maintenanceTab }] : []),
+    ...(isAdmin ? [{ key: 'audit', label: '全局操作记录', children: auditTab }] : []),
     {
       key: 'documents',
-      label: '文书默认信息',
+      label: '文书设置',
       children: (
         <Card size="small" title="通知书和核实报告默认信息">
           <Paragraph type="secondary" style={{ fontSize: 13 }}>
@@ -341,8 +629,7 @@ export default function Settings() {
         </Card>
       ),
     },
-    ...(isAdmin ? [{ key: 'roles', label: '角色管理', children: roleTab }] : []),
-    { key: 'backup', label: '备份中心', children: backupTab },
+    { key: 'backup', label: '备份恢复', children: backupTab },
     {
       key: 'security',
       label: '安全设置',
@@ -384,14 +671,16 @@ export default function Settings() {
   ]
 
   return (
-    <div className="omni-page">
-      <div className="omni-page-header">
+    <div className="business-page">
+      <div className="business-page-wide">
+      <div className="business-page-header">
         <Title level={4} style={{ margin: 0 }}>系统设置</Title>
-        <Text type="secondary">管理您的账号与偏好</Text>
+        <Text type="secondary">管理账号权限、数据维护、备份恢复和文书默认信息</Text>
       </div>
-      <Card>
+      <Card className="business-section">
         <Tabs items={tabItems} />
       </Card>
+      </div>
     </div>
   )
 }

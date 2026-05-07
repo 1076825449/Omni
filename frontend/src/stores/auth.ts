@@ -7,6 +7,7 @@ interface User {
   username: string
   nickname: string
   role: string
+  must_change_password?: boolean
 }
 
 interface AuthState {

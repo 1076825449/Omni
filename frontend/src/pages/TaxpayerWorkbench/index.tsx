@@ -4,8 +4,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import dayjs from 'dayjs'
 import { infoQueryApi, taxOfficerWorkbenchApi, TaxpayerWorkbenchData } from '../../services/api'
 import { useAppMessage } from '../../hooks/useAppMessage'
+import BusinessPageHeader from '../../components/BusinessPageHeader'
 
-const { Title, Text, Paragraph } = Typography
+const { Text, Paragraph } = Typography
 const statusColor: Record<string, string> = { 待核实: 'orange', 已排除: 'green', 整改中: 'blue', 已整改: 'purple' }
 const looksLikeTaxpayerId = (value: string) => /^[0-9A-Z]{8,}$/i.test(value.trim())
 
@@ -108,10 +109,10 @@ export default function TaxpayerWorkbench() {
 
   return (
     <div className="omni-page">
-      <div className="omni-page-header">
-        <Title level={4} style={{ margin: 0 }}>信息查询</Title>
-        <Text type="secondary">按纳税人识别号、企业名称、法定代表人或税收管理员查询，查看该户信息、风险记录、案头分析和整改跟踪。</Text>
-      </div>
+      <BusinessPageHeader
+        title="信息查询"
+        description="按纳税人识别号、企业名称、法定代表人或税收管理员查询，查看该户信息、风险记录、案头分析和整改跟踪。"
+      />
 
       <Card style={{ marginBottom: 16 }}>
         <Space.Compact style={{ width: '100%' }}>

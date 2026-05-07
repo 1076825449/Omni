@@ -12,8 +12,8 @@ const navItems = [
   { label: '管户分配', path: '/modules/info-query' },
   { label: '管户记录', path: '/modules/risk-ledger' },
   { label: '案头分析', path: '/modules/analysis-workbench' },
-  { label: '文书报告', path: '/reports' },
   { label: '刷题程序', path: '/modules/learning-lab' },
+  { label: '文书报告', path: '/reports' },
   { label: '帮助', path: '/help' },
 ]
 
@@ -86,7 +86,7 @@ export default function PlatformHeader() {
   return (
     <header className="omni-header">
       <Link to="/" className="omni-header-logo">
-        税务案头助手
+        统一平台
       </Link>
 
       <nav className="omni-header-nav">

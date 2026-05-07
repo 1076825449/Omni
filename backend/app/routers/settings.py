@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.shared_scope import business_owner_id
 from app.models import SystemSetting, User
 from app.routers.auth import get_current_user, require_permission
 
@@ -41,7 +42,8 @@ def read_document_defaults(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return DocumentSettings(**get_document_settings(db, current_user.id))
+    _ = current_user
+    return DocumentSettings(**get_document_settings(db, business_owner_id()))
 
 
 @router.put("/document-defaults", response_model=DocumentSettings)
@@ -51,14 +53,14 @@ def update_document_defaults(
     current_user: User = Depends(require_permission("platform:settings:manage")),
 ):
     setting = db.query(SystemSetting).filter(
-        SystemSetting.owner_id == current_user.id,
+        SystemSetting.owner_id == business_owner_id(),
         SystemSetting.key == DOCUMENT_SETTING_KEY,
     ).first()
     value = body.model_dump()
     if setting:
         setting.value = value
     else:
-        setting = SystemSetting(owner_id=current_user.id, key=DOCUMENT_SETTING_KEY, value=value)
+        setting = SystemSetting(owner_id=business_owner_id(), key=DOCUMENT_SETTING_KEY, value=value)
         db.add(setting)
     db.commit()
     return DocumentSettings(**value)

@@ -13,6 +13,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.shared_scope import business_owner_id
 from app.models import User
 from app.models.record import OperationLog
 from app.models.risk_ledger import RiskDossier, RiskLedgerEntry
@@ -204,8 +205,9 @@ def log_action(db: Session, action: str, target_id: str, operator_id: int, detai
 
 
 def get_taxpayer_profile(taxpayer_id: str, db: Session, owner_id: int) -> Optional[TaxpayerInfo]:
+    _ = owner_id
     return db.query(TaxpayerInfo).filter(
-        TaxpayerInfo.owner_id == owner_id,
+        TaxpayerInfo.owner_id == business_owner_id(),
         TaxpayerInfo.taxpayer_id == taxpayer_id,
     ).first()
 
@@ -215,7 +217,7 @@ def get_or_create_dossier(body: EntryCreateRequest, db: Session, user_id: int) -
     if not taxpayer_id:
         raise HTTPException(status_code=400, detail="纳税人识别号不能为空")
     existing = db.query(RiskDossier).filter(
-        RiskDossier.owner_id == user_id,
+        RiskDossier.owner_id == business_owner_id(),
         RiskDossier.taxpayer_id == taxpayer_id,
     ).first()
     taxpayer = get_taxpayer_profile(taxpayer_id, db, user_id)
@@ -238,7 +240,7 @@ def get_or_create_dossier(body: EntryCreateRequest, db: Session, user_id: int) -
             address=taxpayer.address,
             is_temporary=False,
             source="info-query",
-            owner_id=user_id,
+            owner_id=business_owner_id(),
         )
     elif body.company_name.strip():
         dossier = RiskDossier(
@@ -249,7 +251,7 @@ def get_or_create_dossier(body: EntryCreateRequest, db: Session, user_id: int) -
             address=body.address.strip(),
             is_temporary=True,
             source="manual",
-            owner_id=user_id,
+            owner_id=business_owner_id(),
         )
     else:
         raise HTTPException(status_code=400, detail=f"信息查询表中未找到 {taxpayer_id}，请提供纳税人名称后创建临时档案")
@@ -277,13 +279,13 @@ def create_entry(body: EntryCreateRequest, db: Session, user: User) -> RiskLedge
         contact_person=body.contact_person.strip(),
         contact_phone=body.contact_phone.strip(),
         note=body.note.strip(),
-        owner_id=user.id,
+        owner_id=business_owner_id(),
         created_by=user.id,
     )
     db.add(entry)
     db.flush()
     dossier.updated_at = datetime.utcnow()
-    taxpayer = get_taxpayer_profile(dossier.taxpayer_id, db, user.id)
+    taxpayer = get_taxpayer_profile(dossier.taxpayer_id, db, business_owner_id())
     if taxpayer:
         taxpayer.last_used_at = datetime.utcnow()
     return entry
@@ -354,7 +356,7 @@ def list_dossiers(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = db.query(RiskDossier).filter(RiskDossier.owner_id == current_user.id)
+    query = db.query(RiskDossier).filter(RiskDossier.owner_id == business_owner_id())
     if q:
         like = f"%{q}%"
         query = query.filter(or_(
@@ -367,7 +369,7 @@ def list_dossiers(
     if registration_status:
         query = query.filter(RiskDossier.registration_status == registration_status)
     if entry_status or date_from or date_to:
-        entry_query = db.query(RiskLedgerEntry.dossier_id).filter(RiskLedgerEntry.owner_id == current_user.id)
+        entry_query = db.query(RiskLedgerEntry.dossier_id).filter(RiskLedgerEntry.owner_id == business_owner_id())
         if entry_status:
             entry_query = entry_query.filter(RiskLedgerEntry.entry_status == entry_status)
         if date_from:
@@ -388,13 +390,13 @@ def get_dossier(
     current_user: User = Depends(get_current_user),
 ):
     dossier = db.query(RiskDossier).filter(
-        RiskDossier.owner_id == current_user.id,
+        RiskDossier.owner_id == business_owner_id(),
         RiskDossier.taxpayer_id == taxpayer_id,
     ).first()
     if not dossier:
         raise HTTPException(status_code=404, detail="风险档案不存在")
     entries = db.query(RiskLedgerEntry).filter(
-        RiskLedgerEntry.owner_id == current_user.id,
+        RiskLedgerEntry.owner_id == business_owner_id(),
         RiskLedgerEntry.dossier_id == dossier.id,
     ).order_by(RiskLedgerEntry.recorded_at.desc(), RiskLedgerEntry.id.desc()).all()
     return DossierDetailResponse(dossier=dossier_to_schema(dossier, db), entries=entries)
@@ -545,21 +547,21 @@ def stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    base = db.query(RiskLedgerEntry).filter(RiskLedgerEntry.owner_id == current_user.id)
+    base = db.query(RiskLedgerEntry).filter(RiskLedgerEntry.owner_id == business_owner_id())
     counts = dict(
         base.with_entities(RiskLedgerEntry.entry_status, func.count(RiskLedgerEntry.id))
         .group_by(RiskLedgerEntry.entry_status)
         .all()
     )
     return StatsResponse(
-        dossier_total=db.query(RiskDossier).filter(RiskDossier.owner_id == current_user.id).count(),
+        dossier_total=db.query(RiskDossier).filter(RiskDossier.owner_id == business_owner_id()).count(),
         entry_total=base.count(),
         pending_count=counts.get("待核实", 0),
         rectifying_count=counts.get("整改中", 0),
         excluded_count=counts.get("已排除", 0),
         rectified_count=counts.get("已整改", 0),
         temporary_count=db.query(RiskDossier).filter(
-            RiskDossier.owner_id == current_user.id,
+            RiskDossier.owner_id == business_owner_id(),
             RiskDossier.is_temporary == True,
         ).count(),
     )

@@ -12,6 +12,7 @@ class User(Base):
     nickname = Column(String(100), default="")
     role = Column(String(20), default="user")  # user / admin
     is_active = Column(Boolean, default=True)
+    must_change_password = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

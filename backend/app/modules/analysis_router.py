@@ -4,9 +4,11 @@ from datetime import datetime, timedelta
 from typing import Any, Optional, List
 from urllib.parse import quote
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Query, Response
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, ConfigDict
 from app.core.database import get_db
+from app.core.shared_scope import business_owner_id
 from app.models import User
 from app.models.record import Task, FileRecord, OperationLog
 from app.models.records import Record
@@ -159,19 +161,21 @@ def log_action(db: Session, action: str, target_id: str, operator_id: int,
 
 
 def get_task_files(task_id: str, db: Session, user_id: int) -> list[FileRecord]:
+    _ = user_id
     return db.query(FileRecord).filter(
         FileRecord.module == "analysis-workbench",
-        FileRecord.owner_id == user_id,
+        FileRecord.owner_id == business_owner_id(),
         FileRecord.name.like(f"{task_id}%"),
     ).order_by(FileRecord.created_at.asc()).all()
 
 
 def build_report_payload(task: Task, db: Session, user_id: int) -> AnalysisReportResponse:
+    _ = user_id
     file_count = db.query(FileRecord).filter(
         FileRecord.module == "analysis-workbench",
         FileRecord.name.like(f"{task.task_id}%")
     ).count()
-    files = get_task_files(task.task_id, db, user_id)
+    files = get_task_files(task.task_id, db, business_owner_id())
     analysis = analyze_files(task, files) if files else {
         "company_name": "",
         "taxpayer_id": "",
@@ -183,7 +187,7 @@ def build_report_payload(task: Task, db: Session, user_id: int) -> AnalysisRepor
     }
     related = db.query(Record).filter(
         Record.import_batch.like(f"analysis-{task.task_id}%"),
-        Record.owner_id == user_id,
+        Record.owner_id == business_owner_id(),
     ).all()
     related_record_ids = [r.record_id for r in related]
     return AnalysisReportResponse(
@@ -207,9 +211,10 @@ def build_report_payload(task: Task, db: Session, user_id: int) -> AnalysisRepor
 
 
 def enrich_analysis_review_state(analysis: dict, task_id: str, db: Session, user_id: int) -> dict:
+    _ = user_id
     records = db.query(Record).filter(
         Record.import_batch == f"analysis-{task_id}",
-        Record.owner_id == user_id,
+        Record.owner_id == business_owner_id(),
     ).all()
     used: set[str] = set()
     for risk in analysis.get("risks", []):
@@ -238,10 +243,11 @@ def enrich_analysis_review_state(analysis: dict, task_id: str, db: Session, user
 
 
 def get_taxpayer_profile(taxpayer_id: str, db: Session, user_id: int) -> Optional[dict]:
+    _ = user_id
     if not taxpayer_id:
         return None
     item = db.query(TaxpayerInfo).filter(
-        TaxpayerInfo.owner_id == user_id,
+        TaxpayerInfo.owner_id == business_owner_id(),
         TaxpayerInfo.taxpayer_id == taxpayer_id,
     ).first()
     if not item:
@@ -287,12 +293,22 @@ def create_task(
 
 @router.get("/tasks", response_model=TaskListResponse)
 def list_tasks(
+    q: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    limit: int = Query(50, le=100),
+    offset: int = Query(0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    q = db.query(Task).filter(Task.module == "analysis-workbench", Task.creator_id == current_user.id)
-    total = q.count()
-    tasks = q.order_by(Task.created_at.desc()).limit(50).all()
+    _ = current_user
+    query = db.query(Task).filter(Task.module == "analysis-workbench")
+    if q:
+        like = f"%{q.strip()}%"
+        query = query.filter(or_(Task.name.like(like), Task.task_id.like(like), Task.company_name.like(like), Task.taxpayer_id.like(like)))
+    if status:
+        query = query.filter(Task.status == status)
+    total = query.count()
+    tasks = query.order_by(Task.created_at.desc()).offset(offset).limit(limit).all()
     items = []
     for t in tasks:
         file_count = db.query(FileRecord).filter(
@@ -317,11 +333,11 @@ def get_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    task = db.query(Task).filter(Task.task_id == task_id, Task.creator_id == current_user.id).first()
+    task = db.query(Task).filter(Task.task_id == task_id, Task.module == "analysis-workbench").first()
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
-    report = build_report_payload(task, db, current_user.id)
-    files = get_task_files(task_id, db, current_user.id)
+    report = build_report_payload(task, db, business_owner_id())
+    files = get_task_files(task_id, db, business_owner_id())
     analysis = analyze_files(task, files) if files else {
         "company_name": "",
         "taxpayer_id": "",
@@ -331,11 +347,10 @@ def get_task(
         "material_gap_list": [],
         "data_warnings": [],
     }
-    analysis = enrich_analysis_review_state(analysis, task_id, db, current_user.id)
-    taxpayer_profile = get_taxpayer_profile(analysis.get("taxpayer_id", ""), db, current_user.id)
+    analysis = enrich_analysis_review_state(analysis, task_id, db, business_owner_id())
+    taxpayer_profile = get_taxpayer_profile(analysis.get("taxpayer_id", ""), db, business_owner_id())
     log_count = db.query(OperationLog).filter(
         OperationLog.module == "analysis-workbench",
-        OperationLog.operator_id == current_user.id,
         OperationLog.target_id == task_id,
     ).count()
     return TaskDetailResponse(
@@ -378,16 +393,16 @@ def export_report(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    task = db.query(Task).filter(Task.task_id == task_id, Task.creator_id == current_user.id).first()
+    task = db.query(Task).filter(Task.task_id == task_id, Task.module == "analysis-workbench").first()
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
 
-    report = build_report_payload(task, db, current_user.id)
-    files = get_task_files(task_id, db, current_user.id)
+    report = build_report_payload(task, db, business_owner_id())
+    files = get_task_files(task_id, db, business_owner_id())
     analysis = analyze_files(task, files) if files else analyze_files(task, [])
     filename_safe_task_id = task.task_id.replace("/", "-")
 
-    document_config = get_document_settings(db, current_user.id)
+    document_config = get_document_settings(db, business_owner_id())
     for key, value in {
         "agency_name": agency_name,
         "document_number": document_number,
@@ -467,7 +482,7 @@ def cancel_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    task = db.query(Task).filter(Task.task_id == task_id, Task.creator_id == current_user.id).first()
+    task = db.query(Task).filter(Task.task_id == task_id, Task.module == "analysis-workbench").first()
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
     task.status = "cancelled"
@@ -483,13 +498,13 @@ def run_task(
     current_user: User = Depends(get_current_user),
 ):
     """基于已上传文件执行轻量分析并生成结果摘要。"""
-    task = db.query(Task).filter(Task.task_id == task_id, Task.creator_id == current_user.id).first()
+    task = db.query(Task).filter(Task.task_id == task_id, Task.module == "analysis-workbench").first()
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
     if task.status not in ("queued",):
         raise HTTPException(status_code=400, detail=f"当前状态无法发起: {task.status}")
 
-    files = get_task_files(task_id, db, current_user.id)
+    files = get_task_files(task_id, db, business_owner_id())
     if not files:
         raise HTTPException(status_code=400, detail="请先上传至少一个分析文件")
 
@@ -517,7 +532,7 @@ def run_task(
                 tags=item["tags"],
                 detail=item["detail"],
                 import_batch=f"analysis-{task_id}",
-                owner_id=current_user.id,
+                owner_id=business_owner_id(),
             )
             db.add(rec)
             db.flush()
@@ -586,7 +601,7 @@ def update_risk_review(
 
     record = db.query(Record).filter(
         Record.record_id == record_id,
-        Record.owner_id == current_user.id,
+        Record.owner_id == business_owner_id(),
         Record.import_batch == f"analysis-{task_id}",
     ).first()
     if not record:
@@ -608,18 +623,18 @@ def sync_risk_to_ledger(
 ):
     record = db.query(Record).filter(
         Record.record_id == risk_id,
-        Record.owner_id == current_user.id,
+        Record.owner_id == business_owner_id(),
     ).first()
     if not record or not record.import_batch.startswith("analysis-"):
         raise HTTPException(status_code=404, detail="未找到可记入台账的分析风险")
 
     task_id = record.import_batch[len("analysis-"):]
-    task = db.query(Task).filter(Task.task_id == task_id, Task.creator_id == current_user.id).first()
+    task = db.query(Task).filter(Task.task_id == task_id, Task.module == "analysis-workbench").first()
     if not task:
         raise HTTPException(status_code=404, detail="来源分析任务不存在")
 
-    files = get_task_files(task_id, db, current_user.id)
-    analysis = enrich_analysis_review_state(analyze_files(task, files), task_id, db, current_user.id)
+    files = get_task_files(task_id, db, business_owner_id())
+    analysis = enrich_analysis_review_state(analyze_files(task, files), task_id, db, business_owner_id())
     matched = next((risk for risk in analysis.get("risks", []) if risk.get("review_record_id") == risk_id), None)
     if not matched:
         raise HTTPException(status_code=404, detail="来源风险明细不存在")
@@ -636,7 +651,7 @@ def sync_risk_to_ledger(
     if matched.get("required_materials"):
         note_parts.append("应调取资料：" + "、".join(matched.get("required_materials", [])))
     existing_entry = db.query(RiskLedgerEntry).filter(
-        RiskLedgerEntry.owner_id == current_user.id,
+        RiskLedgerEntry.owner_id == business_owner_id(),
         RiskLedgerEntry.taxpayer_id == taxpayer_id,
         RiskLedgerEntry.content == content,
     ).first()
@@ -665,7 +680,6 @@ def rerun_task(
 ):
     source_task = db.query(Task).filter(
         Task.task_id == task_id,
-        Task.creator_id == current_user.id,
         Task.module == "analysis-workbench",
     ).first()
     if not source_task:
@@ -673,7 +687,7 @@ def rerun_task(
 
     source_files = db.query(FileRecord).filter(
         FileRecord.module == "analysis-workbench",
-        FileRecord.owner_id == current_user.id,
+        FileRecord.owner_id == business_owner_id(),
         FileRecord.name.like(f"{task_id}%"),
     ).order_by(FileRecord.created_at.asc()).all()
     if not source_files:
@@ -699,7 +713,7 @@ def rerun_task(
             name=f"{new_task_id}:{stored_suffix}",
             original_name=source_file.original_name,
             module="analysis-workbench",
-            owner_id=current_user.id,
+            owner_id=business_owner_id(),
             size=source_file.size,
             mime_type=source_file.mime_type,
             path=source_file.path,
@@ -718,7 +732,7 @@ def upload_file(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    task = db.query(Task).filter(Task.task_id == task_id, Task.creator_id == current_user.id).first()
+    task = db.query(Task).filter(Task.task_id == task_id, Task.module == "analysis-workbench").first()
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
 
@@ -730,7 +744,7 @@ def upload_file(
         name=f"{task_id}:{saved['stored_name']}",
         original_name=saved["original_name"],
         module="analysis-workbench",
-        owner_id=current_user.id,
+        owner_id=business_owner_id(),
         size=saved["size"],
         mime_type=file.content_type or "application/octet-stream",
         path=saved["path"],
@@ -750,7 +764,7 @@ def add_manual_data(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    task = db.query(Task).filter(Task.task_id == task_id, Task.creator_id == current_user.id).first()
+    task = db.query(Task).filter(Task.task_id == task_id, Task.module == "analysis-workbench").first()
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
     if body.data_kind not in {"vat_return", "cit_return", "pit_return"}:
@@ -771,7 +785,7 @@ def add_manual_data(
         name=f"{task_id}:{saved['stored_name']}",
         original_name=saved["original_name"],
         module="analysis-workbench",
-        owner_id=current_user.id,
+        owner_id=business_owner_id(),
         size=saved["size"],
         mime_type="application/json",
         path=saved["path"],

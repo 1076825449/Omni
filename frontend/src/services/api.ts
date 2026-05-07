@@ -339,8 +339,14 @@ export const analysisApi = {
       method: 'POST',
       body: JSON.stringify({ name, description, ...(taxpayer || {}) }),
     }),
-  listTasks: () =>
-    request<{ tasks: AnalysisTask[]; total: number }>('/api/modules/analysis-workbench/tasks'),
+  listTasks: (params?: { q?: string; status?: string; limit?: number; offset?: number }) => {
+    const sp = new URLSearchParams()
+    if (params?.q) sp.set('q', params.q)
+    if (params?.status) sp.set('status', params.status)
+    if (params?.limit) sp.set('limit', String(params.limit))
+    if (params?.offset) sp.set('offset', String(params.offset))
+    return request<{ tasks: AnalysisTask[]; total: number }>('/api/modules/analysis-workbench/tasks?' + sp)
+  },
   getTask: (taskId: string) =>
     request<AnalysisTaskDetail>('/api/modules/analysis-workbench/tasks/' + taskId),
   rerunTask: (taskId: string) =>
@@ -394,6 +400,16 @@ export interface RoleRecord {
   is_active: boolean
 }
 
+export interface UserRecord {
+  id: number
+  username: string
+  nickname: string
+  role: string
+  is_active: boolean
+  must_change_password: boolean
+  created_at: string
+}
+
 export const rolesApi = {
   list: () => request<{ roles: RoleRecord[] }>('/api/platform/roles'),
   getPermissions: () => request<{ permissions: string[]; defaults: Record<string, string[]> }>('/api/platform/roles/permissions'),
@@ -402,6 +418,59 @@ export const rolesApi = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
+}
+
+export const usersApi = {
+  list: () => request<{ users: UserRecord[] }>('/api/platform/users'),
+  create: (data: { username: string; password: string; nickname?: string; role: string }) =>
+    request<UserRecord>('/api/platform/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (id: number, data: { nickname?: string; role?: string; is_active?: boolean }) =>
+    request<UserRecord>('/api/platform/users/' + id, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  resetPassword: (id: number, new_password: string) =>
+    request<{ success: boolean; message: string }>('/api/platform/users/' + id + '/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ new_password }),
+    }),
+}
+
+export interface AuditLogRecord extends OperationLog {
+  operator_name: string
+}
+
+export const auditApi = {
+  list: (params?: { q?: string; operator_id?: number; action?: string; module?: string; result?: string; limit?: number; offset?: number }) => {
+    const sp = new URLSearchParams()
+    if (params?.q) sp.set('q', params.q)
+    if (params?.operator_id) sp.set('operator_id', String(params.operator_id))
+    if (params?.action) sp.set('action', params.action)
+    if (params?.module) sp.set('module', params.module)
+    if (params?.result) sp.set('result', params.result)
+    if (params?.limit) sp.set('limit', String(params.limit))
+    if (params?.offset) sp.set('offset', String(params.offset))
+    return request<{ logs: AuditLogRecord[]; total: number }>('/api/platform/audit/logs?' + sp)
+  },
+}
+
+export interface HealthStatus {
+  status: string
+  database: Record<string, any>
+  uploads: Record<string, any>
+  backups: Record<string, any>
+  data_source: Record<string, any>
+}
+
+export const healthApi = {
+  get: () => request<HealthStatus>('/api/platform/health'),
+}
+
+export const platformMaintenanceApi = {
+  consolidateGlobalData: () => request<{ success: boolean; message: string; backup_id: string; [key: string]: any }>('/api/platform/maintenance/consolidate-global-data', { method: 'POST' }),
 }
 
 export interface DocumentDefaults {
@@ -586,7 +655,16 @@ export const infoQueryApi = {
     })
   },
   getImportJob: (jobId: string) => request<ImportJob>('/api/modules/info-query/import-jobs/' + encodeURIComponent(jobId)),
+  recentImportJob: () => request<ImportJob>('/api/modules/info-query/import-jobs/recent'),
   importHistory: (limit = 8) => request<{ items: ImportHistoryItem[] }>('/api/modules/info-query/import-history?limit=' + limit),
+  filterOptions: () => request<{
+    officers: Array<{ value: string; label: string; count: number }>
+    departments: Array<{ value: string; label: string; count: number }>
+    registration_statuses: Array<{ value: string; label: string; count: number }>
+    industry_tags: Array<{ value: string; label: string; count: number }>
+    address_tags: Array<{ value: string; label: string; count: number }>
+    total: number
+  }>('/api/modules/info-query/filter-options'),
   list: (params?: { q?: string; tax_officer?: string; manager_department?: string; industry?: string; industry_tag?: string; address_tag?: string; registration_status?: string; region?: string; risk_level?: string; limit?: number; offset?: number }) => {
     const sp = new URLSearchParams()
     if (params?.q) sp.set('q', params.q)
@@ -602,7 +680,7 @@ export const infoQueryApi = {
     if (params?.offset) sp.set('offset', String(params.offset))
     return request<{ taxpayers: TaxpayerProfile[]; total: number }>('/api/modules/info-query/taxpayers?' + sp)
   },
-  exportFile: async (params?: { q?: string; tax_officer?: string; manager_department?: string; industry?: string; industry_tag?: string; address_tag?: string; registration_status?: string; region?: string; risk_level?: string }) => {
+  exportFile: async (params?: { q?: string; tax_officer?: string; manager_department?: string; industry?: string; industry_tag?: string; address_tag?: string; registration_status?: string; region?: string; risk_level?: string; view?: string }) => {
     const sp = new URLSearchParams()
     if (params?.q) sp.set('q', params.q)
     if (params?.tax_officer) sp.set('tax_officer', params.tax_officer)
@@ -613,6 +691,7 @@ export const infoQueryApi = {
     if (params?.registration_status) sp.set('registration_status', params.registration_status)
     if (params?.region) sp.set('region', params.region)
     if (params?.risk_level) sp.set('risk_level', params.risk_level)
+    if (params?.view) sp.set('view', params.view)
     const res = await fetch(API_BASE + '/api/modules/info-query/taxpayers/export?' + sp, {
       credentials: 'include',
     })
@@ -620,7 +699,7 @@ export const infoQueryApi = {
     const blob = await res.blob()
     const disposition = res.headers.get('Content-Disposition') || ''
     const match = disposition.match(/filename\\*=UTF-8''([^;]+)/)
-    const filename = match ? decodeURIComponent(match[1]) : '税务登记信息查询导出.csv'
+    const filename = match ? decodeURIComponent(match[1]) : params?.view === 'assignment' ? '管户分配导出.csv' : '税务登记信息查询导出.csv'
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
@@ -642,6 +721,13 @@ export const infoQueryApi = {
       body: JSON.stringify({ taxpayer_ids, ...body }),
     }),
   assignmentStats: () => request<{ by_officer: Record<string, number>; by_department: Record<string, number>; by_risk_level: Record<string, number>; by_industry_tag: Record<string, number>; by_address_tag: Record<string, number>; total: number }>('/api/modules/info-query/assignment-stats'),
+  tagStats: () => request<TagStats>('/api/modules/info-query/tag-stats'),
+}
+
+export interface TagStats {
+  industry_tags: Array<{ tag: string; count: number; manual_count: number }>
+  address_tags: Array<{ tag: string; count: number; manual_count: number }>
+  total: number
 }
 
 export interface RiskDossier {
@@ -805,6 +891,7 @@ export const taxOfficerWorkbenchApi = {
     if (params?.offset) sp.set('offset', String(params.offset))
     return request<TaxpayerRecordListData>('/api/workbench/taxpayer-records?' + sp)
   },
+  taxpayerRecordsSummary: () => request<Record<string, number>>('/api/workbench/taxpayer-records/summary'),
   todos: (params?: { limit?: number; due_days?: number }) => {
     const sp = new URLSearchParams()
     if (params?.limit) sp.set('limit', String(params.limit))

@@ -8,7 +8,8 @@ import Reports from './pages/Reports'
 export default function AnalysisWorkbench() {
   return (
     <PlatformLayout>
-      <div style={{ minHeight: '100vh', background: '#f5f7fb', padding: 24 }}>
+      <div className="business-page">
+        <div className="business-page-wide">
         <Routes>
           <Route index element={<NewAnalysis />} />
           <Route path="new" element={<NewAnalysis />} />
@@ -16,6 +17,7 @@ export default function AnalysisWorkbench() {
           <Route path="results/:id" element={<Results />} />
           <Route path="reports/:id" element={<Reports />} />
         </Routes>
+        </div>
       </div>
     </PlatformLayout>
   )

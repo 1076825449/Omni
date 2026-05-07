@@ -18,6 +18,7 @@ class UserInfo(BaseModel):
     username: str
     nickname: str
     role: str
+    must_change_password: bool = False
 
 
 class LogoutResponse(BaseModel):

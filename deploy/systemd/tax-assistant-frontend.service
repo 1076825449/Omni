@@ -1,0 +1,14 @@
+[Unit]
+Description=Tax Assistant Frontend
+After=network.target tax-assistant-backend.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/tax-desktop-app/frontend
+Environment=VITE_API_BASE_URL=http://192.168.1.50:3000
+ExecStart=/usr/bin/npm run preview -- --host 0.0.0.0 --port 5173
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

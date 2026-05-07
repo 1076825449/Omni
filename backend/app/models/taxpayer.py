@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 from app.core.database import Base
 
 
@@ -14,6 +14,7 @@ class TaxpayerInfo(Base):
     registration_status = Column(String(100), default="")
     industry = Column(String(200), index=True, default="")
     industry_tag = Column(String(120), index=True, default="")
+    industry_tag_manual = Column(Boolean, default=False, nullable=False)
     region = Column(String(200), index=True, default="")
     tax_bureau = Column(String(200), default="")
     manager_department = Column(String(200), index=True, default="")
@@ -23,6 +24,7 @@ class TaxpayerInfo(Base):
     risk_level = Column(String(50), index=True, default="")
     address = Column(String(500), default="")
     address_tag = Column(String(120), index=True, default="")
+    address_tag_manual = Column(Boolean, default=False, nullable=False)
     phone = Column(String(100), default="")
     business_scope = Column(Text, default="")
     last_used_at = Column(DateTime, nullable=True, index=True)

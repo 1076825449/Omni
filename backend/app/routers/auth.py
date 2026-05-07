@@ -133,6 +133,7 @@ def login(
             "username": user.username,
             "nickname": user.nickname,
             "role": user.role,
+            "must_change_password": bool(user.must_change_password),
         },
     )
 
@@ -173,6 +174,7 @@ def get_me(current_user: Optional[User] = Depends(get_optional_user)):
         username=current_user.username,
         nickname=current_user.nickname,
         role=current_user.role,
+        must_change_password=bool(current_user.must_change_password),
     )
 
 
@@ -212,6 +214,7 @@ def change_password(
         raise HTTPException(status_code=400, detail="新密码不能与当前密码相同")
 
     current_user.hashed_password = hash_password(body.new_password)
+    current_user.must_change_password = False
     db.query(SessionModel).filter(
         SessionModel.user_id == current_user.id,
         SessionModel.is_valid == True,

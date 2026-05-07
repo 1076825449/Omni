@@ -6,8 +6,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { analysisApi, taxOfficerWorkbenchApi, TaxpayerProfile, UploadProfile } from '../../../services/api'
 import { useAppMessage } from '../../../hooks/useAppMessage'
 import { useAuthStore } from '../../../stores/auth'
+import BusinessPageHeader from '../../../components/BusinessPageHeader'
 
-const { Text, Paragraph } = Typography
+const { Text } = Typography
 
 const kindLabel: Record<string, string> = {
   sales_invoice: '销项发票',
@@ -124,30 +125,27 @@ export default function NewAnalysis() {
 
   return (
     <div>
-      <Card style={{ marginBottom: 16 }} styles={{ body: { padding: 20 } }}>
-        <Space style={{ width: '100%', justifyContent: 'space-between' }} align="start" wrap>
-          <Space direction="vertical" size={4}>
-            <Typography.Title level={4} style={{ margin: 0 }}>案头分析</Typography.Title>
-            <Text type="secondary">直接上传资料或补录关键数据，系统自动建立本次分析并识别疑点</Text>
-            {taxpayerContext.taxpayer_id && (
-              <Space wrap style={{ marginTop: 8 }}>
-                <Tag color="blue">已带入企业</Tag>
-                <Text>{taxpayerContext.company_name || '未填写名称'}</Text>
-                <Text type="secondary">{taxpayerContext.taxpayer_id}</Text>
-              </Space>
-            )}
+      <BusinessPageHeader
+        title="案头分析"
+        description="直接上传资料或补录关键数据，系统自动建立本次分析并识别疑点。"
+        meta={taxpayerContext.taxpayer_id && (
+          <Space wrap>
+            <Tag color="blue">已带入企业</Tag>
+            <Text>{taxpayerContext.company_name || '未填写名称'}</Text>
+            <Text type="secondary">{taxpayerContext.taxpayer_id}</Text>
           </Space>
-          <Button type="primary" disabled={isViewer} onClick={handleRun}>开始识别疑点</Button>
-        </Space>
-        {isViewer && (
+        )}
+        extra={<Button type="primary" disabled={isViewer} onClick={handleRun}>开始识别疑点</Button>}
+      />
+      {isViewer && (
+        <Card style={{ marginBottom: 16 }} styles={{ body: { padding: 16 } }}>
           <Alert
             type="warning"
             showIcon
             message="只读用户不能上传资料、补录数据或发起分析"
-            style={{ marginTop: 16 }}
           />
-        )}
-      </Card>
+        </Card>
+      )}
 
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         <Col xs={24} xl={12}>

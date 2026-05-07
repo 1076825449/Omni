@@ -14,6 +14,10 @@ ALL_PERMISSIONS = {
     "module:risk-ledger:operate",
     "module:learning-lab:view",
     "module:learning-lab:operate",
+    "module:info-query:view",
+    "module:info-query:import",
+    "module:info-query:assign",
+    "module:info-query:tag-manage",
     # 平台公共
     "platform:task:view",
     "platform:task:operate",
@@ -25,6 +29,9 @@ ALL_PERMISSIONS = {
     "platform:backup:restore",
     "platform:settings:manage",
     "platform:role:manage",
+    "platform:user:manage",
+    "platform:audit:view",
+    "platform:maintenance:operate",
 }
 
 ROLE_PERMISSIONS = {
@@ -39,6 +46,7 @@ ROLE_PERMISSIONS = {
         "module:risk-ledger:operate",
         "module:learning-lab:view",
         "module:learning-lab:operate",
+        "module:info-query:view",
         "platform:task:view",
         "platform:task:operate",
         "platform:file:view",
@@ -50,6 +58,7 @@ ROLE_PERMISSIONS = {
         "module:record-operations:view",
         "module:risk-ledger:view",
         "module:learning-lab:view",
+        "module:info-query:view",
         "platform:task:view",
         "platform:file:view",
         "platform:log:view",

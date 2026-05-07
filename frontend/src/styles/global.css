@@ -15,11 +15,247 @@ body {
   line-height: 1.6;
 }
 
+#root {
+  width: 100%;
+  min-width: 0;
+  min-height: 100vh;
+}
+
+.business-tag {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  white-space: normal;
+  word-break: keep-all;
+  line-height: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', Arial, sans-serif;
+  letter-spacing: 0;
+}
+
 /* 统一页面容器 */
 .omni-page {
   padding: var(--omni-spacing-lg);
-  max-width: 1200px;
-  margin: 0 auto;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  min-height: calc(100vh - var(--omni-header-height));
+  background: linear-gradient(180deg, #f6f8fb 0%, #eef3f8 100%);
+}
+
+.business-page {
+  width: 100%;
+  min-height: calc(100vh - var(--omni-header-height));
+  padding: 18px 24px 28px;
+  background: linear-gradient(180deg, #f6f8fb 0%, #eef3f8 100%);
+}
+
+.business-page-wide {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.business-page-header,
+.business-section,
+.business-filter-section,
+.business-batch-section {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid #e8edf5;
+  border-radius: 14px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+}
+
+.business-page-header {
+  padding: 20px 24px;
+  margin-bottom: 16px;
+}
+
+.business-page-header-inner {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.business-page-heading {
+  min-width: 260px;
+}
+
+.business-page-title {
+  margin: 0 !important;
+  font-size: 22px !important;
+  line-height: 1.3 !important;
+  font-weight: 700 !important;
+  color: #111827 !important;
+}
+
+.business-page-description {
+  display: block;
+  max-width: 920px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #6b7280;
+}
+
+.business-page-meta {
+  margin-top: 2px;
+}
+
+.business-page-extra {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 34px;
+}
+
+.business-filter-section {
+  padding: 14px;
+  margin-bottom: 12px;
+  border-color: #d9eaff;
+  background: linear-gradient(180deg, #fbfdff 0%, #f5f9ff 100%);
+}
+
+.business-batch-section {
+  padding: 14px;
+  margin-bottom: 12px;
+  border-color: #ffe1ad;
+  background: linear-gradient(180deg, #fffdf7 0%, #fff8ec 100%);
+}
+
+.business-section {
+  padding: 16px;
+}
+
+.business-section.ant-card {
+  padding: 0;
+}
+
+.business-section + .business-section {
+  margin-top: 14px;
+}
+
+.business-tabs-section {
+  padding: 0 16px;
+  margin-bottom: 16px;
+}
+
+.business-tabs-section .ant-tabs {
+  margin-bottom: -1px;
+}
+
+.omni-page .ant-card,
+.business-page .ant-card,
+.business-section.ant-card {
+  border: 1px solid #e8edf5;
+  border-radius: 14px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+}
+
+.omni-page > .ant-card,
+.business-page .ant-card,
+.business-section.ant-card {
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.omni-page .ant-card-head,
+.business-page .ant-card-head {
+  min-height: 48px;
+  padding: 0 18px;
+  border-bottom-color: #eef2f7;
+}
+
+.omni-page .ant-card-head-title,
+.business-page .ant-card-head-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.omni-page .ant-card-body,
+.business-page .ant-card-body {
+  padding: 16px 18px;
+}
+
+.omni-page .ant-card-small > .ant-card-head,
+.business-page .ant-card-small > .ant-card-head {
+  min-height: 42px;
+  padding: 0 14px;
+}
+
+.omni-page .ant-card-small > .ant-card-body,
+.business-page .ant-card-small > .ant-card-body {
+  padding: 14px;
+}
+
+.omni-page .ant-statistic-title,
+.business-page .ant-statistic-title {
+  color: #6b7280;
+}
+
+.omni-page .ant-table-wrapper,
+.business-page .ant-table-wrapper {
+  border-radius: 12px;
+}
+
+.omni-page .ant-table,
+.business-page .ant-table {
+  color: #1f2937;
+}
+
+.omni-page .ant-table-thead > tr > th,
+.business-page .ant-table-thead > tr > th {
+  background: #f8fafc;
+  color: #111827;
+  font-weight: 700;
+}
+
+.omni-page .ant-list-item,
+.business-page .ant-list-item {
+  border-block-end-color: #eef2f7;
+}
+
+.business-long-text {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+.status-tag {
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.status-pending {
+  color: #0958d9;
+  background: #e6f4ff;
+  border-color: #91caff;
+}
+
+.status-rectifying {
+  color: #ad4e00;
+  background: #fff7e6;
+  border-color: #ffd591;
+}
+
+.status-overdue {
+  color: #a8071a;
+  background: #fff1f0;
+  border-color: #ffa39e;
+}
+
+.status-excluded {
+  color: #595959;
+  background: #f5f5f5;
+  border-color: #d9d9d9;
+}
+
+.status-rectified {
+  color: #237804;
+  background: #f6ffed;
+  border-color: #b7eb8f;
 }
 
 .omni-page-header {

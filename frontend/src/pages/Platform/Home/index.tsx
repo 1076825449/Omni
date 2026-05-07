@@ -1,4 +1,4 @@
-import { Card, Row, Col, Statistic, Space, Typography, Alert, Tag, Upload, Progress, Descriptions, Skeleton } from 'antd'
+import { Card, Row, Col, Statistic, Space, Typography, Alert, Tag, Upload, Progress, Descriptions, Skeleton, Collapse } from 'antd'
 import { UploadOutlined } from '@ant-design/icons'
 import { Link } from 'react-router-dom'
 import { useEffect, useState } from 'react'
@@ -6,13 +6,19 @@ import { useAuthStore } from '../../../stores/auth'
 import type { ImportHistoryItem, ImportJob, PlatformStatsOverview } from '../../../services/api'
 import { infoQueryApi, platformStatsApi, taxOfficerWorkbenchApi } from '../../../services/api'
 import { useAppMessage } from '../../../hooks/useAppMessage'
+import BusinessPageHeader from '../../../components/BusinessPageHeader'
 
-const { Title, Text, Paragraph } = Typography
+const { Text } = Typography
 
 const roleLabels: Record<string, string> = {
   admin: '管理员',
   user: '普通用户',
   viewer: '访客（只读）',
+}
+
+function isNetworkFailure(reason: unknown) {
+  const text = reason instanceof Error ? reason.message : String(reason)
+  return reason instanceof TypeError || text.includes('Failed to fetch') || text.includes('NetworkError')
 }
 
 export default function Home() {
@@ -26,28 +32,41 @@ export default function Home() {
   const [lastImportResult, setLastImportResult] = useState<ImportHistoryItem | null>(null)
   const [loading, setLoading] = useState(true)
   const message = useAppMessage()
-  const { user } = useAuthStore()
+  const { user, permissions } = useAuthStore()
+  const canImportDataSource = permissions.includes('module:info-query:import')
 
   useEffect(() => {
     let cancelled = false
     const loadHomeData = async () => {
-      const [statsResult, riskResult, historyResult] = await Promise.allSettled([
+      const [statsResult, riskResult, historyResult, recentImportResult] = await Promise.allSettled([
         platformStatsApi.overview(),
-        taxOfficerWorkbenchApi.taxpayerRecords({ limit: 1 }),
+        taxOfficerWorkbenchApi.taxpayerRecordsSummary(),
         infoQueryApi.importHistory(1),
+        infoQueryApi.recentImportJob(),
       ])
       if (cancelled) return
       if (statsResult.status === 'fulfilled') {
         setStats(statsResult.value)
       }
       if (riskResult.status === 'fulfilled') {
-        setRiskSummary(riskResult.value.summary)
+        setRiskSummary(riskResult.value)
       }
       if (historyResult.status === 'fulfilled') {
         setLastImportResult(historyResult.value.items[0] || null)
       }
-      if ([statsResult, riskResult, historyResult].some(result => result.status === 'rejected')) {
-        message.warning('部分首页数据暂时未加载，请刷新页面或稍后重试')
+      if (recentImportResult.status === 'fulfilled') {
+        setImportJob(recentImportResult.value)
+      }
+      const failedHomeRequests = [statsResult, riskResult, historyResult].filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+      if (failedHomeRequests.length > 0 && import.meta.env.DEV) {
+        console.warn('首页部分数据加载失败，已使用默认值降级展示。', failedHomeRequests)
+      }
+      if (failedHomeRequests.length > 0) {
+        if (failedHomeRequests.every(result => isNetworkFailure(result.reason))) {
+          message.error('系统服务未启动或已断开，请先启动后端服务后再刷新页面')
+        } else {
+          message.warning('首页部分统计数据加载失败，请刷新页面或稍后重试')
+        }
       }
       setLoading(false)
     }
@@ -115,28 +134,24 @@ export default function Home() {
     { path: '/modules/info-query', key: 'info-query', title: '管户分配', desc: '查看全部管户、行业标签和地址标签', color: '#13a8a8' },
     { path: '/modules/risk-ledger', key: 'risk-ledger', title: '管户记录', desc: '记录风险、核实结论和整改情况', color: '#fa8c16' },
     { path: '/modules/analysis-workbench', key: 'analysis-workbench', title: '案头分析', desc: '上传资料，识别疑点并生成文书', color: '#cf1322' },
-    { path: '/document-reports', key: 'document-reports', title: '文书报告', desc: '查看和下载通知书、核实报告', color: '#722ed1' },
     { path: '/modules/learning-lab', key: 'learning-lab', title: '刷题程序', desc: '业务题库练习和错题复盘', color: '#389e0d' },
+    { path: '/reports', key: 'document-reports', title: '文书报告', desc: '查看和下载通知书、核实报告', color: '#722ed1' },
   ]
 
   return (
     <div className="omni-page">
-      <div className="omni-page-header" style={{ marginBottom: 16 }}>
-        <Space style={{ width: '100%', justifyContent: 'space-between' }} align="start" wrap>
-          <Space direction="vertical" size={4}>
-            <Title level={4} style={{ margin: 0 }}>税务风险工作助手</Title>
-            <Paragraph type="secondary" style={{ margin: 0 }}>
-              先查企业，再开展案头分析、记录风险、跟踪整改。
-            </Paragraph>
-          </Space>
+      <BusinessPageHeader
+        title="税务风险工作助手"
+        description="先查企业，再开展案头分析、记录风险、跟踪整改。"
+        extra={
           <Space>
             <Text type="secondary">当前账号：{user?.nickname || user?.username}</Text>
             <Tag color={user?.role === 'admin' ? 'red' : user?.role === 'viewer' ? 'orange' : 'blue'}>
               {roleLabels[user?.role || ''] || user?.role}
             </Tag>
           </Space>
-        </Space>
-      </div>
+        }
+      />
 
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         <Col xs={12} lg={6}>
@@ -177,10 +192,10 @@ export default function Home() {
                   ? `最近版本：${lastImportResult.filename || '未记录文件名'}，处理 ${lastImportResult.total_processed} 户`
                   : '导入后，信息查询、管户分配、管户记录和案头分析都会自动带出企业基础信息。'}
               />
-              <Upload.Dragger accept=".xls,.xlsx,.csv,.json" customRequest={({ file }) => handleSourceUpload(file as File)} disabled={importing} showUploadList={false}>
+              <Upload.Dragger accept=".xls,.xlsx,.csv,.json" customRequest={({ file }) => handleSourceUpload(file as File)} disabled={importing || !canImportDataSource} showUploadList={false}>
                 <p><UploadOutlined style={{ fontSize: 26 }} /></p>
-                <p>{importing ? `正在导入：${importFileName || '数据源文件'}` : '上传或更新数据源'}</p>
-                <Text type="secondary" style={{ fontSize: 12 }}>支持 XLS、XLSX、CSV、JSON</Text>
+                <p>{importing ? `正在导入：${importFileName || '数据源文件'}` : canImportDataSource ? '上传或更新数据源' : '当前账号不能导入数据源'}</p>
+                <Text type="secondary" style={{ fontSize: 12 }}>{canImportDataSource ? '支持 XLS、XLSX、CSV、JSON' : '如需更新数据源，请联系管理员。'}</Text>
               </Upload.Dragger>
               {importing && (
                 <Space direction="vertical" style={{ width: '100%' }} size={6}>
@@ -197,16 +212,34 @@ export default function Home() {
                 </Space>
               )}
               {lastImportResult && !importing && (
-                <Descriptions size="small" column={1}>
-                  <Descriptions.Item label="导入时间">{new Date(lastImportResult.created_at).toLocaleString('zh-CN')}</Descriptions.Item>
-                  <Descriptions.Item label="处理结果">
-                    <Space wrap>
-                      <Tag color="green">新增 {lastImportResult.imported}</Tag>
-                      <Tag color="blue">更新 {lastImportResult.updated}</Tag>
-                      <Tag color={lastImportResult.skipped > 0 ? 'orange' : 'default'}>跳过 {lastImportResult.skipped}</Tag>
-                    </Space>
-                  </Descriptions.Item>
-                </Descriptions>
+                <Collapse
+                  size="small"
+                  ghost
+                  items={[{
+                    key: 'source-detail',
+                    label: '查看导入详情',
+                    children: (
+                      <Descriptions size="small" column={1}>
+                        <Descriptions.Item label="导入时间">{new Date(lastImportResult.created_at).toLocaleString('zh-CN')}</Descriptions.Item>
+                        <Descriptions.Item label="最近任务">
+                          <Space wrap>
+                            <Tag color={importJob?.status === 'failed' ? 'red' : importJob?.status === 'running' ? 'blue' : 'green'}>
+                              {importJob?.status === 'failed' ? '失败' : importJob?.status === 'running' ? '导入中' : '已完成'}
+                            </Tag>
+                            <Text type="secondary">{importJob?.filename || lastImportResult.filename}</Text>
+                          </Space>
+                        </Descriptions.Item>
+                        <Descriptions.Item label="处理结果">
+                          <Space wrap>
+                            <Tag color="green">新增 {lastImportResult.imported}</Tag>
+                            <Tag color="blue">更新 {lastImportResult.updated}</Tag>
+                            <Tag color={lastImportResult.skipped > 0 ? 'orange' : 'default'}>跳过 {lastImportResult.skipped}</Tag>
+                          </Space>
+                        </Descriptions.Item>
+                      </Descriptions>
+                    ),
+                  }]}
+                />
               )}
             </Space>
           </Card>

@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.models import User
 from app.models.backup import Backup
 from app.routers.auth import get_current_user, require_permission
+from app.services.audit import log_action
 
 router = APIRouter(prefix="/api/platform", tags=["平台公共"])
 
@@ -68,6 +69,7 @@ def create_backup(
     )
     db.add(backup)
     db.commit()
+    log_action(db, "create_backup", backup_id, current_user.id, f"发起备份：{name}", module="platform")
 
     def do_backup():
         try:

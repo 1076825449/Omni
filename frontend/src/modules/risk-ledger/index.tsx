@@ -8,14 +8,21 @@ import { useSearchParams } from 'react-router-dom'
 import PlatformLayout from '../../components/Layout'
 import { RiskDossier, riskLedgerApi, taxOfficerWorkbenchApi } from '../../services/api'
 import { useAppMessage } from '../../hooks/useAppMessage'
+import BusinessPageHeader from '../../components/BusinessPageHeader'
 
 const { Text, Paragraph } = Typography
 const statuses = ['待核实', '已排除', '整改中', '已整改']
 const statusColor: Record<string, string> = {
-  待核实: 'orange',
-  已排除: 'green',
-  整改中: 'blue',
-  已整改: 'purple',
+  待核实: 'blue',
+  已排除: 'default',
+  整改中: 'orange',
+  已整改: 'green',
+}
+const statusClassMap: Record<string, string> = {
+  待核实: 'status-pending',
+  整改中: 'status-rectifying',
+  已排除: 'status-excluded',
+  已整改: 'status-rectified',
 }
 
 export default function RiskLedgerModule() {
@@ -25,37 +32,51 @@ export default function RiskLedgerModule() {
   const [stats, setStats] = useState<any>(null)
   const [query, setQuery] = useState('')
   const [entryStatus, setEntryStatus] = useState<string | undefined>()
+  const [page, setPage] = useState(1)
   const [rowDrafts, setRowDrafts] = useState<Record<string, any>>({})
+  const [editingTaxpayerId, setEditingTaxpayerId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [hasLoaded, setHasLoaded] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
   const [detail, setDetail] = useState<any>(null)
   const message = useAppMessage()
+  const pageSize = 20
 
-  const load = (q = query) => {
+  const load = (q = query, nextPage = page) => {
     setLoading(true)
-    Promise.all([
-      taxOfficerWorkbenchApi.taxpayerRecords({ q, entry_status: entryStatus, limit: 50 }),
-      riskLedgerApi.stats(),
-    ]).then(([list, stat]) => {
+    taxOfficerWorkbenchApi.taxpayerRecords({ q, entry_status: entryStatus, limit: pageSize, offset: (nextPage - 1) * pageSize }).then((list) => {
       setRows(list.items)
       setTotal(list.total)
-      setStats(stat)
     }).catch(() => {
-      void message.error('加载风险台账失败')
+      void message.error('管户记录暂时无法加载，请确认数据源已导入并稍后刷新')
     }).finally(() => {
       setLoading(false)
       setHasLoaded(true)
     })
   }
 
-  useEffect(() => { load('') }, [entryStatus])
+  const loadSummary = () => {
+    taxOfficerWorkbenchApi.taxpayerRecordsSummary()
+      .then(setStats)
+      .catch(() => undefined)
+  }
+
+  useEffect(() => {
+    loadSummary()
+  }, [])
+
+  useEffect(() => {
+    setEditingTaxpayerId(null)
+    setPage(1)
+    load(query, 1)
+  }, [entryStatus])
 
   useEffect(() => {
     const taxpayerId = searchParams.get('taxpayer_id')
     if (!taxpayerId) return
     setQuery(taxpayerId)
-    load(taxpayerId)
+    setPage(1)
+    load(taxpayerId, 1)
   }, [searchParams])
 
   const showDetail = async (taxpayerId: string) => {
@@ -94,7 +115,9 @@ export default function RiskLedgerModule() {
       })
       void message.success('记录已保存')
       setRowDrafts(prev => ({ ...prev, [record.taxpayer_id]: {} }))
-      load()
+      setEditingTaxpayerId(null)
+      load(query, page)
+      loadSummary()
     } catch {
       void message.error('保存失败，请检查记录内容、整改期限和联系人')
     }
@@ -102,6 +125,7 @@ export default function RiskLedgerModule() {
 
   const renderRecordCard = (record: RiskDossier) => {
     const draft = rowDrafts[record.taxpayer_id] || {}
+    const isEditing = editingTaxpayerId === record.taxpayer_id
     return (
       <Card
         size="small"
@@ -115,8 +139,8 @@ export default function RiskLedgerModule() {
                 <Button type="link" style={{ padding: 0, height: 'auto', fontWeight: 600, whiteSpace: 'normal', textAlign: 'left' }} onClick={() => showDetail(record.taxpayer_id)}>
                   {record.company_name || '未命名纳税人'}
                 </Button>
-                {record.latest_entry_status && <Tag color={statusColor[record.latest_entry_status]}>{record.latest_entry_status}</Tag>}
-                {record.is_overdue && <Tag color="red">逾期</Tag>}
+                {record.latest_entry_status && <Tag className={`status-tag ${statusClassMap[record.latest_entry_status] || ''}`} color={statusColor[record.latest_entry_status]}>{record.latest_entry_status}</Tag>}
+                {record.is_overdue && <Tag className="status-tag status-overdue" color="red">逾期</Tag>}
               </Space>
               <Space wrap size={[8, 4]}>
                 <Text type="secondary">税号：{record.taxpayer_id}</Text>
@@ -124,9 +148,9 @@ export default function RiskLedgerModule() {
                 <Text type="secondary">管理员：{record.tax_officer || '—'}</Text>
               </Space>
               <Space wrap size={[4, 4]}>
-                {record.industry_tag ? <Tag color="blue">{record.industry_tag}</Tag> : <Tag>未分类行业</Tag>}
-                {record.address_tag ? <Tag>{record.address_tag}</Tag> : <Tag>未识别地址</Tag>}
-                <Tag>记录 {record.entry_count || 0} 次</Tag>
+                {record.industry_tag ? <Tag color="blue" className="business-tag">{record.industry_tag}</Tag> : <Tag className="business-tag">未分类行业</Tag>}
+                {record.address_tag ? <Tag className="business-tag">{record.address_tag}</Tag> : <Tag className="business-tag">未识别地址</Tag>}
+                <Tag className="business-tag">记录 {record.entry_count || 0} 次</Tag>
               </Space>
             </Space>
           </Col>
@@ -148,37 +172,46 @@ export default function RiskLedgerModule() {
             </Space>
           </Col>
 
-          <Col xs={24} xl={9}>
+          <Col xs={24} xl={isEditing ? 9 : 3}>
             <Space direction="vertical" size={8} style={{ width: '100%' }}>
-              <Text strong>本次记录</Text>
-              <Row gutter={[8, 8]}>
-                <Col xs={24} md={8}>
-                  <DatePicker value={draft.recorded_at || dayjs()} onChange={value => updateDraft(record.taxpayer_id, { recorded_at: value })} style={{ width: '100%' }} />
-                </Col>
-                <Col xs={24} md={8}>
-                  <Select value={draft.entry_status || '待核实'} onChange={value => updateDraft(record.taxpayer_id, { entry_status: value })} options={statuses.map(s => ({ value: s, label: s }))} style={{ width: '100%' }} />
-                </Col>
-                <Col xs={24} md={8}>
-                  <DatePicker placeholder="整改期限" value={draft.rectification_deadline} onChange={value => updateDraft(record.taxpayer_id, { rectification_deadline: value })} style={{ width: '100%' }} />
-                </Col>
-                <Col xs={24}>
-                  <Input.TextArea
-                    autoSize={{ minRows: 2, maxRows: 4 }}
-                    value={draft.content}
-                    onChange={event => updateDraft(record.taxpayer_id, { content: event.target.value })}
-                    placeholder="记录风险、核实情况、排除理由或整改进展"
-                  />
-                </Col>
-                <Col xs={24} md={8}>
-                  <Input value={draft.contact_person} onChange={event => updateDraft(record.taxpayer_id, { contact_person: event.target.value })} placeholder="联系人" />
-                </Col>
-                <Col xs={24} md={8}>
-                  <Input value={draft.contact_phone} onChange={event => updateDraft(record.taxpayer_id, { contact_phone: event.target.value })} placeholder="联系电话" />
-                </Col>
-                <Col xs={24} md={8}>
-                  <Button type="primary" block onClick={() => handleInlineSave(record)}>保存本次记录</Button>
-                </Col>
-              </Row>
+              {!isEditing ? (
+                <Button type="primary" block onClick={() => setEditingTaxpayerId(record.taxpayer_id)}>记录本次处理</Button>
+              ) : (
+                <>
+                  <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                    <Text strong>本次记录</Text>
+                    <Button size="small" onClick={() => setEditingTaxpayerId(null)}>收起</Button>
+                  </Space>
+                  <Row gutter={[8, 8]}>
+                    <Col xs={24} md={8}>
+                      <DatePicker value={draft.recorded_at || dayjs()} onChange={value => updateDraft(record.taxpayer_id, { recorded_at: value })} style={{ width: '100%' }} />
+                    </Col>
+                    <Col xs={24} md={8}>
+                      <Select value={draft.entry_status || '待核实'} onChange={value => updateDraft(record.taxpayer_id, { entry_status: value })} options={statuses.map(s => ({ value: s, label: s }))} style={{ width: '100%' }} />
+                    </Col>
+                    <Col xs={24} md={8}>
+                      <DatePicker placeholder="整改期限" value={draft.rectification_deadline} onChange={value => updateDraft(record.taxpayer_id, { rectification_deadline: value })} style={{ width: '100%' }} />
+                    </Col>
+                    <Col xs={24}>
+                      <Input.TextArea
+                        autoSize={{ minRows: 2, maxRows: 4 }}
+                        value={draft.content}
+                        onChange={event => updateDraft(record.taxpayer_id, { content: event.target.value })}
+                        placeholder="记录风险、核实情况、排除理由或整改进展"
+                      />
+                    </Col>
+                    <Col xs={24} md={8}>
+                      <Input value={draft.contact_person} onChange={event => updateDraft(record.taxpayer_id, { contact_person: event.target.value })} placeholder="联系人" />
+                    </Col>
+                    <Col xs={24} md={8}>
+                      <Input value={draft.contact_phone} onChange={event => updateDraft(record.taxpayer_id, { contact_phone: event.target.value })} placeholder="联系电话" />
+                    </Col>
+                    <Col xs={24} md={8}>
+                      <Button type="primary" block onClick={() => handleInlineSave(record)}>保存本次记录</Button>
+                    </Col>
+                  </Row>
+                </>
+              )}
             </Space>
           </Col>
         </Row>
@@ -188,36 +221,38 @@ export default function RiskLedgerModule() {
 
   return (
     <PlatformLayout>
-      <div style={{ minHeight: '100vh', background: '#f5f7fb', padding: 24 }}>
+      <div className="business-page">
+        <div className="business-page-wide">
+        <BusinessPageHeader
+          title="管户记录"
+          description="按户记录风险、核实结论和整改进展。"
+          meta={hasLoaded ? (
+            <Space wrap>
+              <Tag>企业 {stats?.taxpayer_total ?? total} 户</Tag>
+              <Tag className="status-tag status-pending" color="blue">待核实 {stats?.pending_count || 0}</Tag>
+              <Tag className="status-tag status-rectifying" color="orange">整改中 {stats?.rectifying_count || 0}</Tag>
+              <Tag className="status-tag status-excluded">已排除 {stats?.excluded_count || 0}</Tag>
+              <Tag className="status-tag status-rectified" color="green">已整改 {stats?.rectified_count || 0}</Tag>
+            </Space>
+          ) : <Text type="secondary">正在加载管户记录...</Text>}
+          extra={
+            <Space>
+              <Input.Search placeholder="税号/名称/法人/管理员" allowClear value={query} onChange={event => setQuery(event.target.value)} onSearch={(value) => { setQuery(value); setPage(1); load(value, 1) }} style={{ width: 260 }} />
+              <Select placeholder="事项状态" allowClear value={entryStatus} onChange={setEntryStatus} style={{ width: 130 }} options={statuses.map(s => ({ value: s, label: s }))} />
+              <Button onClick={() => load(query, page)}>刷新</Button>
+            </Space>
+          }
+        />
         <Card
+          className="business-section"
           style={{ marginBottom: 16 }}
           styles={{ body: { padding: 16 } }}
         >
-          <Space style={{ width: '100%', justifyContent: 'space-between' }} align="start" wrap>
-            <Space direction="vertical" size={4}>
-              <Typography.Title level={4} style={{ margin: 0 }}>管户记录</Typography.Title>
-              <Text type="secondary">按户记录风险、核实结论和整改进展</Text>
-              {hasLoaded ? (
-                <Space wrap style={{ marginTop: 8 }}>
-                  <Tag>企业 {total} 户</Tag>
-                  <Tag color="orange">待核实 {stats?.pending_count || 0}</Tag>
-                  <Tag color="blue">整改中 {stats?.rectifying_count || 0}</Tag>
-                  <Tag color="green">已排除 {stats?.excluded_count || 0}</Tag>
-                  <Tag color="purple">已整改 {stats?.rectified_count || 0}</Tag>
-                </Space>
-              ) : (
-                <Text type="secondary" style={{ marginTop: 8 }}>正在加载管户记录...</Text>
-              )}
-            </Space>
-            <Space>
-              <Input.Search placeholder="税号/名称/法人/管理员" allowClear value={query} onChange={event => setQuery(event.target.value)} onSearch={(value) => { setQuery(value); load(value) }} style={{ width: 260 }} />
-              <Select placeholder="事项状态" allowClear value={entryStatus} onChange={setEntryStatus} style={{ width: 130 }} options={statuses.map(s => ({ value: s, label: s }))} />
-              <Button onClick={() => load()}>刷新</Button>
-            </Space>
-          </Space>
+          <Text type="secondary">在下方企业列表中点击“记录本次处理”，即可补充风险、排除或整改情况。</Text>
         </Card>
 
         <Card
+          className="business-section"
           style={{ marginBottom: 16 }}
           styles={{ body: { padding: 16 } }}
         >
@@ -236,7 +271,16 @@ export default function RiskLedgerModule() {
                   {renderRecordCard(item)}
                 </List.Item>
               )}
-              pagination={total > 50 ? { total, pageSize: 50, showSizeChanger: false } : false}
+              pagination={total > pageSize ? {
+                current: page,
+                total,
+                pageSize,
+                showSizeChanger: false,
+                onChange: nextPage => {
+                  setPage(nextPage)
+                  load(query, nextPage)
+                },
+              } : false}
               locale={{
                 emptyText: query || entryStatus ? '没有符合当前筛选条件的企业' : '暂无企业数据。请先在首页导入税务登记信息查询数据源。',
               }}
@@ -273,6 +317,7 @@ export default function RiskLedgerModule() {
             </Space>
           )}
         </Modal>
+        </div>
       </div>
     </PlatformLayout>
   )

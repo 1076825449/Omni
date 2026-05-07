@@ -314,6 +314,29 @@ def test_tasks_list_with_auth(auth_client):
     assert "tasks" in resp.json() or "total" in resp.json()
 
 
+def test_analysis_tasks_support_report_pagination_and_search(auth_client):
+    first = auth_client.post(
+        "/api/modules/analysis-workbench/tasks",
+        json={"name": "文书分页企业A专项分析", "description": "验证文书报告分页"},
+    )
+    second = auth_client.post(
+        "/api/modules/analysis-workbench/tasks",
+        json={"name": "文书分页企业B专项分析", "description": "验证文书报告分页"},
+    )
+    assert first.status_code == 200
+    assert second.status_code == 200
+
+    search_resp = auth_client.get("/api/modules/analysis-workbench/tasks?q=企业A&limit=1&offset=0")
+    assert search_resp.status_code == 200
+    payload = search_resp.json()
+    assert payload["total"] == 1
+    assert payload["tasks"][0]["name"] == "文书分页企业A专项分析"
+
+    paged_resp = auth_client.get("/api/modules/analysis-workbench/tasks?limit=1&offset=1")
+    assert paged_resp.status_code == 200
+    assert len(paged_resp.json()["tasks"]) == 1
+
+
 def test_task_detail_with_auth(auth_client):
     create_resp = auth_client.post(
         "/api/modules/analysis-workbench/tasks",
@@ -457,7 +480,7 @@ def test_manual_tax_data_and_image_evidence_with_auth(auth_client):
 
 
 def test_info_query_import_assignment_stats_and_analysis_profile(auth_client):
-    from app.modules.info_query_router import derive_address_tag, derive_industry_tag, normalize_row
+    from app.modules.info_query_router import dense_address_candidate, derive_address_tag, derive_industry_tag, normalize_row
 
     normalized = normalize_row({
         "社会信用代码（纳税人识别号）": "91450200322587799A",
@@ -478,6 +501,15 @@ def test_info_query_import_assignment_stats_and_analysis_profile(auth_client):
     assert derive_address_tag("柳江大道1号毅德城") == "柳江大道1号"
     assert derive_address_tag("柳江县柳南高速公路新兴服务区下线") == "柳南高速公路"
     assert derive_address_tag("广西柳州市柳江区拉堡镇") == ""
+    assert derive_address_tag("广西柳州市柳江区穿山镇") == "穿山镇"
+    assert derive_address_tag("广西柳州市柳江区百朋镇怀洪村") == "百朋镇"
+    assert derive_address_tag("广西柳州市柳江区成团镇成团街18号") == "成团镇"
+    assert dense_address_candidate("广西柳州市柳江区拉堡镇华韵上城3栋101号") == "华韵上城"
+    assert dense_address_candidate("广西柳州市柳江区启迪科技城A区") == "启迪科技城"
+    assert dense_address_candidate("广西柳州市柳江区兴柳路125号启迪柳州科技城") == "启迪科技城"
+    assert dense_address_candidate("广西柳州市柳江区柳邕路351号华韵上城") == "华韵上城"
+    assert dense_address_candidate("广西柳州市柳江区拉堡镇柳堡路56号") == "柳堡路"
+    assert dense_address_candidate("广西柳州市柳江区穿山镇成团街18号") == ""
     assert derive_industry_tag("", "柳州某某建材经营部", "销售水泥、五金") == "建材五金"
     assert derive_industry_tag("汽车修理与维护", "柳州某某汽车服务有限公司", "汽车维修") == "汽车销售及维修"
     assert derive_industry_tag("", "柳州某某木材加工厂", "木制品加工") == "木材加工"
@@ -486,8 +518,8 @@ def test_info_query_import_assignment_stats_and_analysis_profile(auth_client):
     assert derive_industry_tag("普通货物道路运输", "柳州某某货运有限公司", "二手车经销；汽车新车销售") == "交通运输"
     assert derive_industry_tag("建材批发", "柳州某某建材经营部", "建筑工程机械租赁") == "建材五金"
     assert derive_industry_tag("理发及美容服务", "柳州某某美容店", "健康咨询服务") == "美容养生"
-    assert derive_industry_tag("其他机械设备及电子产品批发", "柳州某某设备贸易有限公司", "机械设备销售") == "贸易"
-    assert derive_industry_tag("服饰制造", "广西某某服饰有限公司", "建筑材料销售") == "加工制造"
+    assert derive_industry_tag("其他机械设备及电子产品批发", "柳州某某设备贸易有限公司", "机械设备销售") == "机械设备销售租赁"
+    assert derive_industry_tag("服饰制造", "广西某某服饰有限公司", "建筑材料销售") == "服装鞋帽"
 
     csv_content = (
         "企业名称,纳税人识别号,法定代表人,行业,经营范围,注册地址,经营地址,属地,主管税务机关,管理分局,税收管理员,风险等级,纳税信用等级\n"
@@ -511,8 +543,8 @@ def test_info_query_import_assignment_stats_and_analysis_profile(auth_client):
     assert listed["taxpayers"][0]["tax_officer"] == "张税官"
     assert listed["taxpayers"][0]["proposed_tax_officer"] == ""
     assert listed["taxpayers"][0]["address"] == "广西柳州市柳江区拉堡镇柳堡路56号"
-    assert listed["taxpayers"][0]["address_tag"] == "柳堡路"
-    assert listed["taxpayers"][0]["industry_tag"] == "加工制造"
+    assert listed["taxpayers"][0]["address_tag"] == ""
+    assert listed["taxpayers"][0]["industry_tag"] == "其他"
 
     assignment_resp = auth_client.post(
         "/api/modules/info-query/taxpayers/assignment",
@@ -534,8 +566,16 @@ def test_info_query_import_assignment_stats_and_analysis_profile(auth_client):
 
     tag_filter_resp = auth_client.get("/api/modules/info-query/taxpayers?address_tag=柳江大道1号")
     assert tag_filter_resp.status_code == 200
-    assert tag_filter_resp.json()["taxpayers"][0]["company_name"] == "信息企业B"
-    assert tag_filter_resp.json()["taxpayers"][0]["industry_tag"] == "建材五金"
+    assert tag_filter_resp.json()["total"] == 0
+
+    old_town_tag_update = auth_client.post(
+        "/api/modules/info-query/taxpayers/tags",
+        json={"taxpayer_ids": ["91310000INFO0002"], "address_tag": "百朋四井路"},
+    )
+    assert old_town_tag_update.status_code == 200
+    town_filter_resp = auth_client.get("/api/modules/info-query/taxpayers?address_tag=百朋镇")
+    assert town_filter_resp.status_code == 200
+    assert town_filter_resp.json()["total"] == 1
 
     stats_resp = auth_client.get("/api/modules/info-query/assignment-stats")
     assert stats_resp.status_code == 200
@@ -544,8 +584,16 @@ def test_info_query_import_assignment_stats_and_analysis_profile(auth_client):
     assert stats["by_officer"]["拟分配员"] == 2
     assert stats["by_department"]["一分局"] == 1
     assert stats["by_risk_level"]["高"] == 1
-    assert stats["by_industry_tag"]["加工制造"] == 1
-    assert stats["by_address_tag"]["柳堡路"] == 1
+    assert stats["by_industry_tag"]["其他"] == 2
+    assert stats["by_address_tag"]["未识别地址"] == 1
+
+    filter_options_resp = auth_client.get("/api/modules/info-query/filter-options")
+    assert filter_options_resp.status_code == 200
+    filter_options = filter_options_resp.json()
+    assert filter_options["total"] == 2
+    assert any(item["label"] == "拟分配员" and item["count"] == 2 for item in filter_options["officers"])
+    assert any(item["label"] == "一分局" for item in filter_options["departments"])
+    assert any(item["label"] == "其他" for item in filter_options["industry_tags"])
 
     tag_update_resp = auth_client.post(
         "/api/modules/info-query/taxpayers/tags",
@@ -583,6 +631,29 @@ def test_info_query_import_assignment_stats_and_analysis_profile(auth_client):
     assert export_rows[1][17] == "机械加工"
     assert export_rows[1][39] == "广西柳州市柳江区拉堡镇柳堡路56号"
 
+    assignment_export_resp = auth_client.get("/api/modules/info-query/taxpayers/export?q=信息企业A&view=assignment")
+    assert assignment_export_resp.status_code == 200
+    assignment_rows = list(csv.reader(io.StringIO(assignment_export_resp.content.decode("utf-8-sig"))))
+    assert assignment_rows[0] == ["纳税人名称", "纳税人识别号", "登记状态", "税收管理员", "行业标签", "地址标签", "行业", "经营地址"]
+    assert assignment_rows[1] == ["信息企业A", "91310000INFO0001", "", "拟分配员", "重点行业", "柳堡路片区", "制造业", "广西柳州市柳江区拉堡镇柳堡路56号"]
+
+    reimport_csv = (
+        "企业名称,纳税人识别号,法定代表人,行业,经营范围,经营地址,属地,主管税务机关,管理分局,税收管理员\n"
+        "信息企业A,91310000INFO0001,王法人,批发零售,日用品销售,柳江大道1号毅德城,浦东,第一税务所,一分局,拟分配员\n"
+    )
+    reimport_resp = auth_client.post(
+        "/api/modules/info-query/import",
+        files={"file": ("taxpayer-info-new.csv", io.BytesIO(reimport_csv.encode("utf-8-sig")), "text/csv")},
+    )
+    assert reimport_resp.status_code == 200
+    locked_tag_resp = auth_client.get("/api/modules/info-query/taxpayers?q=信息企业A")
+    assert locked_tag_resp.status_code == 200
+    locked_taxpayer = locked_tag_resp.json()["taxpayers"][0]
+    assert locked_taxpayer["industry"] == "批发零售"
+    assert locked_taxpayer["address"] == "柳江大道1号毅德城"
+    assert locked_taxpayer["industry_tag"] == "重点行业"
+    assert locked_taxpayer["address_tag"] == "柳堡路片区"
+
     job_csv = (
         "企业名称,纳税人识别号,法定代表人,行业,经营地址,税收管理员\n"
         "任务导入企业,91310000JOB0001,赵法人,批发零售,柳堡路88号,赵税官\n"
@@ -606,6 +677,10 @@ def test_info_query_import_assignment_stats_and_analysis_profile(auth_client):
     assert job_detail["progress_percent"] == 100
     assert job_detail["processed_rows"] == 1
     assert job_detail["imported"] == 1
+    recent_job_resp = auth_client.get("/api/modules/info-query/import-jobs/recent")
+    assert recent_job_resp.status_code == 200
+    assert recent_job_resp.json()["status"] == "succeeded"
+    assert recent_job_resp.json()["filename"] == "taxpayer-job.csv"
 
     create_resp = auth_client.post(
         "/api/modules/analysis-workbench/tasks",
@@ -665,6 +740,28 @@ def test_info_query_import_assignment_stats_and_analysis_profile(auth_client):
     assert recent_resp.json()["items"][0]["taxpayer_id"] == "91310000INFO0001"
 
 
+def test_info_query_address_tags_require_dense_counts(auth_client):
+    rows = ["企业名称,纳税人识别号,经营地址\n"]
+    for index in range(50):
+        rows.append(f"华韵企业{index},91310000HY{index:04d},广西柳州市柳江区拉堡镇华韵上城{index}号\n")
+    for index in range(2):
+        rows.append(f"零散企业{index},91310000LS{index:04d},广西柳州市柳江区拉堡镇柳堡路{index}号\n")
+
+    import_resp = auth_client.post(
+        "/api/modules/info-query/import",
+        files={"file": ("dense-address.csv", io.BytesIO("".join(rows).encode("utf-8-sig")), "text/csv")},
+    )
+    assert import_resp.status_code == 200
+
+    dense_resp = auth_client.get("/api/modules/info-query/taxpayers?address_tag=华韵上城&limit=100")
+    assert dense_resp.status_code == 200
+    assert dense_resp.json()["total"] == 50
+
+    sparse_resp = auth_client.get("/api/modules/info-query/taxpayers?address_tag=柳堡路&limit=100")
+    assert sparse_resp.status_code == 200
+    assert sparse_resp.json()["total"] == 0
+
+
 def test_risk_ledger_single_batch_import_filters_detail_and_backup(auth_client):
     info_csv = (
         "企业名称,纳税人识别号,登记状态,税收管理员,经营地址\n"
@@ -700,6 +797,11 @@ def test_risk_ledger_single_batch_import_filters_detail_and_backup(auth_client):
     records_after_resp = auth_client.get("/api/workbench/taxpayer-records?entry_status=待核实")
     assert records_after_resp.status_code == 200
     assert any(item["taxpayer_id"] == "91310000RISK0001" for item in records_after_resp.json()["items"])
+    summary_resp = auth_client.get("/api/workbench/taxpayer-records/summary")
+    assert summary_resp.status_code == 200
+    summary = summary_resp.json()
+    assert summary["taxpayer_total"] == 2
+    assert summary["pending_count"] == 1
 
     temporary_resp = auth_client.post(
         "/api/modules/risk-ledger/entries",
@@ -1651,6 +1753,206 @@ def test_user_cannot_access_platform_management(user_client):
     # user 不能修改角色
     role_resp = user_client.put("/api/platform/roles/user", json={"permissions": []})
     assert role_resp.status_code == 403
+
+
+def test_user_management_create_disable_and_reset_password(auth_client, user_client):
+    create_resp = auth_client.post(
+        "/api/platform/users",
+        json={"username": "taxofficer", "nickname": "税务人员", "password": "taxofficer123", "role": "user"},
+    )
+    assert create_resp.status_code == 200
+    created = create_resp.json()
+    assert created["username"] == "taxofficer"
+    assert created["role"] == "user"
+    assert created["is_active"] is True
+    assert created["must_change_password"] is True
+
+    duplicate_resp = auth_client.post(
+        "/api/platform/users",
+        json={"username": "taxofficer", "password": "taxofficer123", "role": "user"},
+    )
+    assert duplicate_resp.status_code == 400
+
+    list_resp = auth_client.get("/api/platform/users")
+    assert list_resp.status_code == 200
+    assert any(item["username"] == "taxofficer" for item in list_resp.json()["users"])
+
+    with TestClient(app) as login_client:
+        login_resp = login_client.post("/api/auth/login", json={"username": "taxofficer", "password": "taxofficer123"})
+        assert login_resp.status_code == 200
+
+    reset_resp = auth_client.post(
+        f"/api/platform/users/{created['id']}/reset-password",
+        json={"new_password": "newpass123"},
+    )
+    assert reset_resp.status_code == 200
+    with TestClient(app) as login_client:
+        old_login_resp = login_client.post("/api/auth/login", json={"username": "taxofficer", "password": "taxofficer123"})
+        assert old_login_resp.status_code == 401
+        new_login_resp = login_client.post("/api/auth/login", json={"username": "taxofficer", "password": "newpass123"})
+        assert new_login_resp.status_code == 200
+        assert new_login_resp.json()["user"]["must_change_password"] is True
+
+    disable_resp = auth_client.put(f"/api/platform/users/{created['id']}", json={"is_active": False})
+    assert disable_resp.status_code == 200
+    from app.middleware.rate_limit import _limiter
+    _limiter._hits.clear()
+    with TestClient(app) as login_client:
+        disabled_login_resp = login_client.post("/api/auth/login", json={"username": "taxofficer", "password": "newpass123"})
+        assert disabled_login_resp.status_code == 403
+
+    forbidden_resp = user_client.get("/api/platform/users")
+    assert forbidden_resp.status_code == 403
+
+
+def test_user_cannot_import_or_batch_update_taxpayer_data(user_client):
+    csv_content = "企业名称,纳税人识别号\n普通用户导入企业,91310000NOIMPORT\n"
+    import_resp = user_client.post(
+        "/api/modules/info-query/import",
+        files={"file": ("forbidden.csv", io.BytesIO(csv_content.encode("utf-8-sig")), "text/csv")},
+    )
+    assert import_resp.status_code == 403
+
+    assignment_resp = user_client.post(
+        "/api/modules/info-query/taxpayers/assignment",
+        json={"taxpayer_ids": ["91310000NOIMPORT"], "tax_officer": "张三"},
+    )
+    assert assignment_resp.status_code == 403
+
+    tag_resp = user_client.post(
+        "/api/modules/info-query/taxpayers/tags",
+        json={"taxpayer_ids": ["91310000NOIMPORT"], "industry_tag": "贸易"},
+    )
+    assert tag_resp.status_code == 403
+
+
+def test_admin_audit_health_and_tag_stats(auth_client):
+    csv_content = (
+        "企业名称,纳税人识别号,行业,经营地址\n"
+        "审计企业,91310000AUDIT001,汽车修理与维护,柳堡路88号\n"
+    )
+    import_resp = auth_client.post(
+        "/api/modules/info-query/import",
+        files={"file": ("audit-taxpayer.csv", io.BytesIO(csv_content.encode("utf-8-sig")), "text/csv")},
+    )
+    assert import_resp.status_code == 200
+
+    tag_resp = auth_client.post(
+        "/api/modules/info-query/taxpayers/tags",
+        json={"taxpayer_ids": ["91310000AUDIT001"], "industry_tag": "汽车销售及维修", "address_tag": "柳堡路"},
+    )
+    assert tag_resp.status_code == 200
+
+    audit_resp = auth_client.get("/api/platform/audit/logs?module=info-query")
+    assert audit_resp.status_code == 200
+    audit = audit_resp.json()
+    assert audit["total"] >= 1
+    assert any(item["action"] in ("import", "update_taxpayer_tags") for item in audit["logs"])
+    assert "operator_name" in audit["logs"][0]
+
+    health_resp = auth_client.get("/api/platform/health")
+    assert health_resp.status_code == 200
+    health = health_resp.json()
+    assert health["database"]["ok"] is True
+    assert health["data_source"]["taxpayer_total"] >= 1
+
+    stats_resp = auth_client.get("/api/modules/info-query/tag-stats")
+    assert stats_resp.status_code == 200
+    stats = stats_resp.json()
+    assert any(item["tag"] == "汽车销售及维修" and item["manual_count"] == 1 for item in stats["industry_tags"])
+    assert any(item["tag"] == "柳堡路" and item["manual_count"] == 1 for item in stats["address_tags"])
+
+
+def test_consolidate_global_data_preserves_manual_tags_and_operator(auth_client, seeded_db):
+    from app.models.record import OperationLog
+    from app.models.risk_ledger import RiskDossier, RiskLedgerEntry
+    from app.models.taxpayer import TaxpayerInfo
+
+    seeded_db.add(User(username="legacy_owner", hashed_password="x", nickname="旧用户", role="user", is_active=True))
+    seeded_db.commit()
+    legacy_user = seeded_db.query(User).filter(User.username == "legacy_owner").first()
+
+    seeded_db.add(TaxpayerInfo(
+        owner_id=1,
+        taxpayer_id="91310000MERGE001",
+        company_name="原全局企业",
+        industry_tag="原标签",
+        address_tag="原地址",
+    ))
+    seeded_db.add(TaxpayerInfo(
+        owner_id=legacy_user.id,
+        taxpayer_id="91310000MERGE001",
+        company_name="旧账号企业",
+        industry_tag="人工行业",
+        industry_tag_manual=True,
+        address_tag="人工地址",
+        address_tag_manual=True,
+    ))
+    dossier = RiskDossier(
+        owner_id=legacy_user.id,
+        taxpayer_id="91310000MERGE001",
+        company_name="旧账号企业",
+    )
+    seeded_db.add(dossier)
+    seeded_db.flush()
+    seeded_db.add(RiskLedgerEntry(
+        owner_id=legacy_user.id,
+        dossier_id=dossier.id,
+        taxpayer_id="91310000MERGE001",
+        entry_id="legacy-entry-001",
+        recorded_at=datetime.utcnow(),
+        content="旧账号记录",
+        created_by=legacy_user.id,
+    ))
+    seeded_db.commit()
+
+    resp = auth_client.post("/api/platform/maintenance/consolidate-global-data")
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["backup_id"]
+    assert payload["taxpayer_merged"] == 1
+
+    target = seeded_db.query(TaxpayerInfo).filter(TaxpayerInfo.owner_id == 1, TaxpayerInfo.taxpayer_id == "91310000MERGE001").first()
+    assert target.company_name == "旧账号企业"
+    assert target.industry_tag == "人工行业"
+    assert target.industry_tag_manual is True
+    assert target.address_tag == "人工地址"
+    entry = seeded_db.query(RiskLedgerEntry).filter(RiskLedgerEntry.entry_id == "legacy-entry-001").first()
+    assert entry.owner_id == 1
+    assert entry.created_by == legacy_user.id
+    assert seeded_db.query(OperationLog).filter(OperationLog.action == "consolidate_global_data").first() is not None
+
+
+def test_business_data_is_shared_across_login_accounts(auth_client, user_client):
+    csv_content = (
+        "企业名称,纳税人识别号,登记状态,税收管理员,经营地址\n"
+        "共享企业,91310000SHARED001,正常,共享管理员,柳堡路1号\n"
+    )
+    import_resp = auth_client.post(
+        "/api/modules/info-query/import",
+        files={"file": ("shared-taxpayer.csv", io.BytesIO(csv_content.encode("utf-8-sig")), "text/csv")},
+    )
+    assert import_resp.status_code == 200
+
+    user_list_resp = user_client.get("/api/modules/info-query/taxpayers?q=共享企业")
+    assert user_list_resp.status_code == 200
+    assert user_list_resp.json()["total"] == 1
+
+    entry_resp = user_client.post(
+        "/api/modules/risk-ledger/entries",
+        json={
+            "taxpayer_id": "91310000SHARED001",
+            "recorded_at": "2026-05-07T10:00:00",
+            "content": "普通用户记录的共享风险",
+            "entry_status": "待核实",
+        },
+    )
+    assert entry_resp.status_code == 200
+    assert entry_resp.json()["created_by"] != 1
+
+    admin_dossier_resp = auth_client.get("/api/modules/risk-ledger/dossiers/91310000SHARED001")
+    assert admin_dossier_resp.status_code == 200
+    assert admin_dossier_resp.json()["entries"][0]["content"] == "普通用户记录的共享风险"
 
 
 def test_log_center_detail_logged_action(auth_client):

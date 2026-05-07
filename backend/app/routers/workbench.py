@@ -7,10 +7,11 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.shared_scope import business_owner_id
 from app.models import User
 from app.models.record import Task
 from app.models.risk_ledger import RiskDossier, RiskLedgerEntry
@@ -86,6 +87,105 @@ def dossier_payload(dossier: RiskDossier, db: Session) -> dict:
     }
 
 
+def latest_entries_by_dossier(db: Session, user_id: int, dossier_ids: list[int]) -> dict[int, RiskLedgerEntry]:
+    _ = user_id
+    if not dossier_ids:
+        return {}
+    latest: dict[int, RiskLedgerEntry] = {}
+    rows = db.query(RiskLedgerEntry).filter(
+        RiskLedgerEntry.owner_id == business_owner_id(),
+        RiskLedgerEntry.dossier_id.in_(dossier_ids),
+    ).order_by(
+        RiskLedgerEntry.dossier_id.asc(),
+        RiskLedgerEntry.recorded_at.desc(),
+        RiskLedgerEntry.id.desc(),
+    ).all()
+    for row in rows:
+        latest.setdefault(row.dossier_id, row)
+    return latest
+
+
+def entry_counts_by_dossier(db: Session, user_id: int, dossier_ids: list[int]) -> dict[int, int]:
+    _ = user_id
+    if not dossier_ids:
+        return {}
+    return dict(
+        db.query(RiskLedgerEntry.dossier_id, func.count(RiskLedgerEntry.id))
+        .filter(
+            RiskLedgerEntry.owner_id == business_owner_id(),
+            RiskLedgerEntry.dossier_id.in_(dossier_ids),
+        )
+        .group_by(RiskLedgerEntry.dossier_id)
+        .all()
+    )
+
+
+def taxpayer_record_payload(
+    taxpayer: Optional[TaxpayerInfo],
+    dossier: Optional[RiskDossier],
+    latest: Optional[RiskLedgerEntry],
+    entry_count: int = 0,
+) -> dict:
+    taxpayer_id = taxpayer.taxpayer_id if taxpayer else dossier.taxpayer_id if dossier else ""
+    latest_deadline = latest.rectification_deadline if latest else None
+    latest_recorded_at = latest.recorded_at if latest else None
+    is_overdue = bool(
+        latest
+        and latest.entry_status == "整改中"
+        and latest_deadline is not None
+        and latest_deadline < datetime.utcnow()
+    )
+    return {
+        "taxpayer_id": taxpayer_id,
+        "company_name": taxpayer.company_name if taxpayer else dossier.company_name if dossier else "",
+        "registration_status": taxpayer.registration_status if taxpayer else dossier.registration_status if dossier else "",
+        "tax_officer": taxpayer.tax_officer if taxpayer else dossier.tax_officer if dossier else "",
+        "address": taxpayer.address if taxpayer else dossier.address if dossier else "",
+        "industry": taxpayer.industry if taxpayer else "",
+        "industry_tag": taxpayer.industry_tag if taxpayer else "",
+        "address_tag": taxpayer.address_tag if taxpayer else "",
+        "manager_department": taxpayer.manager_department if taxpayer else "",
+        "is_temporary": bool(dossier.is_temporary) if dossier else False,
+        "entry_count": entry_count,
+        "latest_recorded_at": latest_recorded_at.isoformat() if latest_recorded_at else None,
+        "latest_rectification_deadline": latest_deadline.isoformat() if latest_deadline else None,
+        "latest_content": latest.content if latest else "",
+        "latest_entry_status": latest.entry_status if latest else "",
+        "latest_contact_person": latest.contact_person if latest else "",
+        "latest_contact_phone": latest.contact_phone if latest else "",
+        "is_overdue": is_overdue,
+    }
+
+
+def taxpayer_record_summary(db: Session, user_id: int) -> dict:
+    _ = user_id
+    latest_by_dossier: dict[int, RiskLedgerEntry] = {}
+    rows = db.query(RiskLedgerEntry).filter(
+        RiskLedgerEntry.owner_id == business_owner_id(),
+    ).order_by(
+        RiskLedgerEntry.dossier_id.asc(),
+        RiskLedgerEntry.recorded_at.desc(),
+        RiskLedgerEntry.id.desc(),
+    ).all()
+    for row in rows:
+        latest_by_dossier.setdefault(row.dossier_id, row)
+    status_counts: dict[str, int] = {}
+    for entry in latest_by_dossier.values():
+        status_counts[entry.entry_status] = status_counts.get(entry.entry_status, 0) + 1
+    return {
+        "taxpayer_total": db.query(TaxpayerInfo).filter(TaxpayerInfo.owner_id == business_owner_id()).count(),
+        "dossier_total": db.query(RiskDossier).filter(RiskDossier.owner_id == business_owner_id()).count(),
+        "pending_count": status_counts.get("待核实", 0),
+        "rectifying_count": status_counts.get("整改中", 0),
+        "rectified_count": status_counts.get("已整改", 0),
+        "excluded_count": status_counts.get("已排除", 0),
+        "temporary_count": db.query(RiskDossier).filter(
+            RiskDossier.owner_id == business_owner_id(),
+            RiskDossier.is_temporary == True,
+        ).count(),
+    }
+
+
 def entry_payload(entry: RiskLedgerEntry) -> dict:
     return {
         "entry_id": entry.entry_id,
@@ -119,14 +219,14 @@ def taxpayer_search_payload(item: TaxpayerInfo) -> dict:
 
 
 def recent_analysis_for_taxpayer(taxpayer_id: str, db: Session, user_id: int, limit: int = 5) -> tuple[list[dict], list[str]]:
+    _ = user_id
     tasks = db.query(Task).filter(
-        Task.creator_id == user_id,
         Task.module == "analysis-workbench",
     ).order_by(Task.created_at.desc()).limit(30).all()
     matched: list[dict] = []
     material_gaps: list[str] = []
     for task in tasks:
-        files = get_task_files(task.task_id, db, user_id)
+        files = get_task_files(task.task_id, db, business_owner_id())
         if not files:
             continue
         analysis = analyze_files(task, files)
@@ -159,7 +259,8 @@ def build_risk_list_items(
     overdue: Optional[bool] = None,
     temporary: Optional[bool] = None,
 ) -> tuple[list[dict], int]:
-    query = db.query(RiskDossier).filter(RiskDossier.owner_id == user_id)
+    _ = user_id
+    query = db.query(RiskDossier).filter(RiskDossier.owner_id == business_owner_id())
     if q:
         like = f"%{q}%"
         query = query.filter(or_(
@@ -186,7 +287,8 @@ def build_risk_list_items(
 
 
 def latest_dossier_by_taxpayer(db: Session, user_id: int) -> dict[str, RiskDossier]:
-    rows = db.query(RiskDossier).filter(RiskDossier.owner_id == user_id).all()
+    _ = user_id
+    rows = db.query(RiskDossier).filter(RiskDossier.owner_id == business_owner_id()).all()
     return {row.taxpayer_id: row for row in rows}
 
 
@@ -201,9 +303,52 @@ def build_taxpayer_record_items(
     temporary: Optional[bool] = None,
     industry_tag: Optional[str] = None,
     address_tag: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
 ) -> tuple[list[dict], int, dict]:
-    dossier_map = latest_dossier_by_taxpayer(db, user_id)
-    query = db.query(TaxpayerInfo).filter(TaxpayerInfo.owner_id == user_id)
+    summary = taxpayer_record_summary(db, user_id)
+    if entry_status or overdue is not None or temporary is not None:
+        dossier_query = db.query(RiskDossier).filter(RiskDossier.owner_id == business_owner_id())
+        if q:
+            like = f"%{q}%"
+            dossier_query = dossier_query.filter(or_(
+                RiskDossier.taxpayer_id.like(like),
+                RiskDossier.company_name.like(like),
+                RiskDossier.tax_officer.like(like),
+            ))
+        if tax_officer:
+            dossier_query = dossier_query.filter(RiskDossier.tax_officer.like(f"%{tax_officer}%"))
+        if registration_status:
+            dossier_query = dossier_query.filter(RiskDossier.registration_status == registration_status)
+        if temporary is not None:
+            dossier_query = dossier_query.filter(RiskDossier.is_temporary == temporary)
+        dossiers = dossier_query.order_by(RiskDossier.updated_at.desc()).all()
+        dossier_ids = [item.id for item in dossiers]
+        latest_map = latest_entries_by_dossier(db, user_id, dossier_ids)
+        count_map = entry_counts_by_dossier(db, user_id, dossier_ids)
+        taxpayer_map = {
+            item.taxpayer_id: item
+            for item in db.query(TaxpayerInfo).filter(
+                TaxpayerInfo.owner_id == business_owner_id(),
+                TaxpayerInfo.taxpayer_id.in_([d.taxpayer_id for d in dossiers] or [""]),
+            ).all()
+        }
+        filtered: list[dict] = []
+        for dossier in dossiers:
+            taxpayer = taxpayer_map.get(dossier.taxpayer_id)
+            if industry_tag and (not taxpayer or taxpayer.industry_tag != industry_tag):
+                continue
+            if address_tag and (not taxpayer or taxpayer.address_tag != address_tag):
+                continue
+            item = taxpayer_record_payload(taxpayer, dossier, latest_map.get(dossier.id), count_map.get(dossier.id, 0))
+            if entry_status and item["latest_entry_status"] != entry_status:
+                continue
+            if overdue is not None and item["is_overdue"] != overdue:
+                continue
+            filtered.append(item)
+        return filtered[offset:offset + limit], len(filtered), summary
+
+    query = db.query(TaxpayerInfo).filter(TaxpayerInfo.owner_id == business_owner_id())
     if q:
         like = f"%{q}%"
         query = query.filter(or_(
@@ -211,7 +356,6 @@ def build_taxpayer_record_items(
             TaxpayerInfo.company_name.like(like),
             TaxpayerInfo.legal_person.like(like),
             TaxpayerInfo.tax_officer.like(like),
-            TaxpayerInfo.address.like(like),
         ))
     if tax_officer:
         query = query.filter(TaxpayerInfo.tax_officer.like(f"%{tax_officer}%"))
@@ -220,79 +364,36 @@ def build_taxpayer_record_items(
     if industry_tag:
         query = query.filter(TaxpayerInfo.industry_tag == industry_tag)
     if address_tag:
-        query = query.filter(TaxpayerInfo.address_tag == address_tag)
-    taxpayers = query.order_by(TaxpayerInfo.last_used_at.desc().nullslast(), TaxpayerInfo.updated_at.desc()).all()
+        if address_tag.endswith(("镇", "乡")):
+            prefix = address_tag[:-1]
+            query = query.filter(or_(
+                TaxpayerInfo.address_tag == address_tag,
+                TaxpayerInfo.address_tag.like(f"{prefix}%"),
+            ))
+        else:
+            query = query.filter(TaxpayerInfo.address_tag == address_tag)
+    total = query.count()
+    taxpayers = query.order_by(TaxpayerInfo.last_used_at.desc().nullslast(), TaxpayerInfo.updated_at.desc()).offset(offset).limit(limit).all()
+    taxpayer_ids = [item.taxpayer_id for item in taxpayers]
+    dossiers = db.query(RiskDossier).filter(
+        RiskDossier.owner_id == business_owner_id(),
+        RiskDossier.taxpayer_id.in_(taxpayer_ids or [""]),
+    ).all()
+    dossier_map = {row.taxpayer_id: row for row in dossiers}
+    latest_map = latest_entries_by_dossier(db, user_id, [row.id for row in dossiers])
+    count_map = entry_counts_by_dossier(db, user_id, [row.id for row in dossiers])
 
     items: list[dict] = []
-    seen: set[str] = set()
     for taxpayer in taxpayers:
         dossier = dossier_map.get(taxpayer.taxpayer_id)
-        if dossier:
-            item = dossier_payload(dossier, db)
-        else:
-            item = {
-                "taxpayer_id": taxpayer.taxpayer_id,
-                "company_name": taxpayer.company_name,
-                "registration_status": taxpayer.registration_status,
-                "tax_officer": taxpayer.tax_officer,
-                "address": taxpayer.address,
-                "industry": taxpayer.industry,
-                "industry_tag": taxpayer.industry_tag,
-                "address_tag": taxpayer.address_tag,
-                "manager_department": taxpayer.manager_department,
-                "is_temporary": False,
-                "entry_count": 0,
-                "latest_recorded_at": None,
-                "latest_rectification_deadline": None,
-                "latest_content": "",
-                "latest_entry_status": "",
-                "latest_contact_person": "",
-                "latest_contact_phone": "",
-                "is_overdue": False,
-            }
-        if entry_status and item["latest_entry_status"] != entry_status:
-            continue
-        if overdue is not None and item["is_overdue"] != overdue:
-            continue
-        if temporary is not None and item["is_temporary"] != temporary:
-            continue
-        seen.add(item["taxpayer_id"])
+        item = taxpayer_record_payload(
+            taxpayer,
+            dossier,
+            latest_map.get(dossier.id) if dossier else None,
+            count_map.get(dossier.id, 0) if dossier else 0,
+        )
         items.append(item)
-
-    for dossier in dossier_map.values():
-        if dossier.taxpayer_id in seen:
-            continue
-        item = dossier_payload(dossier, db)
-        if q:
-            like_text = q.strip()
-            if like_text not in item["taxpayer_id"] and like_text not in item["company_name"] and like_text not in item["address"]:
-                continue
-        if tax_officer and tax_officer not in item["tax_officer"]:
-            continue
-        if registration_status and item["registration_status"] != registration_status:
-            continue
-        if industry_tag and item.get("industry_tag") != industry_tag:
-            continue
-        if address_tag and item.get("address_tag") != address_tag:
-            continue
-        if entry_status and item["latest_entry_status"] != entry_status:
-            continue
-        if overdue is not None and item["is_overdue"] != overdue:
-            continue
-        if temporary is not None and item["is_temporary"] != temporary:
-            continue
-        items.append(item)
-
-    summary = {
-        "taxpayer_total": db.query(TaxpayerInfo).filter(TaxpayerInfo.owner_id == user_id).count(),
-        "dossier_total": len(dossier_map),
-        "pending_count": sum(1 for item in items if item["latest_entry_status"] == "待核实"),
-        "rectifying_count": sum(1 for item in items if item["latest_entry_status"] == "整改中"),
-        "rectified_count": sum(1 for item in items if item["latest_entry_status"] == "已整改"),
-        "excluded_count": sum(1 for item in items if item["latest_entry_status"] == "已排除"),
-        "temporary_count": sum(1 for item in items if item["is_temporary"]),
-    }
-    return items, len(items), summary
+    return items, total, summary
 
 
 @router.get("/taxpayer/{taxpayer_id}", response_model=TaxpayerWorkbenchResponse)
@@ -302,11 +403,11 @@ def taxpayer_workbench(
     current_user: User = Depends(get_current_user),
 ):
     taxpayer = db.query(TaxpayerInfo).filter(
-        TaxpayerInfo.owner_id == current_user.id,
+        TaxpayerInfo.owner_id == business_owner_id(),
         TaxpayerInfo.taxpayer_id == taxpayer_id,
     ).first()
     dossier = db.query(RiskDossier).filter(
-        RiskDossier.owner_id == current_user.id,
+        RiskDossier.owner_id == business_owner_id(),
         RiskDossier.taxpayer_id == taxpayer_id,
     ).first()
     if not taxpayer and not dossier:
@@ -314,7 +415,7 @@ def taxpayer_workbench(
     entries = []
     if dossier:
         entries = db.query(RiskLedgerEntry).filter(
-            RiskLedgerEntry.owner_id == current_user.id,
+            RiskLedgerEntry.owner_id == business_owner_id(),
             RiskLedgerEntry.dossier_id == dossier.id,
         ).order_by(RiskLedgerEntry.recorded_at.desc(), RiskLedgerEntry.id.desc()).limit(20).all()
     recent_tasks, material_gaps = recent_analysis_for_taxpayer(taxpayer_id, db, current_user.id)
@@ -352,7 +453,7 @@ def search_taxpayers(
 ):
     like = f"%{q.strip()}%"
     taxpayers = db.query(TaxpayerInfo).filter(
-        TaxpayerInfo.owner_id == current_user.id,
+        TaxpayerInfo.owner_id == business_owner_id(),
         or_(
             TaxpayerInfo.taxpayer_id.like(like),
             TaxpayerInfo.company_name.like(like),
@@ -370,7 +471,7 @@ def recent_taxpayers(
     current_user: User = Depends(get_current_user),
 ):
     taxpayers = db.query(TaxpayerInfo).filter(
-        TaxpayerInfo.owner_id == current_user.id,
+        TaxpayerInfo.owner_id == business_owner_id(),
         TaxpayerInfo.last_used_at.isnot(None),
     ).order_by(TaxpayerInfo.last_used_at.desc()).limit(limit).all()
     return TaxpayerSearchResponse(items=[taxpayer_search_payload(item) for item in taxpayers])
@@ -392,9 +493,17 @@ def taxpayer_records(
     current_user: User = Depends(get_current_user),
 ):
     matched_items, total, summary = build_taxpayer_record_items(
-        db, current_user.id, q, tax_officer, registration_status, entry_status, overdue, temporary, industry_tag, address_tag
+        db, current_user.id, q, tax_officer, registration_status, entry_status, overdue, temporary, industry_tag, address_tag, limit, offset
     )
-    return RiskListResponse(items=matched_items[offset:offset + limit], total=total, summary=summary)
+    return RiskListResponse(items=matched_items, total=total, summary=summary)
+
+
+@router.get("/taxpayer-records/summary")
+def taxpayer_records_summary(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return taxpayer_record_summary(db, current_user.id)
 
 
 @router.get("/my-risk-list", response_model=RiskListResponse)
@@ -414,7 +523,7 @@ def my_risk_list(
         db, current_user.id, q, tax_officer, registration_status, entry_status, overdue, temporary
     )
     items = matched_items[offset:offset + limit]
-    all_dossiers = db.query(RiskDossier).filter(RiskDossier.owner_id == current_user.id).all()
+    all_dossiers = db.query(RiskDossier).filter(RiskDossier.owner_id == business_owner_id()).all()
     all_items = [dossier_payload(item, db) for item in all_dossiers]
     return RiskListResponse(
         items=items,
@@ -440,7 +549,8 @@ def workbench_todos(
     now = datetime.utcnow()
     today_start = datetime(now.year, now.month, now.day)
     due_cutoff = now + timedelta(days=due_days)
-    dossiers = db.query(RiskDossier).filter(RiskDossier.owner_id == current_user.id).all()
+    _ = current_user
+    dossiers = db.query(RiskDossier).filter(RiskDossier.owner_id == business_owner_id()).all()
     items: list[dict] = []
     summary = {
         "pending_today_count": 0,

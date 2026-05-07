@@ -14,6 +14,8 @@ class Task(Base):
     module = Column(String(50), nullable=False)  # 所属模块 key
     creator_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     result_summary = Column(Text, default="")
+    taxpayer_id = Column(String(64), default="")
+    company_name = Column(String(255), default="")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)

@@ -9,8 +9,8 @@ import RecordDetail from './pages/Detail'
 import NewRecord from './pages/NewRecord'
 
 const tabItems = [
-  { key: 'workbench', label: '工作台', path: '/modules/record-operations' },
-  { key: 'list', label: '对象列表', path: '/modules/record-operations/list' },
+  { key: 'workbench', label: '辅助数据首页', path: '/modules/record-operations' },
+  { key: 'list', label: '辅助记录列表', path: '/modules/record-operations/list' },
   { key: 'import', label: '导入数据', path: '/modules/record-operations/import' },
 ]
 
@@ -18,8 +18,8 @@ export default function RecordOperations() {
   return (
     <PlatformLayout>
       <ModuleLayout
-        moduleName="对象管理模块"
-        moduleDesc="对象列表 · 分类 · 分配 · 批量操作"
+        moduleName="辅助数据管理"
+        moduleDesc="辅助记录 · 分类标签 · 批量整理"
         items={tabItems}
       >
         <Routes>

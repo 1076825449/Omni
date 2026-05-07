@@ -1,0 +1,17 @@
+[Unit]
+Description=Tax Assistant Backend
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/tax-desktop-app/backend
+Environment=APP_ENV=production
+Environment=AUTH_COOKIE_SECURE=false
+Environment=SECRET_KEY=please-change-this-secret-key
+Environment=CORS_ORIGINS=http://192.168.1.50:5173,http://127.0.0.1:5173,http://localhost:5173
+ExecStart=/opt/tax-desktop-app/backend/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 3000
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

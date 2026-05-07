@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from pydantic import BaseModel, ConfigDict
 from app.core.database import get_db
+from app.core.shared_scope import business_owner_id
 from app.models import User
 from app.models.record import Task as TaskModel
 from app.models.record import FileRecord, OperationLog
@@ -68,7 +69,8 @@ def list_tasks(
     current_user: User = Depends(get_current_user),
 ):
     """获取任务列表。支持按状态/模块/类型筛选，分页返回。"""
-    query = db.query(TaskModel).filter(TaskModel.creator_id == current_user.id)
+    _ = current_user
+    query = db.query(TaskModel)
     if q:
         like = f"%{q}%"
         query = query.filter(
@@ -97,7 +99,6 @@ def get_task_detail(
 ):
     task = db.query(TaskModel).filter(
         TaskModel.task_id == task_id,
-        TaskModel.creator_id == current_user.id,
     ).first()
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
@@ -106,12 +107,12 @@ def get_task_detail(
     related_record_count = 0
     if task.module == "analysis-workbench":
         file_count = db.query(FileRecord).filter(
-            FileRecord.owner_id == current_user.id,
+            FileRecord.owner_id == business_owner_id(),
             FileRecord.module == task.module,
             FileRecord.name.like(f"{task.task_id}%"),
         ).count()
         related_record_count = db.query(Record).filter(
-            Record.owner_id == current_user.id,
+            Record.owner_id == business_owner_id(),
             Record.import_batch == f"analysis-{task.task_id}",
         ).count()
 

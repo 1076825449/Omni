@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from pydantic import BaseModel, ConfigDict
 from app.core.database import get_db
+from app.core.shared_scope import business_owner_id
 from app.models import User
 from app.models.record import FileRecord, OperationLog
 from app.routers.auth import get_current_user, require_permission
@@ -68,7 +69,8 @@ def list_files(
     current_user: User = Depends(get_current_user),
 ):
     """获取文件列表。支持按模块/状态/MIME类型筛选，分页返回。"""
-    query = db.query(FileRecord).filter(FileRecord.owner_id == current_user.id)
+    _ = current_user
+    query = db.query(FileRecord).filter(FileRecord.owner_id == business_owner_id())
     if q:
         like = f"%{q}%"
         query = query.filter(
@@ -114,7 +116,7 @@ def archive_file(
     """归档指定文件。归档后文件标记为 archived 状态。"""
     f = db.query(FileRecord).filter(
         FileRecord.file_id == file_id,
-        or_(FileRecord.owner_id == current_user.id, current_user.role == "admin"),
+        FileRecord.owner_id == business_owner_id(),
     ).first()
     if not f:
         raise HTTPException(status_code=404, detail="文件不存在")
@@ -141,7 +143,7 @@ def download_file(
     """下载指定文件。"""
     f = db.query(FileRecord).filter(
         FileRecord.file_id == file_id,
-        FileRecord.owner_id == current_user.id,
+        FileRecord.owner_id == business_owner_id(),
     ).first()
     if not f:
         raise HTTPException(status_code=404, detail="文件不存在")
@@ -163,7 +165,7 @@ def preview_file(
 ):
     file = db.query(FileRecord).filter(
         FileRecord.file_id == file_id,
-        FileRecord.owner_id == current_user.id,
+        FileRecord.owner_id == business_owner_id(),
     ).first()
     if not file:
         raise HTTPException(status_code=404, detail="文件不存在")

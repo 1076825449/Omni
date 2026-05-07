@@ -10,8 +10,8 @@ const { Title, Text } = Typography
 const typeMap: Record<string, { label: string; color: string }> = {
   info: { label: '通知', color: 'blue' },
   success: { label: '成功', color: 'green' },
-  warning: { label: '警告', color: 'orange' },
-  error: { label: '错误', color: 'red' },
+  warning: { label: '需关注', color: 'orange' },
+  error: { label: '处理失败', color: 'red' },
 }
 
 export default function Notifications() {
@@ -41,7 +41,7 @@ export default function Notifications() {
       void message.success('通知已标为已读')
       load()
     } catch {
-      void message.error('操作失败')
+      void message.error('标记失败，请稍后重试')
     }
   }
 
@@ -51,7 +51,7 @@ export default function Notifications() {
       void message.success('已全部标为已读')
       load()
     } catch {
-      void message.error('操作失败')
+      void message.error('标记失败，请稍后重试')
     }
   }
 
@@ -90,8 +90,8 @@ export default function Notifications() {
           >
             <Select.Option value="info">通知</Select.Option>
             <Select.Option value="success">成功</Select.Option>
-            <Select.Option value="warning">警告</Select.Option>
-            <Select.Option value="error">错误</Select.Option>
+            <Select.Option value="warning">需关注</Select.Option>
+            <Select.Option value="error">处理失败</Select.Option>
           </Select>
           <Select
             placeholder="已读状态"
@@ -117,7 +117,7 @@ export default function Notifications() {
                 <Text type="secondary" style={{ fontSize: 12 }}>
                   {isRead !== undefined
                     ? '可以尝试调整筛选条件，或清除筛选查看所有通知'
-                    : '当你有任务完成、导入结果、风险提醒等重要事件时，会在这里收到通知'}
+                    : '当你有案头分析完成、导入结果、风险提醒等重要事项时，会在这里收到通知'}
                 </Text>
               </Space>
             }

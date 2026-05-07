@@ -11,12 +11,12 @@ const { Title, Text } = Typography
 
 const columns: ColumnsType<FileRecord> = [
   {
-    title: '文件名',
+    title: '资料名称',
     dataIndex: 'name',
     key: 'name',
   },
   {
-    title: '所属模块',
+    title: '所属功能',
     dataIndex: 'module',
     key: 'module',
     width: 160,
@@ -104,10 +104,10 @@ export default function FileCenter() {
   const handleArchive = async (fileId: string) => {
     try {
       await filesApi.archive(fileId)
-      void message.success('文件已归档')
+      void message.success('资料已归档')
       load(page, query || undefined, module, status)
     } catch {
-      void message.error('归档失败')
+      void message.error('资料归档失败，请稍后重试')
     }
   }
 
@@ -118,7 +118,7 @@ export default function FileCenter() {
       const data = await filesApi.preview(fileId)
       setPreview(data)
     } catch {
-      void message.error('加载预览失败')
+      void message.error('资料预览失败，请下载后查看')
       setPreview(null)
     } finally {
       setPreviewLoading(false)
@@ -134,7 +134,7 @@ export default function FileCenter() {
           <Button size="small" onClick={() => void handlePreview(record.file_id)}>
             预览
           </Button>
-          <Button size="small" onClick={() => navigate(`/modules/${record.module}`)}>来源模块</Button>
+          <Button size="small" onClick={() => navigate(`/modules/${record.module}`)}>来源功能</Button>
           <Button size="small" disabled={record.status !== 'active'} onClick={() => void handleArchive(record.file_id)}>
             归档
           </Button>
@@ -146,20 +146,20 @@ export default function FileCenter() {
   return (
     <div className="omni-page">
       <div className="omni-page-header">
-        <Title level={4} style={{ margin: 0 }}>文件中心</Title>
-        <Text type="secondary">全平台文件统一管理</Text>
+        <Title level={4} style={{ margin: 0 }}>系统管理：资料留存</Title>
+        <Text type="secondary">查看已上传的分析资料、导入文件和文书相关留存。</Text>
       </div>
 
       <Card size="small" style={{ marginBottom: 16 }}>
         <Space wrap>
           <Input
-            placeholder="搜索文件名"
+            placeholder="搜索资料名称"
             style={{ width: 200 }}
             value={query}
             onChange={e => setQuery(e.target.value)}
           />
           <Select
-            placeholder="所属模块"
+            placeholder="所属功能"
             style={{ width: 180 }}
             allowClear
             value={module}
@@ -170,7 +170,7 @@ export default function FileCenter() {
             ))}
           </Select>
           <Select
-            placeholder="文件状态"
+            placeholder="资料状态"
             style={{ width: 120 }}
             allowClear
             value={status}
@@ -197,12 +197,12 @@ export default function FileCenter() {
           <Empty
             description={
               <Space direction="vertical" size={4}>
-                <Text type="secondary">还没有文件记录</Text>
+                <Text type="secondary">还没有资料留存记录</Text>
                 <Text type="secondary" style={{ fontSize: 12 }}>
-                  当你在各模块上传文件（分析资料、导入数据等），文件会自动汇总到这里。
+                  当你上传分析资料、导入数据等，资料会自动汇总到这里。
                 </Text>
                 <Text type="secondary" style={{ fontSize: 12 }}>
-                  可以进入「模块中心」，选择分析或对象管理模块开始使用。
+                  可以从首页进入「案头分析」或「纳税人信息」开始使用。
                 </Text>
               </Space>
             }
@@ -233,7 +233,7 @@ export default function FileCenter() {
       </Card>
 
       <Modal
-        title={preview?.original_name || '文件预览'}
+        title={preview?.original_name || '资料预览'}
         open={previewOpen}
         onCancel={() => { setPreviewOpen(false); setPreview(null) }}
         footer={null}

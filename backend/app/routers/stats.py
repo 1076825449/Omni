@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.core.database import get_db
+from app.core.shared_scope import business_owner_id
 from app.models import User, Task, FileRecord, OperationLog, Module
 from app.models.records import Record
 from app.routers.auth import get_current_user
@@ -15,23 +16,22 @@ def overview_stats(
     current_user: User = Depends(get_current_user),
 ):
     """平台全局统计数据"""
-    task_total = db.query(Task).filter(Task.creator_id == current_user.id).count()
+    _ = current_user
+    task_total = db.query(Task).count()
     task_done = db.query(Task).filter(
-        Task.creator_id == current_user.id,
         Task.status == "succeeded",
     ).count()
     task_failed = db.query(Task).filter(
-        Task.creator_id == current_user.id,
         Task.status == "failed",
     ).count()
 
-    file_total = db.query(FileRecord).filter(FileRecord.owner_id == current_user.id).count()
+    file_total = db.query(FileRecord).filter(FileRecord.owner_id == business_owner_id()).count()
     file_active = db.query(FileRecord).filter(
-        FileRecord.owner_id == current_user.id,
+        FileRecord.owner_id == business_owner_id(),
         FileRecord.status == "active",
     ).count()
 
-    record_total = db.query(Record).filter(Record.owner_id == current_user.id).count()
+    record_total = db.query(Record).filter(Record.owner_id == business_owner_id()).count()
 
     log_total = db.query(OperationLog).filter(OperationLog.operator_id == current_user.id).count()
 
@@ -60,7 +60,6 @@ def task_stats(
         Task.module,
         func.count(Task.id).label("total"),
     ).filter(
-        Task.creator_id == current_user.id,
     ).group_by(Task.module).all()
 
     by_module = {}
@@ -69,7 +68,6 @@ def task_stats(
 
     for module_key, stats in by_module.items():
         succeeded = db.query(Task).filter(
-            Task.creator_id == current_user.id,
             Task.module == module_key,
             Task.status == "succeeded",
         ).count()

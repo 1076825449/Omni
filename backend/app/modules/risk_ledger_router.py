@@ -13,6 +13,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.shared_scope import business_owner_id
 from app.models import User
 from app.models.record import OperationLog
 from app.models.risk_ledger import RiskDossier, RiskLedgerEntry
@@ -33,6 +34,9 @@ FIELD_ALIASES = {
     "recorded_at": ["记录时间", "发生时间", "触发时间", "recorded_at"],
     "content": ["记录内容", "风险内容", "内容", "问题描述", "content"],
     "entry_status": ["事项状态", "处理状态", "风险状态", "entry_status"],
+    "rectification_deadline": ["整改期限", "整改截止时间", "反馈期限", "rectification_deadline"],
+    "contact_person": ["联系人", "主管税务人员", "contact_person"],
+    "contact_phone": ["联系电话", "联系方式", "contact_phone"],
     "note": ["备注", "note"],
 }
 
@@ -52,9 +56,13 @@ class DossierSchema(BaseModel):
     created_at: datetime
     updated_at: datetime
     latest_recorded_at: Optional[datetime] = None
+    latest_rectification_deadline: Optional[datetime] = None
     latest_content: str = ""
     latest_entry_status: str = ""
+    latest_contact_person: str = ""
+    latest_contact_phone: str = ""
     entry_count: int = 0
+    is_overdue: bool = False
 
 
 class EntrySchema(BaseModel):
@@ -67,6 +75,9 @@ class EntrySchema(BaseModel):
     recorded_at: datetime
     content: str
     entry_status: str
+    rectification_deadline: Optional[datetime] = None
+    contact_person: str = ""
+    contact_phone: str = ""
     note: str
     owner_id: int
     created_by: int
@@ -88,6 +99,9 @@ class EntryCreateRequest(BaseModel):
     recorded_at: datetime
     content: str
     entry_status: str = "待核实"
+    rectification_deadline: Optional[datetime] = None
+    contact_person: str = ""
+    contact_phone: str = ""
     company_name: str = ""
     registration_status: str = ""
     tax_officer: str = ""
@@ -100,6 +114,20 @@ class BatchTextRequest(BaseModel):
     recorded_at: datetime
     content: str
     entry_status: str = "待核实"
+    rectification_deadline: Optional[datetime] = None
+    contact_person: str = ""
+    contact_phone: str = ""
+    note: str = ""
+
+
+class BatchStatusRequest(BaseModel):
+    taxpayer_ids: list[str]
+    entry_status: str
+    recorded_at: Optional[datetime] = None
+    rectification_deadline: Optional[datetime] = None
+    contact_person: str = ""
+    contact_phone: str = ""
+    content: str = ""
     note: str = ""
 
 
@@ -177,8 +205,9 @@ def log_action(db: Session, action: str, target_id: str, operator_id: int, detai
 
 
 def get_taxpayer_profile(taxpayer_id: str, db: Session, owner_id: int) -> Optional[TaxpayerInfo]:
+    _ = owner_id
     return db.query(TaxpayerInfo).filter(
-        TaxpayerInfo.owner_id == owner_id,
+        TaxpayerInfo.owner_id == business_owner_id(),
         TaxpayerInfo.taxpayer_id == taxpayer_id,
     ).first()
 
@@ -188,7 +217,7 @@ def get_or_create_dossier(body: EntryCreateRequest, db: Session, user_id: int) -
     if not taxpayer_id:
         raise HTTPException(status_code=400, detail="纳税人识别号不能为空")
     existing = db.query(RiskDossier).filter(
-        RiskDossier.owner_id == user_id,
+        RiskDossier.owner_id == business_owner_id(),
         RiskDossier.taxpayer_id == taxpayer_id,
     ).first()
     taxpayer = get_taxpayer_profile(taxpayer_id, db, user_id)
@@ -211,7 +240,7 @@ def get_or_create_dossier(body: EntryCreateRequest, db: Session, user_id: int) -
             address=taxpayer.address,
             is_temporary=False,
             source="info-query",
-            owner_id=user_id,
+            owner_id=business_owner_id(),
         )
     elif body.company_name.strip():
         dossier = RiskDossier(
@@ -222,7 +251,7 @@ def get_or_create_dossier(body: EntryCreateRequest, db: Session, user_id: int) -
             address=body.address.strip(),
             is_temporary=True,
             source="manual",
-            owner_id=user_id,
+            owner_id=business_owner_id(),
         )
     else:
         raise HTTPException(status_code=400, detail=f"信息查询表中未找到 {taxpayer_id}，请提供纳税人名称后创建临时档案")
@@ -246,13 +275,19 @@ def create_entry(body: EntryCreateRequest, db: Session, user: User) -> RiskLedge
         recorded_at=body.recorded_at,
         content=content,
         entry_status=body.entry_status,
+        rectification_deadline=parse_datetime(body.rectification_deadline) if body.rectification_deadline else None,
+        contact_person=body.contact_person.strip(),
+        contact_phone=body.contact_phone.strip(),
         note=body.note.strip(),
-        owner_id=user.id,
+        owner_id=business_owner_id(),
         created_by=user.id,
     )
     db.add(entry)
     db.flush()
     dossier.updated_at = datetime.utcnow()
+    taxpayer = get_taxpayer_profile(dossier.taxpayer_id, db, business_owner_id())
+    if taxpayer:
+        taxpayer.last_used_at = datetime.utcnow()
     return entry
 
 
@@ -266,6 +301,12 @@ def entry_summary(dossier_id: int, db: Session) -> tuple[Optional[RiskLedgerEntr
 
 def dossier_to_schema(dossier: RiskDossier, db: Session) -> DossierSchema:
     latest, count = entry_summary(dossier.id, db)
+    is_overdue = bool(
+        latest
+        and latest.entry_status == "整改中"
+        and latest.rectification_deadline
+        and latest.rectification_deadline < datetime.utcnow()
+    )
     return DossierSchema(
         id=dossier.id,
         taxpayer_id=dossier.taxpayer_id,
@@ -279,9 +320,13 @@ def dossier_to_schema(dossier: RiskDossier, db: Session) -> DossierSchema:
         created_at=dossier.created_at,
         updated_at=dossier.updated_at,
         latest_recorded_at=latest.recorded_at if latest else None,
+        latest_rectification_deadline=latest.rectification_deadline if latest else None,
         latest_content=latest.content if latest else "",
         latest_entry_status=latest.entry_status if latest else "",
+        latest_contact_person=latest.contact_person if latest else "",
+        latest_contact_phone=latest.contact_phone if latest else "",
         entry_count=count,
+        is_overdue=is_overdue,
     )
 
 
@@ -311,7 +356,7 @@ def list_dossiers(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = db.query(RiskDossier).filter(RiskDossier.owner_id == current_user.id)
+    query = db.query(RiskDossier).filter(RiskDossier.owner_id == business_owner_id())
     if q:
         like = f"%{q}%"
         query = query.filter(or_(
@@ -324,7 +369,7 @@ def list_dossiers(
     if registration_status:
         query = query.filter(RiskDossier.registration_status == registration_status)
     if entry_status or date_from or date_to:
-        entry_query = db.query(RiskLedgerEntry.dossier_id).filter(RiskLedgerEntry.owner_id == current_user.id)
+        entry_query = db.query(RiskLedgerEntry.dossier_id).filter(RiskLedgerEntry.owner_id == business_owner_id())
         if entry_status:
             entry_query = entry_query.filter(RiskLedgerEntry.entry_status == entry_status)
         if date_from:
@@ -345,13 +390,13 @@ def get_dossier(
     current_user: User = Depends(get_current_user),
 ):
     dossier = db.query(RiskDossier).filter(
-        RiskDossier.owner_id == current_user.id,
+        RiskDossier.owner_id == business_owner_id(),
         RiskDossier.taxpayer_id == taxpayer_id,
     ).first()
     if not dossier:
         raise HTTPException(status_code=404, detail="风险档案不存在")
     entries = db.query(RiskLedgerEntry).filter(
-        RiskLedgerEntry.owner_id == current_user.id,
+        RiskLedgerEntry.owner_id == business_owner_id(),
         RiskLedgerEntry.dossier_id == dossier.id,
     ).order_by(RiskLedgerEntry.recorded_at.desc(), RiskLedgerEntry.id.desc()).all()
     return DossierDetailResponse(dossier=dossier_to_schema(dossier, db), entries=entries)
@@ -390,6 +435,9 @@ def add_batch_text_entries(
                 recorded_at=body.recorded_at,
                 content=body.content,
                 entry_status=body.entry_status,
+                rectification_deadline=body.rectification_deadline,
+                contact_person=body.contact_person,
+                contact_phone=body.contact_phone,
                 note=body.note,
             ), db, current_user)
             created += 1
@@ -400,6 +448,50 @@ def add_batch_text_entries(
     return BatchResultResponse(
         success=len(failures) == 0,
         message=f"批量完成：新增 {created} 条，失败 {len(failures)} 条",
+        created=created,
+        failed=len(failures),
+        failures=failures,
+    )
+
+
+@router.post("/entries/batch-status", response_model=BatchResultResponse)
+def add_batch_status_entries(
+    body: BatchStatusRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    status = validate_entry_status(body.entry_status)
+    if status == "整改中" and (not body.rectification_deadline or not body.contact_person.strip()):
+        raise HTTPException(status_code=400, detail="标记为整改中时必须填写整改期限和联系人")
+    recorded_at = parse_datetime(body.recorded_at or datetime.utcnow())
+    content = body.content.strip() or f"批量更新处理状态为：{status}"
+    created = 0
+    failures: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for raw in body.taxpayer_ids:
+        taxpayer_id = raw.strip()
+        if not taxpayer_id or taxpayer_id in seen:
+            continue
+        seen.add(taxpayer_id)
+        try:
+            create_entry(EntryCreateRequest(
+                taxpayer_id=taxpayer_id,
+                recorded_at=recorded_at,
+                rectification_deadline=body.rectification_deadline,
+                contact_person=body.contact_person,
+                contact_phone=body.contact_phone,
+                content=content,
+                entry_status=status,
+                note=body.note,
+            ), db, current_user)
+            created += 1
+        except HTTPException as exc:
+            failures.append({"taxpayer_id": taxpayer_id, "reason": str(exc.detail)})
+    log_action(db, "update", f"batch-status-{secrets.token_hex(4)}", current_user.id, f"批量更新风险处理状态为 {status}: 成功 {created}, 失败 {len(failures)}")
+    db.commit()
+    return BatchResultResponse(
+        success=len(failures) == 0,
+        message=f"批量处理完成：成功 {created} 户，失败 {len(failures)} 户",
         created=created,
         failed=len(failures),
         failures=failures,
@@ -431,6 +523,9 @@ def import_entries(
                 recorded_at=parse_datetime(row.get("recorded_at")),
                 content=content,
                 entry_status=row.get("entry_status", "待核实") or "待核实",
+                rectification_deadline=parse_datetime(row.get("rectification_deadline")) if row.get("rectification_deadline") else None,
+                contact_person=row.get("contact_person", ""),
+                contact_phone=row.get("contact_phone", ""),
                 note=row.get("note", ""),
             ), db, current_user)
             created += 1
@@ -452,21 +547,21 @@ def stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    base = db.query(RiskLedgerEntry).filter(RiskLedgerEntry.owner_id == current_user.id)
+    base = db.query(RiskLedgerEntry).filter(RiskLedgerEntry.owner_id == business_owner_id())
     counts = dict(
         base.with_entities(RiskLedgerEntry.entry_status, func.count(RiskLedgerEntry.id))
         .group_by(RiskLedgerEntry.entry_status)
         .all()
     )
     return StatsResponse(
-        dossier_total=db.query(RiskDossier).filter(RiskDossier.owner_id == current_user.id).count(),
+        dossier_total=db.query(RiskDossier).filter(RiskDossier.owner_id == business_owner_id()).count(),
         entry_total=base.count(),
         pending_count=counts.get("待核实", 0),
         rectifying_count=counts.get("整改中", 0),
         excluded_count=counts.get("已排除", 0),
         rectified_count=counts.get("已整改", 0),
         temporary_count=db.query(RiskDossier).filter(
-            RiskDossier.owner_id == current_user.id,
+            RiskDossier.owner_id == business_owner_id(),
             RiskDossier.is_temporary == True,
         ).count(),
     )

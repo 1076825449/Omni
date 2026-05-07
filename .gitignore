@@ -10,8 +10,16 @@ build/
 node_modules/
 .DS_Store
 
-# Data
-data/
+# Runtime data and generated artifacts
+/data/
+/runtime/
+/backend/runtime/
+/frontend/dist/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
 
 # Logs
 *.log

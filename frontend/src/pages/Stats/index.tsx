@@ -24,34 +24,34 @@ export default function Stats() {
   return (
     <div className="omni-page">
       <div className="omni-page-header">
-        <Title level={4} style={{ margin: 0 }}>平台统计</Title>
+        <Title level={4} style={{ margin: 0 }}>系统管理：运行统计</Title>
       </div>
 
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} md={6}>
           <Card size="small">
-            <Statistic title="任务总数" value={task_total} />
+            <Statistic title="运行事项总数" value={task_total} />
           </Card>
         </Col>
         <Col xs={24} sm={12} md={6}>
           <Card size="small">
-            <Statistic title="任务成功率" value={task_success_rate} suffix="%" />
+            <Statistic title="运行成功率" value={task_success_rate} suffix="%" />
             <Progress percent={task_success_rate} showInfo={false} size="small" />
           </Card>
         </Col>
         <Col xs={24} sm={12} md={6}>
           <Card size="small">
-            <Statistic title="文件总数" value={file_total} />
+            <Statistic title="资料总数" value={file_total} />
           </Card>
         </Col>
         <Col xs={24} sm={12} md={6}>
           <Card size="small">
-            <Statistic title="活跃文件" value={file_active} />
+            <Statistic title="可用资料" value={file_active} />
           </Card>
         </Col>
         <Col xs={24} sm={12} md={6}>
           <Card size="small">
-            <Statistic title="对象记录" value={record_total} />
+            <Statistic title="风险事项记录" value={record_total} />
           </Card>
         </Col>
         <Col xs={24} sm={12} md={6}>
@@ -61,19 +61,19 @@ export default function Stats() {
         </Col>
         <Col xs={24} sm={12} md={6}>
           <Card size="small">
-            <Statistic title="活跃模块" value={module_active} />
+            <Statistic title="可用功能" value={module_active} />
           </Card>
         </Col>
         <Col xs={24} sm={12} md={6}>
           <Card size="small">
-            <Statistic title="失败任务" value={task_failed} />
+            <Statistic title="失败事项" value={task_failed} />
           </Card>
         </Col>
       </Row>
 
       <Row gutter={16} style={{ marginTop: 16 }}>
         <Col xs={24} md={12}>
-          <Card title="任务状态分布" size="small">
+          <Card title="运行状态分布" size="small">
             <Space direction="vertical" style={{ width: '100%' }}>
               <div>
                 <Text>成功</Text>
@@ -93,7 +93,7 @@ export default function Stats() {
         <Col xs={24} md={12}>
           <Card title="快捷入口" size="small">
             <Space direction="vertical" style={{ width: '100%' }}>
-              <Text type="secondary">任务 {task_total} 个 | 文件 {file_total} 个 | 对象 {record_total} 条 | 日志 {log_total} 条</Text>
+              <Text type="secondary">运行事项 {task_total} 个 | 资料 {file_total} 个 | 风险事项 {record_total} 条 | 操作记录 {log_total} 条</Text>
             </Space>
           </Card>
         </Col>

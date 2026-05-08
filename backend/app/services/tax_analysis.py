@@ -34,9 +34,23 @@ HEADER_ALIASES = {
     "sales_declared": ["申报销售额", "销项销售额", "vat_sales", "sales_declared"],
     "input_declared": ["申报进项", "进项税额", "input_declared"],
     "output_declared": ["申报销项", "销项税额", "output_declared"],
+    "vat_due": ["应纳税额", "本期应纳税额", "vat_due"],
+    "vat_paid": ["实际缴纳税额", "本期已缴税额", "已缴税额", "vat_paid"],
+    "ending_credit": ["期末留抵税额", "留抵税额", "ending_credit"],
+    "input_transfer_out": ["进项税额转出", "进项转出", "input_transfer_out"],
+    "unbilled_sales": ["未开票销售额", "未开票收入", "unbilled_sales"],
     "salary_amount": ["工资薪金", "工资薪金总额", "工资总额", "salary_amount", "payroll"],
     "employee_count": ["人数", "员工人数", "申报人数", "employee_count"],
     "pit_tax_amount": ["个人所得税", "个税税额", "已缴个税", "pit_tax_amount"],
+    "period_expenses": ["期间费用", "销售管理财务费用", "period_expenses"],
+    "tax_adjustment_increase": ["纳税调增额", "调增额", "tax_adjustment_increase"],
+    "tax_adjustment_decrease": ["纳税调减额", "调减额", "tax_adjustment_decrease"],
+    "income_tax_payable": ["应纳所得税额", "应纳企业所得税额", "income_tax_payable"],
+    "salary_employee_count": ["正常工资薪金人数", "工资薪金人数", "salary_employee_count"],
+    "labor_employee_count": ["劳务报酬人数", "labor_employee_count"],
+    "zero_tax_employee_count": ["免税/零税额人数", "零税额人数", "zero_tax_employee_count"],
+    "cumulative_income": ["累计收入额", "累计工资收入", "cumulative_income"],
+    "cumulative_tax_payable": ["累计应纳税额", "累计个税税额", "cumulative_tax_payable"],
     "data_kind": ["资料类型", "数据类型", "data_kind"],
 }
 
@@ -316,6 +330,12 @@ def ratio_text(numerator: float, denominator: float) -> str:
     return f"{numerator / denominator:.2f} 倍"
 
 
+def amount_ratio(numerator: float, denominator: float) -> float:
+    if abs(denominator) < 0.000001:
+        return 0.0
+    return numerator / denominator
+
+
 def source_ref(dataset_kind: str, period: str, field_name: str, field_label: str, value: Union[float, int, str]) -> dict[str, Any]:
     return {
         "dataset_kind": dataset_kind,
@@ -349,8 +369,19 @@ def make_risk(
     threshold_text: str,
     calculation_text: str,
     source_data_refs: list[dict[str, Any]],
+    taxpayer_explanation: str = "",
+    officer_verification_steps: Optional[list[str]] = None,
+    exclusion_conditions: Optional[list[str]] = None,
+    confirmation_conditions: Optional[list[str]] = None,
 ) -> dict[str, Any]:
     library = RISK_LIBRARY[risk_type]
+    amount_values = [
+        abs(float(value))
+        for key, value in metrics.items()
+        if isinstance(value, (int, float)) and any(token in key for token in ("amount", "revenue", "cost", "sales", "purchase", "income", "expense", "tax"))
+    ]
+    priority_amount = max(amount_values) if amount_values else 0.0
+    severity_weight = {"high": 3, "medium": 2, "low": 1}.get(library["severity"], 1)
     return {
         "risk_type": risk_type,
         "severity": library["severity"],
@@ -369,12 +400,68 @@ def make_risk(
         "threshold_text": threshold_text,
         "calculation_text": calculation_text,
         "source_data_refs": source_data_refs,
+        "taxpayer_explanation": taxpayer_explanation or f"根据已取得的申报、发票和财务资料，{trigger_reason}",
+        "officer_verification_steps": officer_verification_steps or [
+            "核对风险涉及期间的申报表、发票清单和财务账载数据是否同口径。",
+            "要求企业说明差异形成原因，并提供合同、账簿、凭证和资金流等佐证材料。",
+            "结合资料真实性、业务必要性和金额勾稽关系判断是否排除、整改或进一步处理。",
+        ],
+        "exclusion_conditions": exclusion_conditions or [
+            "企业能提供完整合同、物流、出入库、账簿和资金流资料，且能合理解释数据差异。",
+            "差异来源于跨期入账、申报口径差异、正常留抵或已依法调整事项。",
+        ],
+        "confirmation_conditions": confirmation_conditions or [
+            "企业无法提供真实业务资料或资料之间相互矛盾。",
+            "差异金额较大且无法通过库存、成本、申报口径或跨期因素合理解释。",
+        ],
+        "priority_score": round(severity_weight * 1_000_000 + priority_amount, 2),
+        "priority_amount": round(priority_amount, 2),
     }
 
 
 def summarize_periods(analysis: NormalizedTaxAnalysis) -> list[str]:
     periods = sorted(period for period in analysis.periods if period)
     return periods or ["未识别期间"]
+
+
+def data_count_summary(analysis: NormalizedTaxAnalysis) -> str:
+    parts = [
+        f"销项发票 {len(analysis.sales_invoices)} 条",
+        f"进项发票 {len(analysis.purchase_invoices)} 条",
+        f"增值税申报 {len(analysis.vat_returns)} 期",
+        f"企业所得税申报 {len(analysis.cit_returns)} 期",
+        f"个人所得税申报 {len(analysis.pit_returns)} 期",
+        f"财务报表 {len(analysis.finance)} 期",
+        f"费用明细 {len(analysis.expense_rows)} 条",
+    ]
+    return "，".join(parts)
+
+
+def data_completeness_summary(analysis: NormalizedTaxAnalysis) -> str:
+    missing = []
+    if not analysis.vat_returns:
+        missing.append("增值税申报")
+    if not analysis.cit_returns:
+        missing.append("企业所得税申报")
+    if not analysis.finance:
+        missing.append("财务报表")
+    if not analysis.sales_invoices:
+        missing.append("销项发票")
+    if not analysis.purchase_invoices:
+        missing.append("进项发票")
+    if missing:
+        return f"本次未完整取得{'、'.join(missing)}，相关疑点需结合企业补充资料进一步核实，当前结论为案头比对提示。"
+    return "本次已取得申报、发票和财务类结构化数据，可形成较完整的案头比对口径。"
+
+
+def taxpayer_profile_summary(analysis: NormalizedTaxAnalysis, risks: list[dict[str, Any]]) -> str:
+    periods = "、".join(summarize_periods(analysis))
+    risk_text = "未识别出明确疑点" if not risks else f"识别 {len(risks)} 项需进一步核实的疑点"
+    return f"该户本次分析期间为 {periods}，系统读取{data_count_summary(analysis)}，{risk_text}。"
+
+
+def sort_priority_risks(risks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(risks, key=lambda item: (item.get("priority_score", 0), item.get("confidence", 0)), reverse=True)
 
 
 def detect_risks(analysis: NormalizedTaxAnalysis) -> list[dict[str, Any]]:
@@ -398,8 +485,16 @@ def detect_risks(analysis: NormalizedTaxAnalysis) -> list[dict[str, Any]]:
         inventory_begin = analysis.finance.get(period, {}).get("inventory_begin", 0.0)
         inventory_end = analysis.finance.get(period, {}).get("inventory_end", 0.0)
         inventory_delta = inventory_end - inventory_begin
+        vat = analysis.vat_returns.get(period, {})
+        ending_credit = vat.get("ending_credit", 0.0)
+        input_transfer_out = vat.get("input_transfer_out", 0.0)
+        unbilled_sales = vat.get("unbilled_sales", 0.0)
 
-        if purchase >= 5000 and purchase > max(sales, 1.0) * 1.8:
+        sales_with_explainers = max(sales + unbilled_sales + max(ending_credit, 0.0) + max(input_transfer_out, 0.0), 1.0)
+        purchase_ratio = amount_ratio(purchase, max(sales, 1.0))
+        unexplained_purchase_ratio = amount_ratio(purchase, sales_with_explainers)
+        if purchase >= 5000 and purchase_ratio > 1.8 and unexplained_purchase_ratio > 1.35:
+            confidence = 0.78 if (ending_credit > 0 or input_transfer_out > 0 or unbilled_sales > 0) else 0.86
             risks.append(make_risk(
                 "有进无销",
                 period,
@@ -407,18 +502,43 @@ def detect_risks(analysis: NormalizedTaxAnalysis) -> list[dict[str, Any]]:
                 build_evidence([
                     f"采购或进项金额约 {purchase:.2f} 元。",
                     f"销售或收入金额约 {sales:.2f} 元。",
+                    f"未开票销售额约 {unbilled_sales:.2f} 元，期末留抵税额约 {ending_credit:.2f} 元，进项转出约 {input_transfer_out:.2f} 元。",
                     f"库存变动约 {inventory_delta:.2f} 元。",
                 ]),
-                0.86,
-                {"purchase_amount": purchase, "sales_amount": sales, "inventory_delta": inventory_delta},
+                confidence,
+                {
+                    "purchase_amount": purchase,
+                    "sales_amount": sales,
+                    "unbilled_sales": unbilled_sales,
+                    "ending_credit": ending_credit,
+                    "input_transfer_out": input_transfer_out,
+                    "inventory_delta": inventory_delta,
+                },
                 "进项采购与销售收入比对",
-                f"{month_label(period)} 采购或进项金额明显高于销售或申报收入，采购规模为销售规模的 {ratio_text(purchase, max(sales, 1.0))}。",
-                "采购或进项金额不低于 5,000 元，且采购/进项金额大于销售或收入金额的 1.8 倍。",
-                f"{money_text(purchase)} ÷ {money_text(max(sales, 1.0))} = {ratio_text(purchase, max(sales, 1.0))}；库存变动 {money_text(inventory_delta)}。",
+                f"{month_label(period)} 采购或进项金额明显高于销售或申报收入；考虑未开票销售、期末留抵和进项转出后，仍存在未解释差异。",
+                "采购或进项金额不低于 5,000 元，采购/进项金额大于销售或收入金额的 1.8 倍，且考虑未开票销售、留抵和进项转出后仍大于 1.35 倍。",
+                f"原始比对：{money_text(purchase)} ÷ {money_text(max(sales, 1.0))} = {ratio_text(purchase, max(sales, 1.0))}；调整后比对：{money_text(purchase)} ÷ {money_text(sales_with_explainers)} = {ratio_text(purchase, sales_with_explainers)}。",
                 [
                     source_ref("purchase_invoice", period, "amount", "采购或进项金额", purchase),
                     source_ref("sales_invoice", period, "amount", "销售或收入金额", sales),
+                    source_ref("vat_return", period, "unbilled_sales", "未开票销售额", unbilled_sales),
+                    source_ref("vat_return", period, "ending_credit", "期末留抵税额", ending_credit),
+                    source_ref("vat_return", period, "input_transfer_out", "进项税额转出", input_transfer_out),
                     source_ref("financial_statement", period, "inventory_delta", "库存变动", inventory_delta),
+                ],
+                taxpayer_explanation=f"你单位 {month_label(period)} 采购或进项金额为 {money_text(purchase)}，同期销售或收入为 {money_text(sales)}。即使考虑未开票销售、留抵税额和进项转出后，采购规模仍明显偏高，请说明采购货物流向、库存结存或收入确认情况。",
+                officer_verification_steps=[
+                    "核对进项发票对应货物、合同、入库单和付款记录。",
+                    "核实期末留抵、进项转出、未开票销售是否能解释进销差异。",
+                    "结合库存台账和销售明细判断是否存在延迟确认收入、账外销售或异常留抵。",
+                ],
+                exclusion_conditions=[
+                    "企业能提供库存结存、生产领用、在建项目或跨期销售资料，且金额可覆盖差异。",
+                    "期末留抵、进项转出或未开票销售申报资料能合理解释进项大于销售。",
+                ],
+                confirmation_conditions=[
+                    "采购货物流向无法说明，库存、出入库和资金流不能相互印证。",
+                    "未开票收入或实际销售未按规定申报，或存在异常留抵无法解释。",
                 ],
             ))
 
@@ -478,7 +598,8 @@ def detect_risks(analysis: NormalizedTaxAnalysis) -> list[dict[str, Any]]:
             1.0,
         )
         observable_revenue = max(sales_by_period.get(period, 0.0), analysis.finance.get(period, {}).get("revenue", 0.0))
-        if observable_revenue >= 5000 and observable_revenue > declared_revenue * 1.2:
+        declared_revenue_with_unbilled = max(declared_revenue + unbilled_sales, 1.0)
+        if observable_revenue >= 5000 and observable_revenue > declared_revenue_with_unbilled * 1.2:
             risks.append(make_risk(
                 "隐瞒收入",
                 period,
@@ -488,36 +609,75 @@ def detect_risks(analysis: NormalizedTaxAnalysis) -> list[dict[str, Any]]:
                     f"申报收入约 {declared_revenue:.2f} 元。",
                 ]),
                 0.88,
-                {"observable_revenue": observable_revenue, "declared_revenue": declared_revenue},
+                {"observable_revenue": observable_revenue, "declared_revenue": declared_revenue, "unbilled_sales": unbilled_sales},
                 "账载开票收入与申报收入比对",
-                f"{month_label(period)} 财务报表或销项发票反映的收入高于增值税/企业所得税申报收入。",
-                "财务或开票可观察收入不低于 5,000 元，且超过申报收入的 1.2 倍。",
-                f"{money_text(observable_revenue)} ÷ {money_text(declared_revenue)} = {ratio_text(observable_revenue, declared_revenue)}。",
+                f"{month_label(period)} 财务报表或销项发票反映的收入高于增值税/企业所得税申报收入，且未开票销售额不足以解释差异。",
+                "财务或开票可观察收入不低于 5,000 元，且超过申报收入与未开票销售额合计的 1.2 倍。",
+                f"{money_text(observable_revenue)} ÷ ({money_text(declared_revenue)} + {money_text(unbilled_sales)}) = {ratio_text(observable_revenue, declared_revenue_with_unbilled)}。",
                 [
                     source_ref("sales_invoice", period, "amount", "财务/开票收入", observable_revenue),
                     source_ref("vat_return", period, "sales_declared", "申报收入", declared_revenue),
+                    source_ref("vat_return", period, "unbilled_sales", "未开票销售额", unbilled_sales),
+                ],
+                taxpayer_explanation=f"你单位 {month_label(period)} 财务或开票收入为 {money_text(observable_revenue)}，申报收入及未开票销售额合计为 {money_text(declared_revenue_with_unbilled)}，两者存在明显差异，请说明是否存在未申报收入、跨期确认或统计口径差异。",
+                officer_verification_steps=[
+                    "核对利润表收入、销项发票清单、增值税申报销售额和企业所得税收入是否同口径。",
+                    "核实未开票销售额、红字发票、跨期收入和免税收入是否已在申报中反映。",
+                    "必要时调取合同订单、收款流水和收入明细账，判断是否存在少计或隐瞒收入。",
+                ],
+                exclusion_conditions=[
+                    "差异来自已申报未开票销售、跨期确认、红字冲销或会计税法口径差异，且资料完整。",
+                    "企业能提供收入明细账、发票清单和申报表调节表，差异可逐项对应。",
+                ],
+                confirmation_conditions=[
+                    "账载收入、开票收入或收款流水高于申报收入，且企业不能合理说明差异。",
+                    "存在未开票收入、账外收款或少申报销售额情形。",
                 ],
             ))
 
         support_cost = max(purchase + max(inventory_begin - inventory_end, 0.0), 1.0)
-        if cost >= 5000 and cost > support_cost * 1.35:
+        cit = analysis.cit_returns.get(period, {})
+        period_expenses = cit.get("period_expenses", 0.0)
+        tax_adjustment_increase = cit.get("tax_adjustment_increase", 0.0)
+        tax_adjustment_decrease = cit.get("tax_adjustment_decrease", 0.0)
+        income_tax_payable = cit.get("income_tax_payable", 0.0)
+        adjusted_cost = max(cost + period_expenses - tax_adjustment_increase + tax_adjustment_decrease, 0.0)
+        if adjusted_cost >= 5000 and adjusted_cost > support_cost * 1.35:
             risks.append(make_risk(
                 "虚列成本",
                 period,
                 f"{month_label(period)} 成本费用规模显著高于采购和库存消耗支撑，存在虚列成本风险。",
                 build_evidence([
-                    f"成本金额约 {cost:.2f} 元。",
+                    f"成本及期间费用调整后金额约 {adjusted_cost:.2f} 元。",
                     f"采购与库存消耗支撑约 {support_cost:.2f} 元。",
+                    f"纳税调增额约 {tax_adjustment_increase:.2f} 元，调减额约 {tax_adjustment_decrease:.2f} 元，应纳所得税额约 {income_tax_payable:.2f} 元。",
                 ]),
                 0.82,
-                {"cost_amount": cost, "support_cost": support_cost},
+                {"cost_amount": cost, "period_expenses": period_expenses, "adjusted_cost": adjusted_cost, "support_cost": support_cost, "income_tax_payable": income_tax_payable},
                 "成本费用与采购库存支撑比对",
-                f"{month_label(period)} 成本金额显著高于采购和库存消耗能够支撑的金额。",
-                "成本金额不低于 5,000 元，且大于采购与库存消耗支撑金额的 1.35 倍。",
-                f"{money_text(cost)} ÷ {money_text(support_cost)} = {ratio_text(cost, support_cost)}。",
+                f"{month_label(period)} 成本费用及纳税调整后金额显著高于采购和库存消耗能够支撑的金额。",
+                "成本费用调整后金额不低于 5,000 元，且大于采购与库存消耗支撑金额的 1.35 倍。",
+                f"({money_text(cost)} + {money_text(period_expenses)} - {money_text(tax_adjustment_increase)} + {money_text(tax_adjustment_decrease)}) ÷ {money_text(support_cost)} = {ratio_text(adjusted_cost, support_cost)}。",
                 [
                     source_ref("financial_statement", period, "cost", "成本金额", cost),
+                    source_ref("cit_return", period, "period_expenses", "期间费用", period_expenses),
+                    source_ref("cit_return", period, "tax_adjustment_increase", "纳税调增额", tax_adjustment_increase),
+                    source_ref("cit_return", period, "tax_adjustment_decrease", "纳税调减额", tax_adjustment_decrease),
                     source_ref("purchase_invoice", period, "amount", "采购与库存消耗支撑", support_cost),
+                ],
+                taxpayer_explanation=f"你单位 {month_label(period)} 成本及期间费用调整后约为 {money_text(adjusted_cost)}，采购及库存消耗支撑约为 {money_text(support_cost)}，成本费用明显偏高，请说明成本费用列支依据和纳税调整情况。",
+                officer_verification_steps=[
+                    "核对企业所得税成本费用、期间费用、纳税调整明细和财务报表成本。",
+                    "抽查成本费用对应合同、发票、付款凭证和费用审批资料。",
+                    "结合采购、库存消耗和成本结转底稿判断是否存在无票列支、重复列支或虚列成本。",
+                ],
+                exclusion_conditions=[
+                    "企业能提供完整成本结转底稿、费用分摊依据和纳税调整明细，差异可合理解释。",
+                    "高成本来源于真实项目、人工、折旧摊销或跨期结转，且凭证资料完整。",
+                ],
+                confirmation_conditions=[
+                    "成本费用无合同、发票、付款或业务资料支撑。",
+                    "纳税调整不足以覆盖不合规成本费用，或存在重复列支、虚假列支。",
                 ],
             ))
 
@@ -525,26 +685,62 @@ def detect_risks(analysis: NormalizedTaxAnalysis) -> list[dict[str, Any]]:
         salary_amount = pit.get("salary_amount", 0.0)
         employee_count = pit.get("employee_count", 0.0)
         pit_tax_amount = pit.get("pit_tax_amount", 0.0)
-        if salary_amount >= 10000 and (employee_count <= 0 or pit_tax_amount <= 0):
+        salary_employee_count = pit.get("salary_employee_count", 0.0)
+        labor_employee_count = pit.get("labor_employee_count", 0.0)
+        zero_tax_employee_count = pit.get("zero_tax_employee_count", 0.0)
+        cumulative_income = pit.get("cumulative_income", 0.0)
+        cumulative_tax_payable = pit.get("cumulative_tax_payable", 0.0)
+        effective_employee_count = max(employee_count, salary_employee_count + labor_employee_count)
+        income_for_pit = max(salary_amount, cumulative_income)
+        per_capita_income = income_for_pit / effective_employee_count if effective_employee_count else income_for_pit
+        zero_share = zero_tax_employee_count / effective_employee_count if effective_employee_count else 0.0
+        if income_for_pit >= 10000 and (
+            effective_employee_count <= 0
+            or (pit_tax_amount <= 0 and cumulative_tax_payable <= 0)
+            or (per_capita_income >= 8000 and zero_share >= 0.8)
+        ):
             risks.append(make_risk(
                 "个税申报异常",
                 period,
                 f"{month_label(period)} 工资薪金或劳务报酬金额较大，但个税申报人数或税额异常偏低。",
                 build_evidence([
-                    f"工资薪金/劳务报酬金额约 {salary_amount:.2f} 元。",
-                    f"申报人数约 {employee_count:.0f} 人。",
-                    f"个税税额约 {pit_tax_amount:.2f} 元。",
+                    f"工资薪金/劳务报酬或累计收入额约 {income_for_pit:.2f} 元。",
+                    f"申报人数约 {effective_employee_count:.0f} 人，人均收入约 {per_capita_income:.2f} 元。",
+                    f"个税税额约 {pit_tax_amount:.2f} 元，累计应纳税额约 {cumulative_tax_payable:.2f} 元。",
                 ]),
                 0.72,
-                {"salary_amount": salary_amount, "employee_count": employee_count, "pit_tax_amount": pit_tax_amount},
+                {
+                    "salary_amount": salary_amount,
+                    "employee_count": effective_employee_count,
+                    "pit_tax_amount": pit_tax_amount,
+                    "cumulative_income": cumulative_income,
+                    "cumulative_tax_payable": cumulative_tax_payable,
+                    "per_capita_income": per_capita_income,
+                    "zero_tax_employee_count": zero_tax_employee_count,
+                },
                 "个人所得税申报人数税额比对",
-                f"{month_label(period)} 工资薪金或劳务报酬金额较大，但申报人数或税额为零或明显偏低。",
-                "工资薪金或劳务报酬金额不低于 10,000 元，且申报人数小于等于 0 或个人所得税税额小于等于 0。",
-                f"工资薪金/劳务报酬 {money_text(salary_amount)}；申报人数 {employee_count:.0f} 人；个税税额 {money_text(pit_tax_amount)}。",
+                f"{month_label(period)} 工资薪金、劳务报酬或累计收入额较大，但申报人数、零税额人数或税额关系异常。",
+                "工资薪金、劳务报酬或累计收入额不低于 10,000 元，且申报人数为 0、税额为 0，或人均收入不低于 8,000 元且零税额人数占比不低于 80%。",
+                f"收入 {money_text(income_for_pit)}；申报人数 {effective_employee_count:.0f} 人；人均 {money_text(per_capita_income)}；税额 {money_text(max(pit_tax_amount, cumulative_tax_payable))}；零税额人数占比 {zero_share:.0%}。",
                 [
-                    source_ref("pit_return", period, "salary_amount", "工资薪金/劳务报酬金额", salary_amount),
-                    source_ref("pit_return", period, "employee_count", "申报人数", employee_count),
+                    source_ref("pit_return", period, "salary_amount", "工资薪金/劳务报酬金额", income_for_pit),
+                    source_ref("pit_return", period, "employee_count", "申报人数", effective_employee_count),
                     source_ref("pit_return", period, "pit_tax_amount", "个人所得税税额", pit_tax_amount),
+                    source_ref("pit_return", period, "zero_tax_employee_count", "零税额人数", zero_tax_employee_count),
+                ],
+                taxpayer_explanation=f"你单位 {month_label(period)} 工资薪金、劳务报酬或累计收入额约为 {money_text(income_for_pit)}，申报人数 {effective_employee_count:.0f} 人，税额 {money_text(max(pit_tax_amount, cumulative_tax_payable))}，人员和税额关系需进一步说明。",
+                officer_verification_steps=[
+                    "核对工资表、个税扣缴明细、员工花名册和银行代发流水。",
+                    "重点核实零税额人员、劳务报酬人员和未申报人员是否真实匹配。",
+                    "结合企业所得税工资薪金费用判断是否存在少申报、漏扣缴或人员口径不一致。",
+                ],
+                exclusion_conditions=[
+                    "人员收入低于应税标准、专项扣除充分或属于免税收入，且个税明细可逐人对应。",
+                    "工资表、扣缴明细和银行代发流水人数金额一致。",
+                ],
+                confirmation_conditions=[
+                    "工资表或银行代发人数、金额明显高于个税申报人数、金额。",
+                    "存在劳务报酬、奖金补贴或其他所得未依法扣缴申报。",
                 ],
             ))
 
@@ -612,12 +808,13 @@ def detect_risks(analysis: NormalizedTaxAnalysis) -> list[dict[str, Any]]:
             continue
         seen.add(key)
         unique_risks.append(risk)
-    return unique_risks
+    return sort_priority_risks(unique_risks)
 
 
 def build_notice_payload(task: Task, analysis: NormalizedTaxAnalysis, risks: list[dict[str, Any]]) -> dict[str, Any]:
     company_name = analysis.company_name or "待补充企业名称"
     taxpayer_id = analysis.taxpayer_id or "待补充税号"
+    priority_risks = sort_priority_risks(risks)
     return {
         "document_type": "tax_notice",
         "title": "税务事项通知书",
@@ -626,6 +823,9 @@ def build_notice_payload(task: Task, analysis: NormalizedTaxAnalysis, risks: lis
         "enterprise_name": company_name,
         "taxpayer_id": taxpayer_id,
         "generated_at": datetime.utcnow().isoformat(),
+        "taxpayer_profile_summary": taxpayer_profile_summary(analysis, priority_risks),
+        "data_completeness_summary": data_completeness_summary(analysis),
+        "priority_risks": priority_risks,
         "rectification_deadline": "收到通知后 5 个工作日内",
         "contact_person": "主管税务人员",
         "contact_phone": "请在系统配置中补充联系人电话",
@@ -642,13 +842,20 @@ def build_notice_payload(task: Task, analysis: NormalizedTaxAnalysis, risks: lis
                 "threshold_text": risk["threshold_text"],
                 "calculation_text": risk["calculation_text"],
                 "source_data_refs": risk["source_data_refs"],
+                "taxpayer_explanation": risk.get("taxpayer_explanation", ""),
+                "officer_verification_steps": risk.get("officer_verification_steps", []),
+                "exclusion_conditions": risk.get("exclusion_conditions", []),
+                "confirmation_conditions": risk.get("confirmation_conditions", []),
+                "priority_score": risk.get("priority_score", 0),
+                "priority_amount": risk.get("priority_amount", 0),
             }
-            for risk in risks
+            for risk in priority_risks
         ],
     }
 
 
 def build_officer_report_payload(task: Task, analysis: NormalizedTaxAnalysis, risks: list[dict[str, Any]]) -> dict[str, Any]:
+    priority_risks = sort_priority_risks(risks)
     return {
         "document_type": "analysis_report",
         "title": "企业涉税风险分析报告",
@@ -658,6 +865,8 @@ def build_officer_report_payload(task: Task, analysis: NormalizedTaxAnalysis, ri
         "taxpayer_id": analysis.taxpayer_id or "待补充税号",
         "generated_at": datetime.utcnow().isoformat(),
         "risk_count": len(risks),
+        "taxpayer_profile_summary": taxpayer_profile_summary(analysis, priority_risks),
+        "data_completeness_summary": data_completeness_summary(analysis),
         "data_summary": {
             "periods": summarize_periods(analysis),
             "sales_invoice_count": len(analysis.sales_invoices),
@@ -670,6 +879,7 @@ def build_officer_report_payload(task: Task, analysis: NormalizedTaxAnalysis, ri
             "data_warnings": analysis.data_warnings,
             "source_files": analysis.source_files,
         },
+        "priority_risks": priority_risks,
         "risks": [
             {
                 "risk_type": risk["risk_type"],
@@ -687,8 +897,14 @@ def build_officer_report_payload(task: Task, analysis: NormalizedTaxAnalysis, ri
                 "threshold_text": risk["threshold_text"],
                 "calculation_text": risk["calculation_text"],
                 "source_data_refs": risk["source_data_refs"],
+                "taxpayer_explanation": risk.get("taxpayer_explanation", ""),
+                "officer_verification_steps": risk.get("officer_verification_steps", []),
+                "exclusion_conditions": risk.get("exclusion_conditions", []),
+                "confirmation_conditions": risk.get("confirmation_conditions", []),
+                "priority_score": risk.get("priority_score", 0),
+                "priority_amount": risk.get("priority_amount", 0),
             }
-            for risk in risks
+            for risk in priority_risks
         ],
     }
 
@@ -701,6 +917,8 @@ def render_notice_text(payload: dict[str, Any]) -> str:
         f"企业名称: {payload['enterprise_name']}",
         f"纳税人识别号: {payload['taxpayer_id']}",
         f"分析任务: {payload['task_name']} ({payload['task_id']})",
+        f"该户数据情况: {payload.get('taxpayer_profile_summary', '')}",
+        f"资料完整性说明: {payload.get('data_completeness_summary', '')}",
         f"整改期限: {payload['rectification_deadline']}",
         f"联系人: {payload['contact_person']}",
         f"联系电话: {payload['contact_phone']}",
@@ -715,6 +933,7 @@ def render_notice_text(payload: dict[str, Any]) -> str:
             f"{index}. 风险类型: {issue['risk_type']}",
             f"   涉及期间: {issue['period']}",
             f"   发现问题: {issue['issue']}",
+            f"   疑点说明: {issue.get('taxpayer_explanation', issue.get('trigger_reason', issue['issue']))}",
             f"   规则名称: {issue.get('rule_name', '规则待补充')}",
             f"   触发原因: {issue.get('trigger_reason', issue['issue'])}",
             f"   涉及数据: {format_source_refs(issue.get('source_data_refs', []))}",
@@ -735,6 +954,8 @@ def render_officer_report_text(payload: dict[str, Any]) -> str:
         f"企业名称: {payload['enterprise_name']}",
         f"纳税人识别号: {payload['taxpayer_id']}",
         f"分析任务: {payload['task_name']} ({payload['task_id']})",
+        f"本户数据画像: {payload.get('taxpayer_profile_summary', '')}",
+        f"资料完整性影响: {payload.get('data_completeness_summary', '')}",
         f"文书日期: {payload.get('document_date', '') or payload['generated_at'][:10]}",
         f"生成时间: {payload['generated_at']}",
         f"识别风险数: {payload['risk_count']}",
@@ -763,8 +984,12 @@ def render_officer_report_text(payload: dict[str, Any]) -> str:
             f"   计算过程: {risk.get('calculation_text', '未生成计算说明')}",
             f"   判断阈值: {risk.get('threshold_text', '按申报、发票、财务资料一致性综合判断')}",
             f"   证据: {'; '.join(risk['evidence']) or '—'}",
+            f"   面向企业说明: {risk.get('taxpayer_explanation', risk.get('trigger_reason', risk['issue']))}",
             f"   核查方向: {risk['verification_focus']}",
+            f"   核实步骤: {'; '.join(risk.get('officer_verification_steps', [])) or '—'}",
             f"   需调取资料: {'; '.join(risk['required_materials'])}",
+            f"   可排除情形: {'; '.join(risk.get('exclusion_conditions', [])) or '—'}",
+            f"   需进一步处理情形: {'; '.join(risk.get('confirmation_conditions', [])) or '—'}",
             f"   判断标准: {risk['judgment_rule']}",
         ])
     if payload["data_summary"]["data_warnings"]:
@@ -804,6 +1029,11 @@ def analyze_files(task: Task, files: list[FileRecord]) -> dict[str, Any]:
                     "sales_declared": to_amount(row.get("sales_declared") or row.get("amount") or row.get("revenue")),
                     "output_declared": to_amount(row.get("output_declared") or row.get("tax_amount")),
                     "input_declared": to_amount(row.get("input_declared")),
+                    "vat_due": to_amount(row.get("vat_due")),
+                    "vat_paid": to_amount(row.get("vat_paid")),
+                    "ending_credit": to_amount(row.get("ending_credit")),
+                    "input_transfer_out": to_amount(row.get("input_transfer_out")),
+                    "unbilled_sales": to_amount(row.get("unbilled_sales")),
                 }
             elif kind == "cit_return":
                 analysis.cit_returns[period] = {
@@ -811,6 +1041,10 @@ def analyze_files(task: Task, files: list[FileRecord]) -> dict[str, Any]:
                     "cost": to_amount(row.get("cost")),
                     "profit": to_amount(row.get("profit")),
                     "taxable_income": to_amount(row.get("taxable_income")),
+                    "period_expenses": to_amount(row.get("period_expenses")),
+                    "tax_adjustment_increase": to_amount(row.get("tax_adjustment_increase")),
+                    "tax_adjustment_decrease": to_amount(row.get("tax_adjustment_decrease")),
+                    "income_tax_payable": to_amount(row.get("income_tax_payable") or row.get("tax_amount")),
                 }
             elif kind == "pit_return":
                 analysis.pit_returns[period] = {
@@ -818,6 +1052,11 @@ def analyze_files(task: Task, files: list[FileRecord]) -> dict[str, Any]:
                     "employee_count": to_amount(row.get("employee_count")),
                     "pit_tax_amount": to_amount(row.get("pit_tax_amount") or row.get("tax_amount")),
                     "taxable_income": to_amount(row.get("taxable_income")),
+                    "salary_employee_count": to_amount(row.get("salary_employee_count")),
+                    "labor_employee_count": to_amount(row.get("labor_employee_count")),
+                    "zero_tax_employee_count": to_amount(row.get("zero_tax_employee_count")),
+                    "cumulative_income": to_amount(row.get("cumulative_income")),
+                    "cumulative_tax_payable": to_amount(row.get("cumulative_tax_payable")),
                 }
             elif kind == "financial_statement":
                 analysis.finance[period] = {

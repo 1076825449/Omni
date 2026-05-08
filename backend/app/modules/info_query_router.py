@@ -199,6 +199,21 @@ class ImportHistoryResponse(BaseModel):
     items: list[ImportHistoryItem]
 
 
+class OperationHistoryItem(BaseModel):
+    id: int
+    action: str
+    action_label: str
+    operator_id: int
+    operator_name: str
+    detail: str
+    result: str
+    created_at: datetime
+
+
+class OperationHistoryResponse(BaseModel):
+    items: list[OperationHistoryItem]
+
+
 class ImportJobResponse(BaseModel):
     job_id: str
     status: str
@@ -741,6 +756,21 @@ def log_action(db: Session, action: str, target_id: str, operator_id: int, detai
     ))
 
 
+def display_user_name(user: Optional[User]) -> str:
+    if not user:
+        return ""
+    return user.nickname or user.username or f"用户{user.id}"
+
+
+def operation_label(action: str) -> str:
+    return {
+        "assign_tax_officer": "分配税收管理员",
+        "update_taxpayer_tags": "修改管户标签",
+        "import": "导入数据源",
+        "import_operator": "记录导入人",
+    }.get(action, action)
+
+
 def taxpayer_query(
     db: Session,
     owner_id: int,
@@ -1092,6 +1122,36 @@ def import_history(
         OperationLog.result == "success",
     ).order_by(OperationLog.created_at.desc()).limit(limit).all()
     return ImportHistoryResponse(items=[parse_import_log(log) for log in logs])
+
+
+@router.get("/operation-history", response_model=OperationHistoryResponse)
+def operation_history(
+    limit: int = Query(8, le=50),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ = current_user
+    actions = ["assign_tax_officer", "update_taxpayer_tags", "import"]
+    logs = db.query(OperationLog).filter(
+        OperationLog.module == "info-query",
+        OperationLog.action.in_(actions),
+    ).order_by(OperationLog.created_at.desc()).limit(limit).all()
+    user_ids = [log.operator_id for log in logs]
+    users = db.query(User).filter(User.id.in_(user_ids or [0])).all()
+    user_names = {user.id: display_user_name(user) for user in users}
+    return OperationHistoryResponse(items=[
+        OperationHistoryItem(
+            id=log.id,
+            action=log.action,
+            action_label=operation_label(log.action),
+            operator_id=log.operator_id,
+            operator_name=user_names.get(log.operator_id, f"用户{log.operator_id}"),
+            detail=log.detail or "",
+            result=log.result,
+            created_at=log.created_at,
+        )
+        for log in logs
+    ])
 
 
 @router.get("/filter-options", response_model=FilterOptionsResponse)

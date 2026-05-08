@@ -300,6 +300,7 @@ export default function Results() {
                             <Text>为什么发现：{risk.trigger_reason || risk.issue}</Text>
                             <Text>计算过程：{risk.calculation_text || '未生成计算说明'}</Text>
                             <Text>判断阈值：{risk.threshold_text || risk.judgment_rule}</Text>
+                            {risk.taxpayer_explanation && <Text>面向企业说明：{risk.taxpayer_explanation}</Text>}
                             <Text>建议核实资料：{risk.required_materials.join('、') || '—'}</Text>
                             <div>
                               <Text>涉及数据：</Text>
@@ -329,8 +330,30 @@ export default function Results() {
                       <Paragraph>{risk.rectify_advice}</Paragraph>
                       <Text strong>税务核查方向</Text>
                       <Paragraph>{risk.verification_focus}</Paragraph>
+                      {risk.officer_verification_steps?.length ? (
+                        <>
+                          <Text strong>核实步骤</Text>
+                          <List
+                            size="small"
+                            dataSource={risk.officer_verification_steps}
+                            renderItem={(item) => <List.Item>{item}</List.Item>}
+                          />
+                        </>
+                      ) : null}
                       <Text strong>需调取资料</Text>
                       <Paragraph>{risk.required_materials.join('、') || '—'}</Paragraph>
+                      {risk.exclusion_conditions?.length ? (
+                        <>
+                          <Text strong>可排除情形</Text>
+                          <Paragraph>{risk.exclusion_conditions.join('；')}</Paragraph>
+                        </>
+                      ) : null}
+                      {risk.confirmation_conditions?.length ? (
+                        <>
+                          <Text strong>需进一步处理情形</Text>
+                          <Paragraph>{risk.confirmation_conditions.join('；')}</Paragraph>
+                        </>
+                      ) : null}
                       <Text strong>判断标准</Text>
                       <Paragraph>{risk.judgment_rule}</Paragraph>
                       <Space wrap>

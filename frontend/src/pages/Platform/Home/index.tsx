@@ -141,8 +141,8 @@ export default function Home() {
   return (
     <div className="omni-page">
       <BusinessPageHeader
-        title="税务风险工作助手"
-        description="先查企业，再开展案头分析、记录风险、跟踪整改。"
+        title="首页"
+        description="查看当前数据源、管户概况和常用业务入口，快速进入信息查询、管户分配、管户记录、案头分析和文书报告。"
         extra={
           <Space>
             <Text type="secondary">当前账号：{user?.nickname || user?.username}</Text>

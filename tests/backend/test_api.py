@@ -462,6 +462,11 @@ def test_manual_tax_data_and_image_evidence_with_auth(auth_client):
                 "salary_amount": 50000,
                 "employee_count": 0,
                 "pit_tax_amount": 0,
+                "salary_employee_count": 0,
+                "labor_employee_count": 0,
+                "zero_tax_employee_count": 0,
+                "cumulative_income": 50000,
+                "cumulative_tax_payable": 0,
             }],
         },
     )
@@ -475,8 +480,64 @@ def test_manual_tax_data_and_image_evidence_with_auth(auth_client):
     assert detail_resp.status_code == 200
     detail = detail_resp.json()
     assert detail["company_name"] == "无表格企业"
-    assert any(risk["risk_type"] == "个税申报异常" for risk in detail["risks"])
+    pit_risk = next(risk for risk in detail["risks"] if risk["risk_type"] == "个税申报异常")
+    assert "人均" in pit_risk["calculation_text"]
+    assert pit_risk["taxpayer_explanation"]
+    assert pit_risk["officer_verification_steps"]
+    assert pit_risk["exclusion_conditions"]
     assert any("图片/扫描件佐证" in warning or "扫描件佐证" in warning for warning in detail["data_warnings"])
+
+
+def test_vat_extra_fields_reduce_false_positive_with_auth(auth_client):
+    create_resp = auth_client.post(
+        "/api/modules/analysis-workbench/tasks",
+        json={"name": "增值税补充字段测试", "description": "验证留抵和未开票销售参与规则"},
+    )
+    assert create_resp.status_code == 200
+    task_id = create_resp.json()["task_id"]
+
+    purchase_resp = auth_client.post(
+        f"/api/modules/analysis-workbench/upload?task_id={task_id}",
+        files={"file": ("purchase.csv", io.BytesIO(
+            "期间,企业名称,纳税人识别号,金额,供应商名称,商品名称\n"
+            "2026-04,补充字段企业,91310000VATEXTRA1,90000,供应商A,材料\n".encode("utf-8")
+        ), "text/csv")},
+    )
+    assert purchase_resp.status_code == 200
+    finance_resp = auth_client.post(
+        f"/api/modules/analysis-workbench/upload?task_id={task_id}",
+        files={"file": ("finance.csv", io.BytesIO(
+            "期间,企业名称,纳税人识别号,营业收入,主营业务成本,期初存货,期末存货\n"
+            "2026-04,补充字段企业,91310000VATEXTRA1,100000,90000,0,90000\n".encode("utf-8")
+        ), "text/csv")},
+    )
+    assert finance_resp.status_code == 200
+    manual_resp = auth_client.post(
+        f"/api/modules/analysis-workbench/tasks/{task_id}/manual-data",
+        json={
+            "data_kind": "vat_return",
+            "rows": [{
+                "period": "2026-04",
+                "company_name": "补充字段企业",
+                "taxpayer_id": "91310000VATEXTRA1",
+                "sales_declared": 10000,
+                "input_declared": 9000,
+                "output_declared": 1000,
+                "ending_credit": 70000,
+                "input_transfer_out": 10000,
+                "unbilled_sales": 90000,
+            }],
+        },
+    )
+    assert manual_resp.status_code == 200
+
+    run_resp = auth_client.post(f"/api/modules/analysis-workbench/tasks/{task_id}/run")
+    assert run_resp.status_code == 200
+    detail_resp = auth_client.get(f"/api/modules/analysis-workbench/tasks/{task_id}")
+    assert detail_resp.status_code == 200
+    risk_types = {item["risk_type"] for item in detail_resp.json()["risks"]}
+    assert "有进无销" not in risk_types
+    assert "隐瞒收入" not in risk_types
 
 
 def test_info_query_import_assignment_stats_and_analysis_profile(auth_client):
@@ -605,6 +666,14 @@ def test_info_query_import_assignment_stats_and_analysis_profile(auth_client):
     assert tagged_resp.status_code == 200
     assert tagged_resp.json()["taxpayers"][0]["industry_tag"] == "重点行业"
     assert tagged_resp.json()["taxpayers"][0]["address_tag"] == "柳堡路片区"
+
+    operation_history_resp = auth_client.get("/api/modules/info-query/operation-history")
+    assert operation_history_resp.status_code == 200
+    operation_history = operation_history_resp.json()["items"]
+    assert operation_history[0]["operator_name"] == "Admin"
+    assert operation_history[0]["action_label"] == "修改管户标签"
+    assert "户数 1" in operation_history[0]["detail"]
+    assert any(item["action_label"] == "分配税收管理员" and item["operator_name"] == "Admin" for item in operation_history)
 
     history_resp = auth_client.get("/api/modules/info-query/import-history")
     assert history_resp.status_code == 200
@@ -794,9 +863,10 @@ def test_risk_ledger_single_batch_import_filters_detail_and_backup(auth_client):
     )
     assert single_resp.status_code == 200
     assert single_resp.json()["taxpayer_id"] == "91310000RISK0001"
+    assert single_resp.json()["created_by_name"] == "Admin"
     records_after_resp = auth_client.get("/api/workbench/taxpayer-records?entry_status=待核实")
     assert records_after_resp.status_code == 200
-    assert any(item["taxpayer_id"] == "91310000RISK0001" for item in records_after_resp.json()["items"])
+    assert any(item["taxpayer_id"] == "91310000RISK0001" and item["latest_created_by_name"] == "Admin" for item in records_after_resp.json()["items"])
     summary_resp = auth_client.get("/api/workbench/taxpayer-records/summary")
     assert summary_resp.status_code == 200
     summary = summary_resp.json()
@@ -880,6 +950,7 @@ def test_risk_ledger_single_batch_import_filters_detail_and_backup(auth_client):
     detail = detail_resp.json()
     assert detail["dossier"]["address"] == "一号路1号"
     assert detail["entries"][0]["contact_phone"] == "123456"
+    assert detail["entries"][0]["created_by_name"] == "Admin"
     assert [entry["content"] for entry in detail["entries"]][:2] == ["问题已整改", "批量触发申报异常"]
 
     stats_resp = auth_client.get("/api/modules/risk-ledger/stats")
@@ -894,7 +965,9 @@ def test_risk_ledger_single_batch_import_filters_detail_and_backup(auth_client):
     taxpayer_workbench = taxpayer_workbench_resp.json()
     assert taxpayer_workbench["taxpayer"]["company_name"] == "台账企业A"
     assert taxpayer_workbench["dossier"]["latest_entry_status"] == "已整改"
+    assert taxpayer_workbench["dossier"]["latest_created_by_name"] == "Admin"
     assert len(taxpayer_workbench["entries"]) == 3
+    assert taxpayer_workbench["entries"][0]["created_by_name"] == "Admin"
 
     search_resp = auth_client.get("/api/workbench/taxpayers/search?q=台账企业A")
     assert search_resp.status_code == 200
@@ -1374,11 +1447,18 @@ def test_analysis_task_run_and_report_export_with_auth(auth_client):
     assert len(report["risks"]) >= 3
     assert "trigger_reason" in report["risks"][0]
     assert "source_data_refs" in report["risks"][0]
+    assert "taxpayer_profile_summary" in report
+    assert "data_completeness_summary" in report
+    assert report["priority_risks"]
+    assert report["risks"][0]["taxpayer_explanation"]
+    assert report["risks"][0]["officer_verification_steps"]
 
     txt_resp = auth_client.get(f"/api/modules/analysis-workbench/tasks/{task_id}/report?format=txt")
     assert txt_resp.status_code == 200
     assert "任务名称: 测试分析" in txt_resp.text
     assert "企业涉税风险分析报告" in txt_resp.text
+    assert "本户数据画像" in txt_resp.text
+    assert "核实步骤" in txt_resp.text
 
     doc_config_query = (
         "agency_name=国家税务总局测试税务局"
@@ -1395,6 +1475,8 @@ def test_analysis_task_run_and_report_export_with_auth(auth_client):
     assert "测试税通〔2026〕001号" in notice_resp.text
     assert "2026年5月10日前" in notice_resp.text
     assert "李税官" in notice_resp.text
+    assert "该户数据情况" in notice_resp.text
+    assert "疑点说明" in notice_resp.text
 
     default_notice_resp = auth_client.get(f"/api/modules/analysis-workbench/tasks/{task_id}/report?format=txt&doc_type=notice")
     assert default_notice_resp.status_code == 200
@@ -1408,6 +1490,8 @@ def test_analysis_task_run_and_report_export_with_auth(auth_client):
         document_xml = docx_zip.read("word/document.xml").decode("utf-8")
     assert "税务疑点核实报告" in document_xml
     assert "应要求企业提供资料" in document_xml
+    assert "本户数据画像" in document_xml
+    assert "核实步骤" in document_xml
     assert "规则名称" in document_xml
     assert "测试税通" in document_xml
 
@@ -1417,6 +1501,8 @@ def test_analysis_task_run_and_report_export_with_auth(auth_client):
         notice_xml = docx_zip.read("word/document.xml").decode("utf-8")
     assert "税务事项通知书" in notice_xml
     assert "整改要求" in notice_xml
+    assert "该户数据情况" in notice_xml
+    assert "疑点说明" in notice_xml
     assert "国家税务总局测试税务局" in notice_xml
     assert "李税官" in notice_xml
     assert "12345" in notice_xml
@@ -1629,6 +1715,8 @@ def test_tax_analysis_detects_multiple_risks_and_exports_notice(auth_client):
     assert notice["document_type"] == "tax_notice"
     assert notice["enterprise_name"] == "样例企业"
     assert len(notice["issues"]) >= 4
+    assert notice["taxpayer_profile_summary"].startswith("该户本次分析期间")
+    assert notice["issues"][0]["taxpayer_explanation"]
 
 
 def test_notifications_is_read_filter(auth_client):

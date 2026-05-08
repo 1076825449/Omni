@@ -61,6 +61,7 @@ class DossierSchema(BaseModel):
     latest_entry_status: str = ""
     latest_contact_person: str = ""
     latest_contact_phone: str = ""
+    latest_created_by_name: str = ""
     entry_count: int = 0
     is_overdue: bool = False
 
@@ -81,6 +82,7 @@ class EntrySchema(BaseModel):
     note: str
     owner_id: int
     created_by: int
+    created_by_name: str = ""
     created_at: datetime
 
 
@@ -190,6 +192,47 @@ def validate_entry_status(value: str) -> str:
     if status not in ENTRY_STATUSES:
         raise HTTPException(status_code=400, detail=f"事项状态必须为: {','.join(sorted(ENTRY_STATUSES))}")
     return status
+
+
+def display_user_name(user: Optional[User]) -> str:
+    if not user:
+        return ""
+    return user.nickname or user.username or f"用户{user.id}"
+
+
+def user_name_by_id(db: Session, user_id: Optional[int]) -> str:
+    if not user_id:
+        return ""
+    user = db.query(User).filter(User.id == user_id).first()
+    return display_user_name(user)
+
+
+def users_name_map(db: Session, user_ids: list[int]) -> dict[int, str]:
+    ids = sorted({item for item in user_ids if item})
+    if not ids:
+        return {}
+    users = db.query(User).filter(User.id.in_(ids)).all()
+    return {user.id: display_user_name(user) for user in users}
+
+
+def entry_to_schema(entry: RiskLedgerEntry, created_by_name: str = "") -> EntrySchema:
+    return EntrySchema(
+        id=entry.id,
+        entry_id=entry.entry_id,
+        dossier_id=entry.dossier_id,
+        taxpayer_id=entry.taxpayer_id,
+        recorded_at=entry.recorded_at,
+        content=entry.content,
+        entry_status=entry.entry_status,
+        rectification_deadline=entry.rectification_deadline,
+        contact_person=entry.contact_person,
+        contact_phone=entry.contact_phone,
+        note=entry.note,
+        owner_id=entry.owner_id,
+        created_by=entry.created_by,
+        created_by_name=created_by_name,
+        created_at=entry.created_at,
+    )
 
 
 def log_action(db: Session, action: str, target_id: str, operator_id: int, detail: str):
@@ -325,6 +368,7 @@ def dossier_to_schema(dossier: RiskDossier, db: Session) -> DossierSchema:
         latest_entry_status=latest.entry_status if latest else "",
         latest_contact_person=latest.contact_person if latest else "",
         latest_contact_phone=latest.contact_phone if latest else "",
+        latest_created_by_name=user_name_by_id(db, latest.created_by) if latest else "",
         entry_count=count,
         is_overdue=is_overdue,
     )
@@ -399,7 +443,11 @@ def get_dossier(
         RiskLedgerEntry.owner_id == business_owner_id(),
         RiskLedgerEntry.dossier_id == dossier.id,
     ).order_by(RiskLedgerEntry.recorded_at.desc(), RiskLedgerEntry.id.desc()).all()
-    return DossierDetailResponse(dossier=dossier_to_schema(dossier, db), entries=entries)
+    user_names = users_name_map(db, [entry.created_by for entry in entries])
+    return DossierDetailResponse(
+        dossier=dossier_to_schema(dossier, db),
+        entries=[entry_to_schema(entry, user_names.get(entry.created_by, "")) for entry in entries],
+    )
 
 
 @router.post("/entries", response_model=EntrySchema)
@@ -412,7 +460,7 @@ def add_entry(
     log_action(db, "create", entry.entry_id, current_user.id, f"新增风险台账记录: {entry.taxpayer_id}")
     db.commit()
     db.refresh(entry)
-    return entry
+    return entry_to_schema(entry, display_user_name(current_user))
 
 
 @router.post("/entries/batch-text", response_model=BatchResultResponse)

@@ -269,6 +269,12 @@ export interface AnalysisRisk {
   trigger_reason: string
   threshold_text: string
   calculation_text: string
+  taxpayer_explanation?: string
+  officer_verification_steps?: string[]
+  exclusion_conditions?: string[]
+  confirmation_conditions?: string[]
+  priority_score?: number
+  priority_amount?: number
   source_data_refs: Array<{
     dataset_kind: string
     dataset_label: string
@@ -657,6 +663,7 @@ export const infoQueryApi = {
   getImportJob: (jobId: string) => request<ImportJob>('/api/modules/info-query/import-jobs/' + encodeURIComponent(jobId)),
   recentImportJob: () => request<ImportJob>('/api/modules/info-query/import-jobs/recent'),
   importHistory: (limit = 8) => request<{ items: ImportHistoryItem[] }>('/api/modules/info-query/import-history?limit=' + limit),
+  operationHistory: (limit = 8) => request<{ items: InfoQueryOperationHistoryItem[] }>('/api/modules/info-query/operation-history?limit=' + limit),
   filterOptions: () => request<{
     officers: Array<{ value: string; label: string; count: number }>
     departments: Array<{ value: string; label: string; count: number }>
@@ -730,6 +737,17 @@ export interface TagStats {
   total: number
 }
 
+export interface InfoQueryOperationHistoryItem {
+  id: number
+  action: string
+  action_label: string
+  operator_id: number
+  operator_name: string
+  detail: string
+  result: string
+  created_at: string
+}
+
 export interface RiskDossier {
   id: number
   taxpayer_id: string
@@ -752,6 +770,7 @@ export interface RiskDossier {
   latest_entry_status: string
   latest_contact_person?: string
   latest_contact_phone?: string
+  latest_created_by_name?: string
   entry_count: number
   is_overdue?: boolean
 }
@@ -770,6 +789,7 @@ export interface RiskLedgerEntry {
   note: string
   owner_id: number
   created_by: number
+  created_by_name?: string
   created_at: string
 }
 

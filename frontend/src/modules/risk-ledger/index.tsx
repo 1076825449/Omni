@@ -161,6 +161,9 @@ export default function RiskLedgerModule() {
               <Text type="secondary">
                 {record.latest_recorded_at ? dayjs(record.latest_recorded_at).format('YYYY-MM-DD HH:mm') : '暂无记录'}
               </Text>
+              {record.latest_created_by_name && (
+                <Text type="secondary">记录人：{record.latest_created_by_name}</Text>
+              )}
               <Paragraph ellipsis={{ rows: 2 }} style={{ marginBottom: 0 }}>
                 {record.latest_content || '还没有风险、排除或整改记录'}
               </Paragraph>
@@ -307,6 +310,7 @@ export default function RiskLedgerModule() {
                     <Space direction="vertical" size={2}>
                       <Space><Text strong>{dayjs(entry.recorded_at).format('YYYY-MM-DD HH:mm')}</Text><Tag color={statusColor[entry.entry_status]}>{entry.entry_status}</Tag></Space>
                       <Text>{entry.content}</Text>
+                      <Text type="secondary">记录人：{entry.created_by_name || `用户${entry.created_by}`}</Text>
                       {entry.rectification_deadline && <Text type={dayjs(entry.rectification_deadline).isBefore(dayjs()) && entry.entry_status === '整改中' ? 'danger' : 'secondary'}>整改期限：{dayjs(entry.rectification_deadline).format('YYYY-MM-DD HH:mm')}</Text>}
                       {(entry.contact_person || entry.contact_phone) && <Text type="secondary">联系人：{entry.contact_person || '—'} {entry.contact_phone || ''}</Text>}
                       {entry.note && <Text type="secondary">备注：{entry.note}</Text>}

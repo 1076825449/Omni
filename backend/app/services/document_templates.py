@@ -113,6 +113,8 @@ def render_notice_docx(payload: dict[str, Any], agency_name: str = "主管税务
     basis = "根据《中华人民共和国税收征收管理法》第二十五条、第六十四条等有关规定，以及你单位申报、发票、财务报表等资料比对情况。"
     _add_paragraph(doc, f"事由：{reason}", size=16, first_indent=True)
     _add_paragraph(doc, f"依据：{basis}", size=16, first_indent=True)
+    _add_paragraph(doc, f"该户数据情况：{payload.get('taxpayer_profile_summary', '本次已对你单位相关申报、发票和财务资料开展案头比对。')}", size=16, first_indent=True)
+    _add_paragraph(doc, f"资料完整性说明：{payload.get('data_completeness_summary', '请结合实际业务资料进一步核实。')}", size=16, first_indent=True)
     _add_paragraph(doc, "通知内容：经案头分析，你单位相关涉税数据存在需进一步核实的事项。现将有关事项通知如下：", size=16, first_indent=True)
 
     if not issues:
@@ -120,8 +122,7 @@ def render_notice_docx(payload: dict[str, Any], agency_name: str = "主管税务
     for index, issue in enumerate(issues, start=1):
         _add_paragraph(doc, f"{index}. {issue.get('risk_type', '涉税风险')}：{issue.get('issue', '需进一步核实')}", size=16, first_indent=True)
         _add_paragraph(doc, f"涉及期间：{issue.get('period', '待核实')}", size=16, first_indent=True)
-        _add_paragraph(doc, f"规则名称：{issue.get('rule_name', '规则待补充')}", size=16, first_indent=True)
-        _add_paragraph(doc, f"触发原因：{issue.get('trigger_reason', issue.get('issue', '需进一步核实'))}", size=16, first_indent=True)
+        _add_paragraph(doc, f"疑点说明：{issue.get('taxpayer_explanation') or issue.get('trigger_reason', issue.get('issue', '需进一步核实'))}", size=16, first_indent=True)
         _add_paragraph(doc, f"涉及数据：{_source_refs_text(issue.get('source_data_refs', []))}", size=16, first_indent=True)
         _add_paragraph(doc, f"计算过程：{issue.get('calculation_text', '未生成计算说明')}", size=16, first_indent=True)
         _add_paragraph(doc, f"判断阈值：{issue.get('threshold_text', '按申报、发票、财务资料一致性综合判断')}", size=16, first_indent=True)
@@ -158,6 +159,8 @@ def render_officer_report_docx(payload: dict[str, Any]) -> bytes:
     _add_paragraph(doc, f"企业名称：{payload.get('enterprise_name', '待补充')}", size=16)
     _add_paragraph(doc, f"分析任务：{payload.get('task_name', '案头分析任务')}", size=16)
     _add_paragraph(doc, f"风险数量：{payload.get('risk_count', 0)}", size=16)
+    _add_paragraph(doc, f"本户数据画像：{payload.get('taxpayer_profile_summary', '暂无')}", size=16, first_indent=True)
+    _add_paragraph(doc, f"资料完整性影响：{payload.get('data_completeness_summary', '暂无')}", size=16, first_indent=True)
 
     data_summary = payload.get("data_summary") or {}
     _add_paragraph(doc, "二、数据概况", size=16, bold=True)
@@ -178,8 +181,14 @@ def render_officer_report_docx(payload: dict[str, Any]) -> bytes:
         _add_paragraph(doc, f"计算过程：{risk.get('calculation_text', '未生成计算说明')}", size=16, first_indent=True)
         _add_paragraph(doc, f"判断阈值：{risk.get('threshold_text', '按申报、发票、财务资料一致性综合判断')}", size=16, first_indent=True)
         _add_paragraph(doc, f"证据要点：{_safe_join(risk.get('evidence', []))}", size=16, first_indent=True)
+        _add_paragraph(doc, f"面向企业说明：{risk.get('taxpayer_explanation', risk.get('trigger_reason', '需进一步核实'))}", size=16, first_indent=True)
         _add_paragraph(doc, f"核实方向：{risk.get('verification_focus', '请结合申报、发票、账簿和资金流水进一步核实。')}", size=16, first_indent=True)
+        steps = risk.get("officer_verification_steps") or []
+        if steps:
+            _add_paragraph(doc, f"核实步骤：{_safe_join(steps)}", size=16, first_indent=True)
         _add_paragraph(doc, f"应要求企业提供资料：{_safe_join(risk.get('required_materials', []))}", size=16, first_indent=True)
+        _add_paragraph(doc, f"可排除情形：{_safe_join(risk.get('exclusion_conditions', []))}", size=16, first_indent=True)
+        _add_paragraph(doc, f"需进一步处理情形：{_safe_join(risk.get('confirmation_conditions', []))}", size=16, first_indent=True)
         _add_paragraph(doc, f"判断标准：{risk.get('judgment_rule', '结合业务真实性、资料完整性和申报一致性判断。')}", size=16, first_indent=True)
 
     warnings = data_summary.get("data_warnings") or []

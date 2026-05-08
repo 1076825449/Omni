@@ -47,6 +47,19 @@ class TaxpayerSearchResponse(BaseModel):
     items: list[dict]
 
 
+def display_user_name(user: Optional[User]) -> str:
+    if not user:
+        return ""
+    return user.nickname or user.username or f"用户{user.id}"
+
+
+def user_name_by_id(db: Session, user_id: Optional[int]) -> str:
+    if not user_id:
+        return ""
+    user = db.query(User).filter(User.id == user_id).first()
+    return display_user_name(user)
+
+
 def dossier_payload(dossier: RiskDossier, db: Session) -> dict:
     taxpayer = db.query(TaxpayerInfo).filter(
         TaxpayerInfo.owner_id == dossier.owner_id,
@@ -83,6 +96,7 @@ def dossier_payload(dossier: RiskDossier, db: Session) -> dict:
         "latest_entry_status": latest.entry_status if latest else "",
         "latest_contact_person": latest.contact_person if latest else "",
         "latest_contact_phone": latest.contact_phone if latest else "",
+        "latest_created_by_name": user_name_by_id(db, latest.created_by) if latest else "",
         "is_overdue": is_overdue,
     }
 
@@ -125,6 +139,7 @@ def taxpayer_record_payload(
     dossier: Optional[RiskDossier],
     latest: Optional[RiskLedgerEntry],
     entry_count: int = 0,
+    latest_created_by_name: str = "",
 ) -> dict:
     taxpayer_id = taxpayer.taxpayer_id if taxpayer else dossier.taxpayer_id if dossier else ""
     latest_deadline = latest.rectification_deadline if latest else None
@@ -153,6 +168,7 @@ def taxpayer_record_payload(
         "latest_entry_status": latest.entry_status if latest else "",
         "latest_contact_person": latest.contact_person if latest else "",
         "latest_contact_phone": latest.contact_phone if latest else "",
+        "latest_created_by_name": latest_created_by_name,
         "is_overdue": is_overdue,
     }
 
@@ -186,7 +202,7 @@ def taxpayer_record_summary(db: Session, user_id: int) -> dict:
     }
 
 
-def entry_payload(entry: RiskLedgerEntry) -> dict:
+def entry_payload(entry: RiskLedgerEntry, created_by_name: str = "") -> dict:
     return {
         "entry_id": entry.entry_id,
         "taxpayer_id": entry.taxpayer_id,
@@ -197,6 +213,8 @@ def entry_payload(entry: RiskLedgerEntry) -> dict:
         "contact_person": entry.contact_person,
         "contact_phone": entry.contact_phone,
         "note": entry.note,
+        "created_by": entry.created_by,
+        "created_by_name": created_by_name,
         "created_at": entry.created_at.isoformat() if entry.created_at else None,
     }
 
@@ -326,6 +344,9 @@ def build_taxpayer_record_items(
         dossier_ids = [item.id for item in dossiers]
         latest_map = latest_entries_by_dossier(db, user_id, dossier_ids)
         count_map = entry_counts_by_dossier(db, user_id, dossier_ids)
+        latest_user_ids = [entry.created_by for entry in latest_map.values()]
+        users = db.query(User).filter(User.id.in_(latest_user_ids or [0])).all()
+        user_names = {user.id: display_user_name(user) for user in users}
         taxpayer_map = {
             item.taxpayer_id: item
             for item in db.query(TaxpayerInfo).filter(
@@ -340,7 +361,14 @@ def build_taxpayer_record_items(
                 continue
             if address_tag and (not taxpayer or taxpayer.address_tag != address_tag):
                 continue
-            item = taxpayer_record_payload(taxpayer, dossier, latest_map.get(dossier.id), count_map.get(dossier.id, 0))
+            latest = latest_map.get(dossier.id)
+            item = taxpayer_record_payload(
+                taxpayer,
+                dossier,
+                latest,
+                count_map.get(dossier.id, 0),
+                user_names.get(latest.created_by, "") if latest else "",
+            )
             if entry_status and item["latest_entry_status"] != entry_status:
                 continue
             if overdue is not None and item["is_overdue"] != overdue:
@@ -382,15 +410,20 @@ def build_taxpayer_record_items(
     dossier_map = {row.taxpayer_id: row for row in dossiers}
     latest_map = latest_entries_by_dossier(db, user_id, [row.id for row in dossiers])
     count_map = entry_counts_by_dossier(db, user_id, [row.id for row in dossiers])
+    latest_user_ids = [entry.created_by for entry in latest_map.values()]
+    users = db.query(User).filter(User.id.in_(latest_user_ids or [0])).all()
+    user_names = {user.id: display_user_name(user) for user in users}
 
     items: list[dict] = []
     for taxpayer in taxpayers:
         dossier = dossier_map.get(taxpayer.taxpayer_id)
+        latest = latest_map.get(dossier.id) if dossier else None
         item = taxpayer_record_payload(
             taxpayer,
             dossier,
-            latest_map.get(dossier.id) if dossier else None,
+            latest,
             count_map.get(dossier.id, 0) if dossier else 0,
+            user_names.get(latest.created_by, "") if latest else "",
         )
         items.append(item)
     return items, total, summary
@@ -419,7 +452,10 @@ def taxpayer_workbench(
             RiskLedgerEntry.dossier_id == dossier.id,
         ).order_by(RiskLedgerEntry.recorded_at.desc(), RiskLedgerEntry.id.desc()).limit(20).all()
     recent_tasks, material_gaps = recent_analysis_for_taxpayer(taxpayer_id, db, current_user.id)
-    latest_risk = entry_payload(entries[0]) if entries else None
+    entry_user_ids = [entry.created_by for entry in entries]
+    users = db.query(User).filter(User.id.in_(entry_user_ids or [0])).all()
+    user_names = {user.id: display_user_name(user) for user in users}
+    latest_risk = entry_payload(entries[0], user_names.get(entries[0].created_by, "")) if entries else None
     if taxpayer:
         taxpayer.last_used_at = datetime.utcnow()
         db.commit()
@@ -437,7 +473,7 @@ def taxpayer_workbench(
             "manager_department": taxpayer.manager_department if taxpayer else "",
         },
         dossier=dossier_payload(dossier, db) if dossier else None,
-        entries=[entry_payload(item) for item in entries],
+        entries=[entry_payload(item, user_names.get(item.created_by, "")) for item in entries],
         recent_analysis_tasks=recent_tasks,
         latest_risk=latest_risk,
         material_gap_list=material_gaps,

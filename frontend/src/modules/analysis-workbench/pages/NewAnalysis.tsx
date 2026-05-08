@@ -1,5 +1,5 @@
 // 分析工作模块 - 新建分析
-import { Card, Form, Input, Button, Upload, Typography, Space, List, Row, Col, Alert, Tag, Select, InputNumber } from 'antd'
+import { Card, Form, Input, Button, Upload, Typography, Space, List, Row, Col, Alert, Tag, Select, InputNumber, Collapse } from 'antd'
 import { UploadOutlined, FileOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -116,7 +116,11 @@ export default function NewAnalysis() {
         taxpayer_id: values.taxpayer_id || taxpayerContext.taxpayer_id,
       })
       setFileList(prev => [...prev, { name: `手工补录-${kindLabel[dataKind]}`, status: 'done', profile: result.profile }])
-      manualForm.resetFields(['sales_declared', 'output_declared', 'input_declared', 'revenue', 'cost', 'profit', 'taxable_income', 'salary_amount', 'employee_count', 'pit_tax_amount'])
+      manualForm.resetFields([
+        'sales_declared', 'output_declared', 'input_declared', 'vat_due', 'vat_paid', 'ending_credit', 'input_transfer_out', 'unbilled_sales',
+        'revenue', 'cost', 'profit', 'taxable_income', 'period_expenses', 'tax_adjustment_increase', 'tax_adjustment_decrease', 'income_tax_payable',
+        'salary_amount', 'employee_count', 'pit_tax_amount', 'salary_employee_count', 'labor_employee_count', 'zero_tax_employee_count', 'cumulative_income', 'cumulative_tax_payable',
+      ])
       message.success('补录数据已纳入本次分析')
     } catch {
       message.error('补录失败')
@@ -196,30 +200,83 @@ export default function NewAnalysis() {
                 const dataKind = getFieldValue('data_kind')
                 if (dataKind === 'vat_return') {
                   return (
-                    <Row gutter={12}>
-                      <Col xs={24} md={8}><Form.Item label="申报销售额" name="sales_declared"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
-                      <Col xs={24} md={8}><Form.Item label="申报销项" name="output_declared"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
-                      <Col xs={24} md={8}><Form.Item label="申报进项" name="input_declared"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
-                    </Row>
+                    <>
+                      <Row gutter={12}>
+                        <Col xs={24} md={8}><Form.Item label="申报销售额" name="sales_declared"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+                        <Col xs={24} md={8}><Form.Item label="申报销项" name="output_declared"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+                        <Col xs={24} md={8}><Form.Item label="申报进项" name="input_declared"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+                      </Row>
+                      <Collapse
+                        ghost
+                        items={[{
+                          key: 'vat-extra',
+                          label: '更多申报字段',
+                          children: (
+                            <Row gutter={12}>
+                              <Col xs={24} md={8}><Form.Item label="应纳税额" name="vat_due"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+                              <Col xs={24} md={8}><Form.Item label="实际缴纳税额" name="vat_paid"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+                              <Col xs={24} md={8}><Form.Item label="期末留抵税额" name="ending_credit"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+                              <Col xs={24} md={8}><Form.Item label="进项税额转出" name="input_transfer_out"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+                              <Col xs={24} md={8}><Form.Item label="未开票销售额" name="unbilled_sales"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+                            </Row>
+                          ),
+                        }]}
+                      />
+                    </>
                   )
                 }
                 if (dataKind === 'cit_return') {
                   return (
-                    <Row gutter={12}>
-                      <Col xs={24} md={6}><Form.Item label="收入总额" name="revenue"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
-                      <Col xs={24} md={6}><Form.Item label="成本费用" name="cost"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
-                      <Col xs={24} md={6}><Form.Item label="利润总额" name="profit"><InputNumber style={{ width: '100%' }} /></Form.Item></Col>
-                      <Col xs={24} md={6}><Form.Item label="应纳税所得额" name="taxable_income"><InputNumber style={{ width: '100%' }} /></Form.Item></Col>
-                    </Row>
+                    <>
+                      <Row gutter={12}>
+                        <Col xs={24} md={6}><Form.Item label="收入总额" name="revenue"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+                        <Col xs={24} md={6}><Form.Item label="成本费用" name="cost"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+                        <Col xs={24} md={6}><Form.Item label="利润总额" name="profit"><InputNumber style={{ width: '100%' }} /></Form.Item></Col>
+                        <Col xs={24} md={6}><Form.Item label="应纳税所得额" name="taxable_income"><InputNumber style={{ width: '100%' }} /></Form.Item></Col>
+                      </Row>
+                      <Collapse
+                        ghost
+                        items={[{
+                          key: 'cit-extra',
+                          label: '更多申报字段',
+                          children: (
+                            <Row gutter={12}>
+                              <Col xs={24} md={8}><Form.Item label="期间费用" name="period_expenses"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+                              <Col xs={24} md={8}><Form.Item label="纳税调增额" name="tax_adjustment_increase"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+                              <Col xs={24} md={8}><Form.Item label="纳税调减额" name="tax_adjustment_decrease"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+                              <Col xs={24} md={8}><Form.Item label="应纳所得税额" name="income_tax_payable"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+                            </Row>
+                          ),
+                        }]}
+                      />
+                    </>
                   )
                 }
                 return (
-                  <Row gutter={12}>
-                    <Col xs={24} md={6}><Form.Item label="工资薪金/劳务报酬" name="salary_amount"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
-                    <Col xs={24} md={6}><Form.Item label="申报人数" name="employee_count"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
-                    <Col xs={24} md={6}><Form.Item label="个税税额" name="pit_tax_amount"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
-                    <Col xs={24} md={6}><Form.Item label="应纳税所得额" name="taxable_income"><InputNumber style={{ width: '100%' }} /></Form.Item></Col>
-                  </Row>
+                  <>
+                    <Row gutter={12}>
+                      <Col xs={24} md={6}><Form.Item label="工资薪金/劳务报酬" name="salary_amount"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+                      <Col xs={24} md={6}><Form.Item label="申报人数" name="employee_count"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+                      <Col xs={24} md={6}><Form.Item label="个税税额" name="pit_tax_amount"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+                      <Col xs={24} md={6}><Form.Item label="应纳税所得额" name="taxable_income"><InputNumber style={{ width: '100%' }} /></Form.Item></Col>
+                    </Row>
+                    <Collapse
+                      ghost
+                      items={[{
+                        key: 'pit-extra',
+                        label: '更多申报字段',
+                        children: (
+                          <Row gutter={12}>
+                            <Col xs={24} md={8}><Form.Item label="正常工资薪金人数" name="salary_employee_count"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+                            <Col xs={24} md={8}><Form.Item label="劳务报酬人数" name="labor_employee_count"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+                            <Col xs={24} md={8}><Form.Item label="免税/零税额人数" name="zero_tax_employee_count"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+                            <Col xs={24} md={8}><Form.Item label="累计收入额" name="cumulative_income"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+                            <Col xs={24} md={8}><Form.Item label="累计应纳税额" name="cumulative_tax_payable"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item></Col>
+                          </Row>
+                        ),
+                      }]}
+                    />
+                  </>
                 )
               }}
             </Form.Item>
